@@ -1,0 +1,206 @@
+
+import React, { useState, useRef, useEffect } from 'react';
+import { X, FileUp, Trash2, Save, Loader2, User, Phone } from 'lucide-react';
+import { Event, Track } from '../types';
+import { storageService } from '../services/storageService';
+import { generateUUID, sanitizeInput } from '../utils/security';
+import { Button } from './Button';
+
+interface Props {
+    isOpen: boolean;
+    event: Event;
+    onClose: () => void;
+    onSave: (updatedEvent: Event) => void;
+}
+
+export const EventSettingsModal: React.FC<Props> = ({ isOpen, event, onClose, onSave }) => {
+    const [name, setName] = useState(event.name);
+    const [location, setLocation] = useState(event.location);
+    const [supervisorName, setSupervisorName] = useState(event.supervisorName || '');
+    const [supervisorPhone, setSupervisorPhone] = useState(event.supervisorPhone || '');
+    const [organizerCode, setOrganizerCode] = useState(event.organizer_code || '');
+    const [tracks, setTracks] = useState<Track[]>(event.tracks || []);
+    const [isSaving, setIsSaving] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    
+    // Bloquer le scroll du body quand la modale est ouverte
+    useEffect(() => {
+        if (isOpen) {
+            document.body.style.overflow = 'hidden';
+        } else {
+            document.body.style.overflow = 'unset';
+        }
+        return () => {
+            document.body.style.overflow = 'unset';
+        };
+    }, [isOpen]);
+
+    if (!isOpen) return null;
+
+    const handleGpxUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = e.target.files;
+        if (!files || files.length === 0) return;
+
+        Array.from(files).forEach(file => {
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                const text = ev.target?.result as string;
+                try {
+                    const parser = new DOMParser();
+                    const xmlDoc = parser.parseFromString(text, "text/xml");
+                    const trkpts = xmlDoc.getElementsByTagName("trkpt");
+                    
+                    const coords: [number, number][] = [];
+                    const step = Math.ceil(trkpts.length / 2000); 
+
+                    for(let i=0; i < trkpts.length; i += step) {
+                        const lat = parseFloat(trkpts[i].getAttribute("lat") || "0");
+                        const lon = parseFloat(trkpts[i].getAttribute("lon") || "0");
+                        if (lat && lon) coords.push([lat, lon]);
+                    }
+                    
+                    let trackName = xmlDoc.getElementsByTagName("name")[0]?.textContent || file.name.replace('.gpx', '');
+                    
+                    const newTrack: Track = {
+                        id: generateUUID(),
+                        name: trackName,
+                        data: coords,
+                        color: ['#2563eb', '#dc2626', '#16a34a', '#eab308', '#9333ea', '#ea580c', '#0891b2'][Math.floor(Math.random() * 7)]
+                    };
+                    
+                    setTracks(prev => [...prev, newTrack]);
+                } catch (err) {
+                    alert(`Erreur fichier ${file.name}`);
+                }
+            };
+            reader.readAsText(file);
+        });
+        if (fileInputRef.current) fileInputRef.current.value = '';
+    };
+
+    const handleSave = async () => {
+        setIsSaving(true);
+        const updatedEvent: Event = {
+            ...event,
+            name: sanitizeInput(name),
+            location: sanitizeInput(location),
+            supervisorName: sanitizeInput(supervisorName),
+            supervisorPhone: sanitizeInput(supervisorPhone),
+            organizer_code: sanitizeInput(organizerCode).toUpperCase(),
+            tracks: tracks.length > 0 ? tracks : undefined,
+            trackData: tracks.length > 0 ? tracks[0].data : undefined
+        };
+        await storageService.saveEvent(updatedEvent);
+        onSave(updatedEvent);
+        setIsSaving(false);
+    };
+
+    return (
+        <div className="fixed inset-0 z-[3000] bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 overflow-hidden">
+            <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-700 flex flex-col max-h-[95dvh] sm:max-h-[90vh]">
+                <div className="p-4 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-900/50 flex-shrink-0">
+                    <h2 className="font-bold text-slate-800 dark:text-white">Paramètres de l'événement</h2>
+                    <button onClick={onClose} className="p-2 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-full transition-colors">
+                        <X className="w-5 h-5 text-slate-500" />
+                    </button>
+                </div>
+
+                <div className="p-4 sm:p-6 overflow-y-auto space-y-6 flex-1 overscroll-contain">
+                    <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-100 dark:border-blue-800">
+                        <label className="block text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase mb-1 tracking-widest">Code Accès Organisateur</label>
+                        <input 
+                            type="text" 
+                            className="w-full p-2 bg-white dark:bg-slate-900 border border-blue-200 dark:border-blue-700 rounded-lg text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500 font-black tracking-widest uppercase text-center"
+                            value={organizerCode}
+                            onChange={e => setOrganizerCode(e.target.value)}
+                            placeholder="EX: ORGA-123"
+                        />
+                        <p className="mt-1 text-[9px] text-blue-500/70 italic text-center">Ce code permet à l'organisateur de se connecter avec un accès restreint (Vue Tactique & Carte uniquement).</p>
+                    </div>
+
+                    <div>
+                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Nom</label>
+                        <input 
+                            type="text" 
+                            className="w-full p-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-600 rounded-lg text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500"
+                            value={name}
+                            onChange={e => setName(e.target.value)}
+                        />
+                    </div>
+
+                    <div>
+                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Lieu</label>
+                        <input 
+                            type="text" 
+                            className="w-full p-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-600 rounded-lg text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500"
+                            value={location}
+                            onChange={e => setLocation(e.target.value)}
+                        />
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Responsable</label>
+                            <div className="relative">
+                                <User className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
+                                <input 
+                                    type="text" 
+                                    className="w-full pl-9 p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-600 rounded-lg text-sm text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500"
+                                    value={supervisorName}
+                                    onChange={e => setSupervisorName(e.target.value)}
+                                    placeholder="Nom"
+                                />
+                            </div>
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Téléphone</label>
+                            <div className="relative">
+                                <Phone className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
+                                <input 
+                                    type="tel" 
+                                    className="w-full pl-9 p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-600 rounded-lg text-sm text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500"
+                                    value={supervisorPhone}
+                                    onChange={e => setSupervisorPhone(e.target.value)}
+                                    placeholder="06..."
+                                />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Tracés GPX ({tracks.length})</label>
+                        <div className="space-y-2 mb-4">
+                            {tracks.map(t => (
+                                <div key={t.id} className="flex items-center justify-between bg-slate-50 dark:bg-slate-900 p-3 rounded-lg border border-slate-200 dark:border-slate-700">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: t.color }}></div>
+                                        <span className="text-sm font-bold text-slate-700 dark:text-slate-200 truncate max-w-[200px]">{t.name}</span>
+                                    </div>
+                                    <button onClick={() => setTracks(prev => prev.filter(x => x.id !== t.id))} className="text-slate-400 hover:text-red-500">
+                                        <Trash2 className="w-4 h-4" />
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                        <input type="file" accept=".gpx" multiple ref={fileInputRef} className="hidden" onChange={handleGpxUpload} />
+                        <button 
+                            type="button"
+                            onClick={() => fileInputRef.current?.click()}
+                            className="w-full py-3 border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-lg text-slate-500 hover:text-blue-500 hover:border-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/10 transition-all flex items-center justify-center gap-2"
+                        >
+                            <FileUp className="w-5 h-5" />
+                            <span className="text-xs font-bold uppercase">Ajouter GPX</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div className="p-4 bg-slate-50 dark:bg-slate-900/50 border-t border-slate-100 dark:border-slate-700 flex gap-3 flex-shrink-0">
+                    <Button onClick={onClose} variant="outline" fullWidth>Annuler</Button>
+                    <Button onClick={handleSave} fullWidth disabled={isSaving}>
+                        {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Save className="w-4 h-4 mr-2" /> Enregistrer</>}
+                    </Button>
+                </div>
+            </div>
+        </div>
+    );
+};

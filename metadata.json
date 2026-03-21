@@ -1,0 +1,9 @@
+{
+  "name": "App DPS 65 V3",
+  "description": "Application Opérationnelle",
+  "requestFramePermissions": [
+    "microphone",
+    "camera",
+    "geolocation"
+  ]
+}

@@ -1,0 +1,92 @@
+
+import React, { createContext, useContext, useEffect, useState } from 'react';
+
+type ThemeMode = 'system' | 'light' | 'dark';
+
+interface ThemeContextType {
+  isEcoMode: boolean;
+  toggleEcoMode: () => void;
+  themeMode: ThemeMode;
+  setThemeMode: (mode: ThemeMode) => void;
+  isDark: boolean;
+}
+
+const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
+
+export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [isEcoMode, setIsEcoMode] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('dps65_eco_mode') === 'true';
+    }
+    return false;
+  });
+
+  const [themeMode, setThemeModeState] = useState<ThemeMode>(() => {
+      if (typeof window !== 'undefined') {
+          return (localStorage.getItem('dps65_theme_mode') as ThemeMode) || 'system';
+      }
+      return 'system';
+  });
+
+  const [systemIsDark, setSystemIsDark] = useState<boolean>(() => {
+      if (typeof window !== 'undefined') {
+          return window.matchMedia('(prefers-color-scheme: dark)').matches;
+      }
+      return false;
+  });
+
+  useEffect(() => {
+      const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+      const handler = (e: MediaQueryListEvent) => setSystemIsDark(e.matches);
+      mediaQuery.addEventListener('change', handler);
+      return () => mediaQuery.removeEventListener('change', handler);
+  }, []);
+
+  const setThemeMode = (mode: ThemeMode) => {
+      setThemeModeState(mode);
+      localStorage.setItem('dps65_theme_mode', mode);
+  };
+
+  const toggleEcoMode = () => {
+    const newVal = !isEcoMode;
+    setIsEcoMode(newVal);
+    localStorage.setItem('dps65_eco_mode', String(newVal));
+  };
+
+  // Calcul : Eco force le dark, sinon user choice, sinon system
+  const isDark = isEcoMode || (themeMode === 'system' ? systemIsDark : themeMode === 'dark');
+
+  // Application des classes CSS au Body
+  useEffect(() => {
+    const root = window.document.documentElement;
+    
+    // Reset des classes
+    root.classList.remove('light', 'dark', 'tactical', 'ultra-eco');
+
+    if (isEcoMode) {
+        // Mode Éco FORCE le mode Tactique (Noir/Rouge) pour économie max
+        root.classList.add('dark', 'tactical', 'ultra-eco');
+    } else {
+        // Sinon, on suit le système ou le choix utilisateur
+        if (isDark) {
+            root.classList.add('dark');
+        } else {
+            root.classList.add('light');
+        }
+    }
+  }, [isEcoMode, isDark]);
+
+  return (
+    <ThemeContext.Provider value={{ isEcoMode, toggleEcoMode, themeMode, setThemeMode, isDark }}>
+      {children}
+    </ThemeContext.Provider>
+  );
+};
+
+export const useTheme = () => {
+  const context = useContext(ThemeContext);
+  if (context === undefined) {
+    throw new Error('useTheme must be used within a ThemeProvider');
+  }
+  return context;
+};
