@@ -520,7 +520,6 @@ export const HomePage: React.FC = () => {
 
       {showEmergency && <EmergencyGuide onClose={() => setShowEmergency(false)} />}
 
-
       <ConfirmDialog 
         isOpen={showStopTrackingConfirm}
         title="Arrêter le suivi ?"
