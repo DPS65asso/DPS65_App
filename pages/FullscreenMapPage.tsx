@@ -18,6 +18,10 @@ export const FullscreenMapPage: React.FC = () => {
     const load = async () => {
       if (id) {
         try {
+            // Force une synchro pour récupérer les données publiques (events, markers, locations)
+            const { syncService } = await import('../services/syncService');
+            syncService.pullLatestData();
+
             const e = await storageService.getEventById(id);
             if (e) setEvent(e);
         } catch (err) {

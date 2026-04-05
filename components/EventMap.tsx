@@ -401,16 +401,27 @@ export const EventMap: React.FC<Props> = ({ eventId, isFullscreen = false }) => 
     
     const interval = setInterval(loadLocs, 5000); 
 
-    const bc = new BroadcastChannel('dps65_gps_channel');
-    bc.onmessage = (e) => {
+    const bcGps = new BroadcastChannel('dps65_gps_channel');
+    const bcEvents = new BroadcastChannel('dps65_events_channel');
+
+    bcGps.onmessage = (e) => {
         if (e.data.type === 'NEW_LOCATION') {
             loadLocs();
+        } else if (e.data.type === 'UPDATE_CUSTOM_MARKERS') {
+            loadMarkers();
+        }
+    };
+
+    bcEvents.onmessage = (e) => {
+        if (e.data.type === 'UPDATE_EVENTS') {
+            loadEventData();
         }
     };
 
     return () => {
         clearInterval(interval);
-        bc.close();
+        bcGps.close();
+        bcEvents.close();
     };
   }, [eventId, isEcoMode, forceLoad]);
 
