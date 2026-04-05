@@ -33,6 +33,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const checkAuth = useCallback(async () => {
       setLoading(true);
+      
+      // Sécurité : Timeout pour éviter le blocage infini du chargement (ex: IndexedDB lock)
+      const timeoutId = setTimeout(() => {
+          setLoading(false);
+          console.warn("Auth check timed out - forcing loading to false");
+      }, 5000);
+
       try {
           const data = await authService.getSession();
           setProfile(data.profile);
@@ -40,6 +47,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           console.error("Profile Load Error", e);
           setProfile(null);
       } finally {
+          clearTimeout(timeoutId);
           setLoading(false);
       }
   }, []);
