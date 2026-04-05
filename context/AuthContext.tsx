@@ -34,11 +34,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const checkAuth = useCallback(async () => {
       setLoading(true);
       
-      // Sécurité : Timeout pour éviter le blocage infini du chargement (ex: IndexedDB lock)
+      // Sécurité renforcée : Timeout court pour la fenêtre TV/Projecteur
+      const isMapWindow = window.location.hash.includes('/map/');
+      const timeoutDuration = isMapWindow ? 2000 : 5000;
+
       const timeoutId = setTimeout(() => {
           setLoading(false);
-          console.warn("Auth check timed out - forcing loading to false");
-      }, 5000);
+          console.warn("Auth check timed out - unblocking UI");
+      }, timeoutDuration);
 
       try {
           const data = await authService.getSession();
