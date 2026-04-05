@@ -12,36 +12,27 @@ const ADMIN_EMAIL = 'dps65.asso@gmail.com';
 export const authService = {
   // Récupère la session active (locale ou distante)
   getSession: async () => {
-    // 1. Priorité au stockage local pour un chargement instantané (très important pour la fenêtre TV)
-    const storedId = localStorage.getItem(SESSION_KEY);
-    
-    if (storedId) {
-        try {
-            // On essaie de récupérer le profil localement
+    // 1. On vérifie si Supabase a une session active (via cookie/localStorage natif)
+    if (isLive) {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
             const db = await initDB();
-            const profile = await db.get('profiles', storedId);
+            const profile = await db.get('profiles', session.user.id);
             if (profile) {
-                return { user: { id: profile.id, role: profile.role }, profile };
+                localStorage.setItem(SESSION_KEY, profile.id);
+                return { user: session.user, profile };
             }
-        } catch (e) {
-            console.warn("Local profile load failed, trying Supabase...", e);
         }
     }
 
-    // 2. Fallback Supabase (si en ligne et pas de session locale valide)
-    if (isLive) {
-        try {
-            const { data: { session } } = await supabase.auth.getSession();
-            if (session?.user) {
-                const db = await initDB();
-                const profile = await db.get('profiles', session.user.id);
-                if (profile) {
-                    localStorage.setItem(SESSION_KEY, profile.id);
-                    return { user: session.user, profile };
-                }
-            }
-        } catch (e) {
-            console.error("Supabase session error", e);
+    // 2. Fallback : vérification locale (Mode Hors Ligne standard)
+    const storedId = localStorage.getItem(SESSION_KEY);
+    const db = await initDB();
+
+    if (storedId) {
+        const profile = await db.get('profiles', storedId);
+        if (profile) {
+            return { user: { id: profile.id, role: profile.role }, profile };
         }
     }
     

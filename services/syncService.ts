@@ -134,27 +134,20 @@ class SyncService {
         
         try {
             const syncTable = async (tableName: string, dbStoreName: string) => {
-                try {
-                    const { data, error } = await supabase.from(tableName).select('*');
-                    if (error) {
-                        // On logge l'erreur mais on ne bloque pas les autres tables
-                        console.warn(`Sync: Could not pull ${tableName}: ${error.message}`);
-                        return;
-                    }
-                    if (data) {
-                        const db = await initDB();
-                        const tx = db.transaction(dbStoreName as any, 'readwrite');
-                        for (const remote of data) {
-                            if (dbStoreName === 'config') {
-                                await tx.store.put(remote, 'main');
-                            } else {
-                                await tx.store.put(remote);
-                            }
+                const { data, error } = await supabase.from(tableName).select('*');
+                if (error) throw error;
+                if (data) {
+                    const db = await initDB();
+                    const tx = db.transaction(dbStoreName as any, 'readwrite');
+                    for (const remote of data) {
+                        // CORRECTION CRITIQUE : Le store 'config' n'a pas de keyPath, il faut fournir la clé 'main'
+                        if (dbStoreName === 'config') {
+                            await tx.store.put(remote, 'main');
+                        } else {
+                            await tx.store.put(remote);
                         }
-                        await tx.done;
                     }
-                } catch (e) {
-                    console.error(`Sync: Error pulling ${tableName}`, e);
+                    await tx.done;
                 }
             };
             
@@ -163,15 +156,14 @@ class SyncService {
                 syncTable('profiles', 'profiles'), syncTable('bags', 'bags'), syncTable('bag_items', 'bag_items'),
                 syncTable('uniforms', 'uniforms'), syncTable('fleet', 'fleet'), syncTable('news', 'news'),
                 syncTable('documents', 'documents'), syncTable('courses', 'courses'), syncTable('vehicle_checks', 'vehicle_checks'),
-                syncTable('config', 'config'), syncTable('custom_markers', 'custom_markers'),
-                syncTable('team_locations', 'team_locations') // Ajout explicite de team_locations
+                syncTable('config', 'config'), syncTable('custom_markers', 'custom_markers')
             ];
             
             await Promise.all(tasks);
             this.hasError = false;
             
         } catch (e) { 
-            console.error("Sync Pull Global Error:", e);
+            console.error("Sync Pull Error:", e);
             this.hasError = true; 
         } finally { 
             this.notifyListeners(); 

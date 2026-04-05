@@ -7,13 +7,14 @@ import { Logo } from '../components/Logo';
 import { EmergencyGuide } from '../components/EmergencyGuide';
 import { storageService } from '../services/storageService';
 import { geoService } from '../services/geoService';
+import { biometricService } from '../services/biometricService'; 
 import { bagService } from '../services/bagService';
 import { authService } from '../services/authService';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { ScreenCurtain, CurtainTrigger } from '../components/ScreenCurtain';
 import { ConfirmDialog } from '../components/ConfirmDialog';
-import { Loader2, RefreshCw, HeartPulse, Settings, MapPin, QrCode, Battery, BatteryCharging, Users, Radio, Briefcase, ChevronRight, Power, Shield, Stethoscope, ShieldAlert, FlaskConical, User, GraduationCap, Package, Phone } from 'lucide-react';
+import { Loader2, RefreshCw, HeartPulse, Settings, MapPin, QrCode, Battery, BatteryCharging, Users, Fingerprint, ShieldCheck, Radio, Briefcase, ChevronRight, Power, Shield, Stethoscope, ShieldAlert, FlaskConical, User, GraduationCap, Package, Phone } from 'lucide-react';
 import { AppConfig, Bag, UserRole, Event as DpsEvent } from '../types';
 import { generateUUID, getLocalDateString } from '../utils/security';
 import { useWakeLock } from '../hooks/useWakeLock';
@@ -49,6 +50,7 @@ export const HomePage: React.FC = () => {
   const [showBagSelect, setShowBagSelect] = useState(false); 
   const [availableBags, setAvailableBags] = useState<Bag[]>([]); 
   const [loadingBags, setLoadingBags] = useState(false); 
+  const [showBioProposal, setShowBioProposal] = useState(false);
   const [config, setConfig] = useState<AppConfig | null>(null);
   const [todayEvent, setTodayEvent] = useState<DpsEvent | null>(null);
   
@@ -78,6 +80,8 @@ export const HomePage: React.FC = () => {
         setIsTracking(geoService.isTracking);
     };
     initGps();
+
+    checkBiometricProposal();
   }, []);
 
   // Surveiller la config pour l'arrêt forcé du service
@@ -118,8 +122,41 @@ export const HomePage: React.FC = () => {
       loadCurrentBag();
   }, [currentTeam]);
 
+  const checkBiometricProposal = async () => {
+      // On ne propose que si :
+      // 1. L'utilisateur n'a pas déjà fait un choix définitif (localStorage)
+      // 2. On ne l'a pas déjà proposé dans CETTE session (sessionStorage)
+      // 3. Le matériel est compatible
+      const alreadyProposedThisSession = sessionStorage.getItem('dps65_bio_proposed_this_session') === 'true';
+      
+      if (!biometricService.hasMadeChoice() && !alreadyProposedThisSession && await biometricService.isAvailable()) {
+          sessionStorage.setItem('dps65_bio_proposed_this_session', 'true');
+          setTimeout(() => setShowBioProposal(true), 1500);
+      }
+  };
+
   const handleRefresh = () => {
       window.location.reload();
+  };
+
+  const handleEnableBio = async () => {
+      const success = await biometricService.authenticate();
+      if (success) {
+          biometricService.enable();
+          alert("Biométrie activée !");
+      } else {
+          alert("Échec de la configuration biométrique.");
+      }
+      setShowBioProposal(false);
+  };
+
+  const handleDeclineTemporary = () => {
+      setShowBioProposal(false);
+  };
+
+  const handleNeverAskBio = () => {
+      biometricService.setChoiceMade();
+      setShowBioProposal(false);
   };
 
   const handleEmergencyClick = async () => {
@@ -519,6 +556,31 @@ export const HomePage: React.FC = () => {
       )}
 
       {showEmergency && <EmergencyGuide onClose={() => setShowEmergency(false)} />}
+
+      {showBioProposal && (
+          <div className="fixed inset-0 z-[120] bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-6 animate-in fade-in zoom-in duration-300">
+              <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-sm w-full p-6 text-center border border-blue-500/30">
+                  <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <Fingerprint className="w-8 h-8" />
+                  </div>
+                  <h3 className="text-xl font-black text-slate-800 dark:text-white mb-2">Connexion Rapide</h3>
+                  <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
+                      Voulez-vous activer <strong>FaceID / TouchID</strong> pour déverrouiller l'application plus rapidement la prochaine fois ?
+                  </p>
+                  <div className="space-y-3">
+                      <Button onClick={handleEnableBio} fullWidth variant="primary" icon={<ShieldCheck />}>
+                          Activer Biométrie
+                      </Button>
+                      <button onClick={handleDeclineTemporary} className="w-full py-2 text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-white font-medium bg-slate-50 dark:bg-slate-900/50 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-900 transition-colors">
+                          Plus tard
+                      </button>
+                      <button onClick={handleNeverAskBio} className="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 underline pt-2 block w-full">
+                          Ne plus me demander
+                      </button>
+                  </div>
+              </div>
+          </div>
+      )}
 
       <ConfirmDialog 
         isOpen={showStopTrackingConfirm}

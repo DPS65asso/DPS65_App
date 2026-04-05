@@ -33,16 +33,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const checkAuth = useCallback(async () => {
       setLoading(true);
-      
-      // Sécurité renforcée : Timeout court pour la fenêtre TV/Projecteur
-      const isMapWindow = window.location.hash.includes('/map/');
-      const timeoutDuration = isMapWindow ? 2000 : 5000;
-
-      const timeoutId = setTimeout(() => {
-          setLoading(false);
-          console.warn("Auth check timed out - unblocking UI");
-      }, timeoutDuration);
-
       try {
           const data = await authService.getSession();
           setProfile(data.profile);
@@ -50,7 +40,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           console.error("Profile Load Error", e);
           setProfile(null);
       } finally {
-          clearTimeout(timeoutId);
           setLoading(false);
       }
   }, []);

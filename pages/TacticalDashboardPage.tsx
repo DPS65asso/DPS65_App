@@ -70,23 +70,15 @@ export const TacticalDashboardPage: React.FC = () => {
         };
     }, [selectedEventId]);
 
-
     const handleOpenMapWindow = () => {
         if (!selectedEventId) return;
         const width = 1200;
         const height = 800;
         const left = (window.screen.width / 2) - (width / 2);
         const top = (window.screen.height / 2) - (height / 2);
-        
-        // Utilisation d'une URL absolue propre pour éviter les problèmes de routage
-        const baseUrl = window.location.origin + window.location.pathname;
+        const baseUrl = window.location.href.split('#')[0];
         const targetUrl = `${baseUrl}#/map/${selectedEventId}`;
-        
-        const newWindow = window.open(
-            targetUrl, 
-            `dps65_map_${selectedEventId}`, 
-            `width=${width},height=${height},top=${top},left=${left},resizable=yes,scrollbars=no,status=no,toolbar=no,menubar=no,location=no`
-        );
+        const newWindow = window.open(targetUrl, 'dps65_map_tactical', `width=${width},height=${height},top=${top},left=${left},resizable=yes,scrollbars=no,status=no,toolbar=no,menubar=no,location=no`);
         if (newWindow) newWindow.focus();
     };
 

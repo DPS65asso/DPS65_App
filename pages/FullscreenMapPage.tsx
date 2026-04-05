@@ -17,30 +17,14 @@ export const FullscreenMapPage: React.FC = () => {
   useEffect(() => {
     const load = async () => {
       if (id) {
-        try {
-            // Force une synchro pour récupérer les données publiques (events, markers, locations)
-            const { syncService } = await import('../services/syncService');
-            syncService.pullLatestData();
-
-            const e = await storageService.getEventById(id);
-            if (e) setEvent(e);
-        } catch (err) {
-            console.error("Erreur chargement événement TV:", err);
-        }
+        const e = await storageService.getEventById(id);
+        if (e) setEvent(e);
       }
     };
-    
-    // Chargement immédiat
     load();
 
-    // Rafraîchissement périodique au cas où le premier échoue (ex: session en cours d'init)
-    const refreshInterval = setInterval(load, 3000);
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
-    
-    return () => {
-        clearInterval(refreshInterval);
-        clearInterval(timer);
-    };
+    return () => clearInterval(timer);
   }, [id]);
 
   if (!id) return <div className="h-screen flex items-center justify-center bg-black text-white">ID Événement manquant</div>;
