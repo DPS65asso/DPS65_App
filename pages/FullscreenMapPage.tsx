@@ -20,14 +20,28 @@ export const FullscreenMapPage: React.FC = () => {
 
   const loadData = async () => {
     if (id) {
+      // Sécurité : Timeout pour ne pas bloquer l'UI si Supabase est lent
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error("Timeout chargement")), 10000)
+      );
+
       try {
-          const e = await storageService.getEventById(id);
+          const e = await Promise.race([
+              storageService.getEventById(id),
+              timeoutPromise
+          ]) as Event | undefined;
+          
           if (e) setEvent(e);
           
-          const v = await storageService.getVictimsByEvent(id, false);
+          const v = await Promise.race([
+              storageService.getVictimsByEvent(id, false),
+              timeoutPromise
+          ]) as Victim[];
+          
           setVictims(v);
       } catch (err) {
           console.error("Erreur chargement données TV:", err);
+          // Si on a déjà des données locales, on continue
       } finally {
           setIsLoading(false);
       }

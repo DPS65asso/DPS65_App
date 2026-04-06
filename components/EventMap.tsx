@@ -432,6 +432,8 @@ export const EventMap: React.FC<Props> = ({ eventId, isFullscreen = false }) => 
     bc.onmessage = (e) => {
         if (e.data.type === 'NEW_LOCATION') {
             loadLocs();
+        } else if (e.data.type === 'UPDATE_CUSTOM_MARKERS') {
+            loadMarkers();
         }
     };
 

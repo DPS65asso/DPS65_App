@@ -207,10 +207,22 @@ class SyncService {
                 'config': 'dps65_config_channel',
                 'news': 'dps65_asso_channel',
                 'documents': 'dps65_asso_channel',
-                'custom_markers': 'dps65_gps_channel'
+                'custom_markers': 'dps65_gps_channel',
+                'team_locations': 'dps65_gps_channel'
             };
             
-            if (bcMap[table]) new BroadcastChannel(bcMap[table]).postMessage({ type: 'UPDATE_' + table.toUpperCase(), eventId: newRecord?.eventId, entry: newRecord });
+            const eventId = newRecord?.eventId || newRecord?.event_id;
+            const type = table === 'team_locations' ? 'NEW_LOCATION' : 'UPDATE_' + table.toUpperCase();
+            
+            if (bcMap[table]) {
+                const channel = new BroadcastChannel(bcMap[table]);
+                channel.postMessage({ 
+                    type, 
+                    eventId, 
+                    entry: newRecord 
+                });
+                channel.close();
+            }
         } catch (e) {
             console.error("Error handling remote change:", e);
         }
