@@ -1,6 +1,7 @@
 
 import React, { createContext, useContext, useEffect, useState, useMemo, useCallback } from 'react';
 import { authService } from '../services/authService';
+import { geoService } from '../services/geoService';
 import { UserProfile, UserRole } from '../types';
 
 interface AuthContextType {
@@ -22,13 +23,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
   
   const [currentTeam, setCurrentTeam] = useState<string | null>(() => {
-      return sessionStorage.getItem('dps65_current_team');
+      return localStorage.getItem('dps65_current_team');
   });
 
   const setSessionTeam = useCallback((team: string | null) => {
       setCurrentTeam(team);
-      if (team) sessionStorage.setItem('dps65_current_team', team);
-      else sessionStorage.removeItem('dps65_current_team');
+      if (team) localStorage.setItem('dps65_current_team', team);
+      else localStorage.removeItem('dps65_current_team');
   }, []);
 
   const checkAuth = useCallback(async () => {
@@ -49,10 +50,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [checkAuth]);
 
   const signOut = useCallback(async () => {
+      // On arrête le GPS et on nettoie la position sur la carte, 
+      // mais on garde l'équipe assignée (localStorage) pour la reprise
+      if (currentTeam) {
+          try {
+              await geoService.clearLocation(currentTeam);
+              geoService.pauseTracking();
+          } catch (e) {}
+      }
+      
       await authService.logout();
       setProfile(null);
-      setSessionTeam(null);
-  }, [setSessionTeam]);
+      // setSessionTeam(null); // On ne vide plus l'équipe à la déconnexion
+  }, [currentTeam]);
 
   const refreshProfile = useCallback(async () => {
       const data = await authService.getSession();

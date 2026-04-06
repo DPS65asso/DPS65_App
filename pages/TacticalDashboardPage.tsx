@@ -70,15 +70,23 @@ export const TacticalDashboardPage: React.FC = () => {
         };
     }, [selectedEventId]);
 
+
     const handleOpenMapWindow = () => {
         if (!selectedEventId) return;
         const width = 1200;
         const height = 800;
         const left = (window.screen.width / 2) - (width / 2);
         const top = (window.screen.height / 2) - (height / 2);
-        const baseUrl = window.location.href.split('#')[0];
+        
+        // Utilisation d'une URL absolue propre pour éviter les problèmes de routage
+        const baseUrl = window.location.origin + window.location.pathname;
         const targetUrl = `${baseUrl}#/map/${selectedEventId}`;
-        const newWindow = window.open(targetUrl, 'dps65_map_tactical', `width=${width},height=${height},top=${top},left=${left},resizable=yes,scrollbars=no,status=no,toolbar=no,menubar=no,location=no`);
+        
+        const newWindow = window.open(
+            targetUrl, 
+            `dps65_map_${selectedEventId}`, 
+            `width=${width},height=${height},top=${top},left=${left},resizable=yes,scrollbars=no,status=no,toolbar=no,menubar=no,location=no`
+        );
         if (newWindow) newWindow.focus();
     };
 
@@ -101,9 +109,9 @@ export const TacticalDashboardPage: React.FC = () => {
                     <div className="flex flex-wrap gap-2 w-full md:w-auto">
                         <Button onClick={refreshData} className="bg-slate-800 hover:bg-slate-700 border border-slate-600 flex-1 min-w-[120px] whitespace-nowrap" icon={<RefreshCw className="w-5 h-5" />} disabled={!selectedEventId}>Rafraîchir</Button>
                         <Button onClick={() => setShowMap(!showMap)} className={`flex-1 min-w-[120px] whitespace-nowrap ${showMap ? 'bg-slate-700' : 'bg-blue-600 hover:bg-blue-500'}`} icon={showMap ? <X className="w-5 h-5" /> : <MapIcon className="w-5 h-5" />} disabled={!selectedEventId}>
-                            {showMap ? "Carte" : "Carte"}
+                            {showMap ? "Masquer Carte" : "Afficher Carte"}
                         </Button>
-                        <Button onClick={handleOpenMapWindow} className="bg-slate-800 hover:bg-slate-700 border border-slate-600 flex-1 min-w-[80px] whitespace-nowrap" icon={<ExternalLink className="w-5 h-5" />} disabled={!selectedEventId}>TV</Button>
+                        <Button onClick={handleOpenMapWindow} className="bg-slate-800 hover:bg-slate-700 border border-slate-600 flex-1 min-w-[80px] whitespace-nowrap" icon={<Monitor className="w-5 h-5" />} disabled={!selectedEventId}>TV</Button>
                     </div>
                 </div>
                 <div className="mt-4">

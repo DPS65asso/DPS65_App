@@ -161,17 +161,21 @@ class GeoService {
     };
 
     public stopTracking() {
-        if (this.watchId !== null) {
-            navigator.geolocation.clearWatch(this.watchId);
-            this.watchId = null;
-        }
-        this.isTracking = false;
+        this.pauseTracking();
         this.clearSessionStorage(); // Suppression de la persistance
         
         if (this.onStopCallback) {
             this.onStopCallback();
             this.onStopCallback = null;
         }
+    }
+
+    public pauseTracking() {
+        if (this.watchId !== null) {
+            navigator.geolocation.clearWatch(this.watchId);
+            this.watchId = null;
+        }
+        this.isTracking = false;
     }
 
     // Supprime la position de l'équipe (DB Locale + Sync Cloud)

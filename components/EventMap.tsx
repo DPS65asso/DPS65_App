@@ -6,14 +6,27 @@ import { initDB } from '../services/db';
 import { storageService } from '../services/storageService';
 import { generateUUID } from '../utils/security';
 import L from 'leaflet';
-import { Battery, BatteryCharging, Mountain, Radio, Map as MapIcon, Target, Phone, Trash2, Tent, Truck, AlertTriangle, MapPin, User, Save, X, Move, Car, Zap } from 'lucide-react';
+import { Battery, BatteryCharging, Mountain, Radio, Map as MapIcon, Target, Phone, Trash2, Tent, Truck, AlertTriangle, MapPin, User, Save, X, Move, Car, Zap, Layers, Check, ChevronDown, ChevronUp } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { Button } from './Button';
 import { OPS_DATA } from '../data/opsData';
 
 // Fix Leaflet Default Icon
 const iconUrl = 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png';
+const STALE_LOCATION_THRESHOLD = 15 * 60 * 1000; // 15 minutes
 const iconShadow = 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png';
+
+const LAYER_LABELS: Record<string, string> = {
+    pointsPerso: "Points Perso",
+    deadZones: "Zones Blanches",
+    tracks: "Tracés GPX",
+    radar: "Radar Pluie",
+    hospitals: "Hôpitaux",
+    fireStations: "Pompiers",
+    medicalHomes: "Maisons Médicales",
+    dz: "DZ Hélico",
+    dae: "DAE Public"
+};
 
 // --- ZONES BLANCHES (RÉSEAU / RADIO) ---
 const KNOWN_DEAD_ZONES = [
@@ -164,7 +177,7 @@ const MapBounds = ({ locations, trackData, tracks }: { locations: TeamLocation[]
     }, [locations, trackData, tracks, map, hasCentered]);
 
     return (
-        <div className="absolute top-20 right-2 z-[1000]">
+        <div className="absolute top-20 right-4 z-[1000]">
              <button 
                 onClick={() => {
                     const points: L.LatLngExpression[] = [];
@@ -181,10 +194,10 @@ const MapBounds = ({ locations, trackData, tracks }: { locations: TeamLocation[]
                         map.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
                     }
                 }}
-                className="bg-white dark:bg-slate-800 p-2 rounded shadow-md border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-white hover:bg-slate-100"
+                className="bg-white dark:bg-slate-800 p-3 rounded-full shadow-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-white hover:scale-110 transition-transform flex items-center justify-center"
                 title="Recentrer sur la zone"
              >
-                 <Target className="w-5 h-5" />
+                 <Target className="w-6 h-6" />
              </button>
         </div>
     );
@@ -232,7 +245,7 @@ const DraggableMarker: React.FC<{ m: CustomMarker, onUpdate: (id: string, lat: n
             ref={markerRef}
         >
             <Popup>
-                <div className="min-w-[120px] text-center">
+                <div className="min-w-[120px] text-center text-slate-900">
                     <div className="font-bold text-sm mb-1">{m.label}</div>
                     <div className="text-[10px] text-slate-500 uppercase tracking-widest mb-2 flex items-center justify-center gap-1"><Move className="w-3 h-3"/> Déplaçable</div>
                     <button 
@@ -289,7 +302,7 @@ const TacticalMarker = React.memo(({ loc, zoomLevel }: { loc: TeamLocation; zoom
     return (
         <Marker position={[loc.lat, loc.lng]} icon={icon}>
             <Popup>
-                <div className="min-w-[150px]">
+                <div className="min-w-[150px] text-slate-900">
                     <div className="flex items-center gap-2 mb-1">
                         <h3 className="font-bold text-lg">{loc.team_name}</h3>
                         {!loc.event_id && <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded border border-blue-200 font-bold uppercase">Libre</span>}
@@ -332,6 +345,19 @@ export const EventMap: React.FC<Props> = ({ eventId, isFullscreen = false }) => 
   const [forceLoad, setForceLoad] = useState(false);
   const [zoomLevel, setZoomLevel] = useState(15); 
   const [rainViewerTimestamp, setRainViewerTimestamp] = useState<number | null>(null);
+  const [currentStyle, setCurrentStyle] = useState<'standard' | 'topo' | 'satellite'>('standard');
+  const [showLayersControl, setShowLayersControl] = useState(false);
+  const [layersVisibility, setLayersVisibility] = useState({
+    pointsPerso: true,
+    deadZones: true,
+    tracks: true,
+    radar: false,
+    hospitals: false,
+    fireStations: false,
+    medicalHomes: false,
+    dz: false,
+    dae: false
+  });
 
   // Fetch RainViewer latest data
   useEffect(() => {
@@ -378,7 +404,8 @@ export const EventMap: React.FC<Props> = ({ eventId, isFullscreen = false }) => 
             const latest: Record<string, TeamLocation> = {};
             
             locs.sort((a,b) => a.timestamp - b.timestamp).forEach(l => {
-                if (!l.event_id || l.event_id === eventId) {
+                const isStale = (Date.now() - l.timestamp) > STALE_LOCATION_THRESHOLD;
+                if (!isStale && (!l.event_id || l.event_id === eventId)) {
                     latest[l.team_name] = l;
                 }
             });
@@ -468,8 +495,8 @@ export const EventMap: React.FC<Props> = ({ eventId, isFullscreen = false }) => 
 
   return (
     <div className={`${isFullscreen ? 'h-full' : 'h-[60vh]'} w-full rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 shadow-sm relative z-0`}>
-        {/* BOUTON MODE ÉDITION - Positionnée à gauche (sous le zoom) pour éviter LayersControl à droite */}
-        <div className="absolute top-64 left-3 z-[1000] flex flex-col gap-2">
+        {/* BOUTON MODE ÉDITION & BLITZORTUNG - Aligné avec 3D */}
+        <div className="absolute top-48 left-3 z-[1000] flex flex-col gap-2">
             <button 
                 onClick={() => setIsEditMode(!isEditMode)} 
                 className={`p-3 rounded-full shadow-lg border-2 transition-all active:scale-95 ${isEditMode ? 'bg-orange-500 border-orange-600 text-white animate-pulse' : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-200'}`}
@@ -478,7 +505,6 @@ export const EventMap: React.FC<Props> = ({ eventId, isFullscreen = false }) => 
                 {isEditMode ? <X className="w-6 h-6" /> : <MapPin className="w-6 h-6" />}
             </button>
 
-            {/* BOUTON BLITZORTUNG (FOUDRE) */}
             <a 
                 href="https://www.lightningmaps.org" 
                 target="_blank" 
@@ -488,6 +514,49 @@ export const EventMap: React.FC<Props> = ({ eventId, isFullscreen = false }) => 
             >
                 <Zap className="w-6 h-6" />
             </a>
+        </div>
+
+        {/* LAYERS CONTROL - TOP RIGHT (UNDER RECENTER) */}
+        <div className="absolute top-36 right-4 z-[1000] flex flex-col items-end gap-2">
+            <button 
+                onClick={() => setShowLayersControl(!showLayersControl)}
+                className={`p-3 rounded-full shadow-xl border transition-all ${showLayersControl ? 'bg-blue-600 border-blue-500 text-white' : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-white'}`}
+                title="Contrôle des calques"
+            >
+                <Layers className="w-6 h-6" />
+            </button>
+
+            {showLayersControl && (
+                <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl p-4 w-64 animate-in slide-in-from-right-4">
+                    <div className="flex items-center justify-between mb-4 border-b border-slate-100 dark:border-slate-700 pb-2">
+                        <h3 className="text-xs font-black uppercase tracking-widest text-slate-400">Calques & Fonds</h3>
+                        <button onClick={() => setShowLayersControl(false)}><X className="w-4 h-4 text-slate-400" /></button>
+                    </div>
+
+                    {/* Base Styles */}
+                    <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">Fonds de carte</h4>
+                    <div className="grid grid-cols-1 gap-1 mb-4">
+                        <button onClick={() => setCurrentStyle('standard')} className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-bold transition-all ${currentStyle === 'standard' ? 'bg-blue-600 text-white' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'}`}><Zap className="w-4 h-4"/> Plan Standard</button>
+                        <button onClick={() => setCurrentStyle('topo')} className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-bold transition-all ${currentStyle === 'topo' ? 'bg-blue-600 text-white' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'}`}><Mountain className="w-4 h-4"/> Relief (Topo)</button>
+                        <button onClick={() => setCurrentStyle('satellite')} className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-bold transition-all ${currentStyle === 'satellite' ? 'bg-blue-600 text-white' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'}`}><Layers className="w-4 h-4"/> Satellite (ESRI)</button>
+                    </div>
+
+                    {/* Overlays */}
+                    <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">Données Tactiques</h4>
+                    <div className="space-y-1">
+                        {Object.entries(layersVisibility).map(([key, visible]) => (
+                            <button 
+                                key={key}
+                                onClick={() => setLayersVisibility(prev => ({ ...prev, [key]: !visible }))}
+                                className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-bold transition-all ${visible ? 'bg-slate-100 dark:bg-slate-700 text-blue-600 dark:text-blue-400' : 'text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
+                            >
+                                <span>{LAYER_LABELS[key] || key}</span>
+                                <div className={`w-2 h-2 rounded-full ${visible ? 'bg-blue-600' : 'bg-slate-300'}`}></div>
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            )}
         </div>
 
         {/* INSTRUCTION FLOTTANTE */}
@@ -535,8 +604,8 @@ export const EventMap: React.FC<Props> = ({ eventId, isFullscreen = false }) => 
             <MapBounds locations={locs} trackData={eventTrack} tracks={eventTracks} />
             <MapEvents isEditMode={isEditMode} onMapClick={handleMapClick} />
             
-            {/* ZOOM CONTROL DESCENDU */}
-            <div className="absolute top-20 left-3 z-[1000] hidden sm:flex flex-col gap-1 leaflet-bar border-none shadow-none">
+            {/* ZOOM CONTROL - Aligné avec 3D */}
+            <div className="absolute top-4 left-3 z-[1000] hidden sm:flex flex-col gap-1 leaflet-bar border-none shadow-none">
                 <button 
                     onClick={() => {
                         const map = (window as any).leafletMap;
@@ -559,147 +628,140 @@ export const EventMap: React.FC<Props> = ({ eventId, isFullscreen = false }) => 
                 </button>
             </div>
 
-            <LayersControl position="topright">
-                <LayersControl.BaseLayer checked name="Plan Standard">
-                    <TileLayer attribution='&copy; OSM' url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png" />
-                </LayersControl.BaseLayer>
-                <LayersControl.BaseLayer name="Relief (Topo)">
-                    <TileLayer attribution='&copy; OpenTopoMap' url="https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png" maxZoom={17} />
-                </LayersControl.BaseLayer>
-                <LayersControl.BaseLayer name="Satellite (ESRI)">
-                    <TileLayer attribution='&copy; Esri' url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" />
-                </LayersControl.BaseLayer>
+            {/* FOND DE CARTE */}
+            {currentStyle === 'standard' && (
+                <TileLayer attribution='&copy; OSM' url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png" />
+            )}
+            {currentStyle === 'topo' && (
+                <TileLayer attribution='&copy; OpenTopoMap' url="https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png" maxZoom={17} />
+            )}
+            {currentStyle === 'satellite' && (
+                <TileLayer attribution='&copy; Esri' url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" />
+            )}
 
-                <LayersControl.Overlay name="Points Perso" checked={true}>
-                    <LayerGroup>
-                        {customMarkers.map(m => (
-                            <DraggableMarker 
-                                key={m.id} 
-                                m={m} 
-                                onUpdate={handleMarkerUpdate} 
-                                onDelete={handleDeleteMarker} 
-                            />
-                        ))}
-                    </LayerGroup>
-                </LayersControl.Overlay>
+            {/* POINTS PERSO */}
+            {layersVisibility.pointsPerso && (
+                <LayerGroup>
+                    {customMarkers.map(m => (
+                        <DraggableMarker 
+                            key={m.id} 
+                            m={m} 
+                            onUpdate={handleMarkerUpdate} 
+                            onDelete={handleDeleteMarker} 
+                        />
+                    ))}
+                </LayerGroup>
+            )}
 
-                <LayersControl.Overlay name="Zones Blanches (Réseau/Radio)" checked={true}>
-                    <LayerGroup>
-                        {KNOWN_DEAD_ZONES.map(zone => (
-                            <Polygon
-                                key={zone.id}
-                                positions={zone.positions}
-                                pathOptions={{ color: '#ef4444', dashArray: '5, 10', fillColor: '#ef4444', fillOpacity: 0.2, weight: 2 }}
-                            >
-                                <Popup>
-                                    <div className="text-center">
-                                        <AlertTriangle className="w-6 h-6 text-red-500 mx-auto mb-1" />
-                                        <div className="font-bold text-slate-800 dark:text-white">Zone Blanche</div>
-                                        <div className="text-xs text-slate-500">{zone.name}</div>
-                                        <div className="text-[10px] font-bold bg-red-100 text-red-700 px-2 py-1 rounded mt-1">{zone.type}</div>
-                                    </div>
-                                </Popup>
-                            </Polygon>
-                        ))}
-                    </LayerGroup>
-                </LayersControl.Overlay>
-
-                {/* TRACKS GPX INDIVIDUELS DANS LES OPTIONS DE LA CARTE */}
-                {eventTracks.map(track => (
-                    <LayersControl.Overlay key={track.id} name={`Tracé: ${track.name}`} checked={true}>
-                        <Polyline 
-                            positions={track.data} 
-                            pathOptions={{ color: track.color || '#2563eb', weight: 4, opacity: 0.8 }} 
+            {/* ZONES BLANCHES */}
+            {layersVisibility.deadZones && (
+                <LayerGroup>
+                    {KNOWN_DEAD_ZONES.map(zone => (
+                        <Polygon
+                            key={zone.id}
+                            positions={zone.positions}
+                            pathOptions={{ color: '#ef4444', dashArray: '5, 10', fillColor: '#ef4444', fillOpacity: 0.2, weight: 2 }}
                         >
-                            <Popup>{track.name}</Popup>
-                        </Polyline>
-                    </LayersControl.Overlay>
-                ))}
+                            <Popup>
+                                <div className="text-center text-slate-900">
+                                    <AlertTriangle className="w-6 h-6 text-red-500 mx-auto mb-1" />
+                                    <div className="font-bold text-slate-800">Zone Blanche</div>
+                                    <div className="text-xs text-slate-500">{zone.name}</div>
+                                    <div className="text-[10px] font-bold bg-red-100 text-red-700 px-2 py-1 rounded mt-1">{zone.type}</div>
+                                </div>
+                            </Popup>
+                        </Polygon>
+                    ))}
+                </LayerGroup>
+            )}
 
-                {/* RADAR PLUIE TEMPS RÉEL (RAINVIEWER) */}
-                <RainViewerOverlay timestamp={rainViewerTimestamp} />
+            {/* TRACÉS GPX */}
+            {layersVisibility.tracks && eventTracks.map(track => (
+                <Polyline 
+                    key={track.id}
+                    positions={track.data} 
+                    pathOptions={{ color: track.color || '#2563eb', weight: 4, opacity: 0.8 }} 
+                >
+                    <Popup>
+                        <div className="text-slate-900 font-bold">{track.name}</div>
+                    </Popup>
+                </Polyline>
+            ))}
 
-                {/* CALQUES OPÉRATIONNELS 65 (Désactivés par défaut pour la perf) */}
-                <LayersControl.Overlay name="Hôpitaux" checked={false}>
-                    <LayerGroup>
-                        {OPS_DATA.hospitals.map((h, i) => (
-                            <Marker key={`hosp-${i}`} position={h.pos} icon={createPoiIcon('HOSP', 'bg-red-600')}>
-                                <Popup>
-                                    <div className="text-center">
-                                        <div className="font-bold text-sm">{h.name}</div>
-                                        <div className="text-xs font-mono mt-1 bg-slate-100 p-1 rounded">
-                                            <Phone className="w-3 h-3 inline mr-1"/>{h.tel}
-                                        </div>
+            {/* RADAR PLUIE */}
+            {layersVisibility.radar && rainViewerTimestamp && (
+                <TileLayer 
+                    url={`https://tilecache.rainviewer.com/v2/radar/${rainViewerTimestamp}/256/{z}/{x}/{y}/2/1_1.png`}
+                    attribution='&copy; RainViewer'
+                    opacity={0.7}
+                    maxNativeZoom={10}
+                />
+            )}
+
+            {/* POINTS OPÉRATIONNELS */}
+            {layersVisibility.hospitals && (
+                <LayerGroup>
+                    {OPS_DATA.hospitals.map((h, i) => (
+                        <Marker key={`hosp-${i}`} position={h.pos} icon={createPoiIcon('HOSP', 'bg-red-600')}>
+                            <Popup>
+                                <div className="text-center text-slate-900">
+                                    <div className="font-bold text-sm">{h.name}</div>
+                                    <div className="text-xs font-mono mt-1 bg-slate-100 p-1 rounded text-slate-700">
+                                        <Phone className="w-3 h-3 inline mr-1"/>{h.tel}
                                     </div>
-                                </Popup>
-                            </Marker>
-                        ))}
-                    </LayerGroup>
-                </LayersControl.Overlay>
+                                </div>
+                            </Popup>
+                        </Marker>
+                    ))}
+                </LayerGroup>
+            )}
 
-                <LayersControl.Overlay name="Pompiers (CS/CSP)" checked={false}>
-                    <LayerGroup>
-                        {OPS_DATA.fireStations.map((f, i) => (
-                            <Marker key={`fire-${i}`} position={f.pos} icon={createPoiIcon('FIRE', 'bg-red-500')}>
-                                <Popup>
-                                    <div className="text-center">
-                                        <div className="font-bold text-sm">{f.name}</div>
-                                        <div className="text-xs font-mono mt-1 bg-slate-100 p-1 rounded">
-                                            <Phone className="w-3 h-3 inline mr-1"/>{f.tel}
-                                        </div>
+            {layersVisibility.fireStations && (
+                <LayerGroup>
+                    {OPS_DATA.fireStations.map((f, i) => (
+                        <Marker key={`fire-${i}`} position={f.pos} icon={createPoiIcon('FIRE', 'bg-red-500')}>
+                            <Popup>
+                                <div className="text-center text-slate-900">
+                                    <div className="font-bold text-sm">{f.name}</div>
+                                    <div className="text-xs font-mono mt-1 bg-slate-100 p-1 rounded text-slate-700">
+                                        <Phone className="w-3 h-3 inline mr-1"/>{f.tel}
                                     </div>
-                                </Popup>
-                            </Marker>
-                        ))}
-                    </LayerGroup>
-                </LayersControl.Overlay>
+                                </div>
+                            </Popup>
+                        </Marker>
+                    ))}
+                </LayerGroup>
+            )}
 
-                <LayersControl.Overlay name="Maisons Médicales (MMG)" checked={false}>
-                    <LayerGroup>
-                        {OPS_DATA.medicalHomes.map((m, i) => (
-                            <Marker key={`mmg-${i}`} position={m.pos} icon={createPoiIcon('MMG', 'bg-emerald-600')}>
-                                <Popup>
-                                    <div className="text-center">
-                                        <div className="font-bold text-sm">{m.name}</div>
-                                        <div className="text-xs font-mono mt-1 bg-slate-100 p-1 rounded">{m.info}</div>
-                                    </div>
-                                </Popup>
-                            </Marker>
-                        ))}
-                    </LayerGroup>
-                </LayersControl.Overlay>
+            {layersVisibility.dz && (
+                <LayerGroup>
+                    {OPS_DATA.dz.map((d, i) => (
+                        <Marker key={`dz-${i}`} position={d.pos} icon={createPoiIcon('DZ', 'bg-blue-600')}>
+                            <Popup>
+                                <div className="text-center text-slate-900">
+                                    <div className="font-bold text-sm">{d.name}</div>
+                                    <div className="text-xs font-mono mt-1 bg-slate-100 p-1 rounded text-slate-700">Type: {d.type}</div>
+                                </div>
+                            </Popup>
+                        </Marker>
+                    ))}
+                </LayerGroup>
+            )}
 
-                <LayersControl.Overlay name="DZ Hélico" checked={false}>
-                    <LayerGroup>
-                        {OPS_DATA.dz.map((d, i) => (
-                            <Marker key={`dz-${i}`} position={d.pos} icon={createPoiIcon('DZ', 'bg-blue-600')}>
-                                <Popup>
-                                    <div className="text-center">
-                                        <div className="font-bold text-sm">{d.name}</div>
-                                        <div className="text-xs font-mono mt-1 bg-slate-100 p-1 rounded">Type: {d.type}</div>
-                                    </div>
-                                </Popup>
-                            </Marker>
-                        ))}
-                    </LayerGroup>
-                </LayersControl.Overlay>
-
-                <LayersControl.Overlay name="DAE Public" checked={false}>
-                    <LayerGroup>
-                        {OPS_DATA.dae.map((d, i) => (
-                            <Marker key={`dae-${i}`} position={d.pos} icon={createPoiIcon('DAE', 'bg-green-600')}>
-                                <Popup>
-                                    <div className="text-center">
-                                        <div className="font-bold text-sm">{d.name}</div>
-                                        <div className="text-xs font-mono mt-1 bg-slate-100 p-1 rounded">Loc: {d.loc}</div>
-                                    </div>
-                                </Popup>
-                            </Marker>
-                        ))}
-                    </LayerGroup>
-                </LayersControl.Overlay>
-
-            </LayersControl>
+            {layersVisibility.dae && (
+                <LayerGroup>
+                    {OPS_DATA.dae.map((d, i) => (
+                        <Marker key={`dae-${i}`} position={d.pos} icon={createPoiIcon('DAE', 'bg-green-600')}>
+                            <Popup>
+                                <div className="text-center text-slate-900">
+                                    <div className="font-bold text-sm">{d.name}</div>
+                                    <div className="text-xs font-mono mt-1 bg-slate-100 p-1 rounded text-slate-700">Loc: {d.loc}</div>
+                                </div>
+                            </Popup>
+                        </Marker>
+                    ))}
+                </LayerGroup>
+            )}
             
             {locs.map(loc => (
                 <TacticalMarker key={loc.team_name} loc={loc} zoomLevel={zoomLevel} />
