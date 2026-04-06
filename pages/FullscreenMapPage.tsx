@@ -77,7 +77,7 @@ export const FullscreenMapPage: React.FC = () => {
         <div className="flex items-center gap-6 pointer-events-auto pl-16">
             <div className="flex flex-col items-center md:items-start">
                 <h1 className="text-4xl font-black uppercase tracking-tighter text-blue-500 drop-shadow-[0_2px_10px_rgba(59,130,246,0.5)]">
-                    {event ? event.name : 'CHARGEMENT...'}
+                    {event ? event.name : (isLoading ? 'CHARGEMENT...' : 'ÉVÉNEMENT INTROUVABLE')}
                 </h1>
                 <div className="flex items-center gap-4 text-sm font-mono text-slate-300 mt-1">
                     <span className="flex items-center gap-2"><Maximize className="w-4 h-4 text-blue-400" /> {event?.location}</span>

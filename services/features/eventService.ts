@@ -1,5 +1,6 @@
 
 import { initDB } from '../db';
+import { supabase, isLive } from '../supabaseClient';
 import { Event as AppEvent, Mission } from '../../types';
 import { generateUUID, getLocalDateString } from '../../utils/security';
 import { auditService } from '../auditService';
@@ -96,6 +97,21 @@ export const eventService = {
         const db = await initDB();
         let event = await db.get('events', id);
         if (!event) event = await db.get('events_archive', id);
+        
+        // Si non trouvé localement et qu'on est en ligne, on tente de le récupérer sur Supabase
+        if (!event && isLive) {
+            try {
+                const { data, error } = await supabase.from('events').select('*').eq('id', id).single();
+                if (!error && data) {
+                    event = data;
+                    // On le met en cache localement
+                    await db.put('events', data);
+                }
+            } catch (e) {
+                console.error("Error fetching event from Supabase:", e);
+            }
+        }
+        
         return event;
     },
 

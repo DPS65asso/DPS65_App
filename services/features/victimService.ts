@@ -1,5 +1,6 @@
 
 import { initDB } from '../db';
+import { supabase, isLive } from '../supabaseClient';
 import { Victim, CprEvent, Outcome, TriageColor, VictimPhoto } from '../../types';
 import { generateUUID, getLocalDateTimeString, sanitizeInput } from '../../utils/security';
 import { auditService } from '../auditService';
@@ -11,7 +12,32 @@ const bc = new BroadcastChannel('dps65_victims_channel');
 export const victimService = {
     getVictimsByEvent: async (eventId: string, includePhotos: boolean = false): Promise<Victim[]> => {
         const db = await initDB();
-        const storedVictims = await db.getAllFromIndex('victims', 'by-event', eventId);
+        let storedVictims = await db.getAllFromIndex('victims', 'by-event', eventId);
+        
+        // Si vide localement et en ligne, on tente de récupérer sur Supabase
+        if (storedVictims.length === 0 && isLive) {
+            try {
+                const { data, error } = await supabase.from('victims').select('*').eq('event_id', eventId);
+                if (!error && data) {
+                    // Mapping event_id -> eventId si nécessaire
+                    const mappedData = data.map((v: any) => ({
+                        ...v,
+                        eventId: v.event_id || v.eventId
+                    }));
+
+                    // On met en cache localement
+                    const tx = db.transaction('victims', 'readwrite');
+                    for (const v of mappedData) {
+                        await tx.store.put(v);
+                    }
+                    await tx.done;
+                    storedVictims = mappedData;
+                }
+            } catch (e) {
+                console.error("Error fetching victims from Supabase:", e);
+            }
+        }
+
         const localVictims = await Promise.all(storedVictims.map(v => restoreVictimFromStorage(v)));
 
         if (!includePhotos) return localVictims;
