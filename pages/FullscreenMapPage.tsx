@@ -3,6 +3,7 @@ import React, { useEffect, useState, Suspense, lazy, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Loader2, WifiOff, Battery, Maximize, ArrowLeft, Users, AlertCircle, Activity, Bed, CheckCircle2, Monitor } from 'lucide-react';
 import { storageService } from '../services/storageService';
+import { syncService } from '../services/syncService';
 import { Event, Victim, TriageColor, Outcome } from '../types';
 
 // Lazy load map components
@@ -18,11 +19,22 @@ export const FullscreenMapPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [is3D, setIs3D] = useState(true); // 3D par défaut sur TV
 
-  const loadData = async () => {
+  const loadData = async (retryCount = 0) => {
     if (id) {
+      setIsLoading(true);
+      
+      // On tente de forcer un pull des données de cet événement spécifique
+      if (retryCount === 0) {
+          try {
+              await syncService.pullEventData(id);
+          } catch (e) {
+              console.warn("Sync pullEventData failed, continuing with local storage", e);
+          }
+      }
+
       // Sécurité : Timeout pour ne pas bloquer l'UI si Supabase est lent
       const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error("Timeout chargement")), 10000)
+        setTimeout(() => reject(new Error("Timeout chargement")), 15000)
       );
 
       try {
@@ -31,19 +43,28 @@ export const FullscreenMapPage: React.FC = () => {
               timeoutPromise
           ]) as Event | undefined;
           
-          if (e) setEvent(e);
-          
-          const v = await Promise.race([
-              storageService.getVictimsByEvent(id, false),
-              timeoutPromise
-          ]) as Victim[];
-          
-          setVictims(v);
+          if (e) {
+              setEvent(e);
+              const v = await Promise.race([
+                  storageService.getVictimsByEvent(id, false),
+                  timeoutPromise
+              ]) as Victim[];
+              setVictims(v);
+              setIsLoading(false);
+          } else if (retryCount < 3) {
+              // Si non trouvé, on tente de forcer une synchro et on réessaie dans 2s
+              console.warn(`Événement ${id} non trouvé, tentative ${retryCount + 1}...`);
+              setTimeout(() => loadData(retryCount + 1), 2000);
+          } else {
+              setIsLoading(false);
+          }
       } catch (err) {
           console.error("Erreur chargement données TV:", err);
-          // Si on a déjà des données locales, on continue
-      } finally {
-          setIsLoading(false);
+          if (retryCount < 3) {
+              setTimeout(() => loadData(retryCount + 1), 3000);
+          } else {
+              setIsLoading(false);
+          }
       }
     }
   };

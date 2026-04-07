@@ -101,11 +101,12 @@ export const eventService = {
         // Si non trouvé localement et qu'on est en ligne, on tente de le récupérer sur Supabase
         if (!event && isLive) {
             try {
-                const { data, error } = await supabase.from('events').select('*').eq('id', id).single();
+                // On force un petit délai pour laisser Supabase s'initialiser si besoin
+                const { data, error } = await supabase.from('events').select('*').eq('id', id).maybeSingle();
                 if (!error && data) {
-                    event = data;
+                    event = data as AppEvent;
                     // On le met en cache localement
-                    await db.put('events', data);
+                    await db.put('events', event);
                 }
             } catch (e) {
                 console.error("Error fetching event from Supabase:", e);

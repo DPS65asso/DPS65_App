@@ -184,21 +184,56 @@ class SyncService {
         }
     }
 
+    public async pullEventData(eventId: string) {
+        if (!this.isOnline || !isLive) return;
+        console.log(`Sync: Pulling specific data for event ${eventId}`);
+        
+        const syncTableFiltered = async (tableName: string, dbStoreName: string) => {
+            try {
+                const { data, error } = await supabase.from(tableName).select('*').eq('event_id', eventId);
+                if (!error && data) {
+                    const db = await initDB();
+                    const tx = db.transaction(dbStoreName as any, 'readwrite');
+                    for (const remote of data) {
+                        const localData = { ...remote };
+                        if (localData.event_id && !localData.eventId) {
+                            localData.eventId = localData.event_id;
+                        }
+                        await tx.store.put(localData);
+                    }
+                    await tx.done;
+                }
+            } catch (e) {
+                console.error(`Sync: Error pulling filtered ${tableName}`, e);
+            }
+        };
+
+        await Promise.all([
+            syncTableFiltered('victims', 'victims'),
+            syncTableFiltered('logbook', 'logbook'),
+            syncTableFiltered('custom_markers', 'custom_markers')
+        ]);
+    }
+
     private async handleRemoteChange(table: string, payload: any) {
         const db = await initDB();
         const { eventType, new: newRecord, old: oldRecord } = payload;
         try {
             if (eventType === 'INSERT' || eventType === 'UPDATE') {
-                // CORRECTION CRITIQUE : Gestion clé 'main' pour config lors des updates temps réel
+                const localData = { ...newRecord };
+                // Mapping event_id -> eventId pour la compatibilité locale
+                if (localData.event_id && !localData.eventId) {
+                    localData.eventId = localData.event_id;
+                }
+
                 if (table === 'config') {
-                    await db.put(table as any, newRecord, 'main');
+                    await db.put(table as any, localData, 'main');
                 } else {
-                    await db.put(table as any, newRecord);
+                    await db.put(table as any, localData);
                 }
             }
             else if (eventType === 'DELETE' && oldRecord?.id) {
                 if (table === 'config') {
-                    // Config ne devrait pas être supprimée, mais au cas où
                     await db.delete(table as any, 'main');
                 } else {
                     await db.delete(table as any, oldRecord.id);
