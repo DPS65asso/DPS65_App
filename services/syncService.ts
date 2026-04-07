@@ -145,10 +145,16 @@ class SyncService {
                         const db = await initDB();
                         const tx = db.transaction(dbStoreName as any, 'readwrite');
                         for (const remote of data) {
+                            // Mapping event_id -> eventId pour la compatibilité locale
+                            const localData = { ...remote };
+                            if (localData.event_id && !localData.eventId) {
+                                localData.eventId = localData.event_id;
+                            }
+
                             if (dbStoreName === 'config') {
-                                await tx.store.put(remote, 'main');
+                                await tx.store.put(localData, 'main');
                             } else {
-                                await tx.store.put(remote);
+                                await tx.store.put(localData);
                             }
                         }
                         await tx.done;
@@ -286,9 +292,15 @@ class SyncService {
                     const controller = new AbortController();
                     const timeoutId = setTimeout(() => controller.abort(), 15000);
 
+                    // Mapping eventId -> event_id pour Supabase
+                    const dataToPush = { ...item.data };
+                    if (dataToPush.eventId && !dataToPush.event_id) {
+                        dataToPush.event_id = dataToPush.eventId;
+                    }
+
                     if (item.action === 'UPSERT') {
                         sessionStorage.setItem(`local_create_${item.data.id}`, 'true');
-                        const { error } = await supabase.from(item.table).upsert(item.data);
+                        const { error } = await supabase.from(item.table).upsert(dataToPush);
                         if (!error) success = true;
                         else errorMessage = error.message;
                     } else if (item.action === 'DELETE') {
