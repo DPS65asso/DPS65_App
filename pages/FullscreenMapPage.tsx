@@ -2,8 +2,7 @@
 import React, { useEffect, useState, Suspense, lazy, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Loader2, WifiOff, Battery, Maximize, ArrowLeft, Users, AlertCircle, Activity, Bed, CheckCircle2, Monitor } from 'lucide-react';
-import { storageService } from '../services/storageService';
-import { syncService } from '../services/syncService';
+import { supabase } from '../services/supabaseClient';
 import { Event, Victim, TriageColor, Outcome } from '../types';
 
 // Lazy load map components
@@ -17,76 +16,91 @@ export const FullscreenMapPage: React.FC = () => {
   const [victims, setVictims] = useState<Victim[]>([]);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [isLoading, setIsLoading] = useState(true);
-  const [is3D, setIs3D] = useState(true); // 3D par défaut sur TV
+  const [is3D, setIs3D] = useState(true);
 
-  const loadData = async (retryCount = 0) => {
-    if (id) {
-      setIsLoading(true);
-      
-      // On tente de forcer un pull des données de cet événement spécifique
-      if (retryCount === 0) {
-          try {
-              await syncService.pullEventData(id);
-          } catch (e) {
-              console.warn("Sync pullEventData failed, continuing with local storage", e);
-          }
+  const fetchDirectData = async () => {
+    if (!id) return;
+    
+    try {
+      // 1. Récupération directe de l'événement
+      const { data: eventData, error: eventError } = await supabase
+        .from('events')
+        .select('*')
+        .eq('id', id)
+        .maybeSingle();
+
+      if (eventData) {
+        setEvent(eventData);
       }
 
-      // Sécurité : Timeout pour ne pas bloquer l'UI si Supabase est lent
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error("Timeout chargement")), 15000)
-      );
+      // 2. Récupération directe des victimes
+      const { data: victimsData, error: victimsError } = await supabase
+        .from('victims')
+        .select('*')
+        .eq('event_id', id);
 
-      try {
-          const e = await Promise.race([
-              storageService.getEventById(id),
-              timeoutPromise
-          ]) as Event | undefined;
-          
-          if (e) {
-              setEvent(e);
-              const v = await Promise.race([
-                  storageService.getVictimsByEvent(id, false),
-                  timeoutPromise
-              ]) as Victim[];
-              setVictims(v);
-              setIsLoading(false);
-          } else if (retryCount < 3) {
-              // Si non trouvé, on tente de forcer une synchro et on réessaie dans 2s
-              console.warn(`Événement ${id} non trouvé, tentative ${retryCount + 1}...`);
-              setTimeout(() => loadData(retryCount + 1), 2000);
-          } else {
-              setIsLoading(false);
-          }
-      } catch (err) {
-          console.error("Erreur chargement données TV:", err);
-          if (retryCount < 3) {
-              setTimeout(() => loadData(retryCount + 1), 3000);
-          } else {
-              setIsLoading(false);
-          }
+      if (victimsData) {
+        // Mapping event_id -> eventId pour la compatibilité avec les types de l'app
+        const mappedVictims = victimsData.map((v: any) => ({
+          ...v,
+          eventId: v.event_id || v.eventId
+        }));
+        setVictims(mappedVictims);
       }
+    } catch (err) {
+      console.error("Erreur lors du fetch direct Supabase:", err);
+    } finally {
+      setIsLoading(false);
     }
   };
 
   useEffect(() => {
-    loadData();
+    if (!id) return;
 
-    // BroadcastChannel pour les mises à jour instantanées
-    const bc = new BroadcastChannel('dps65_victims_channel');
-    bc.onmessage = (e) => {
-        if (e.data.type === 'UPDATE_VICTIMS' && e.data.eventId === id) {
-            loadData();
+    fetchDirectData();
+
+    // ABONNEMENT TEMPS RÉEL SUPABASE
+    // On écoute tous les changements sur la table victims pour cet événement
+    const victimsChannel = supabase
+      .channel(`tv-victims-${id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'victims',
+          filter: `event_id=eq.${id}`
+        },
+        (payload) => {
+          console.log('Changement victime reçu en direct:', payload);
+          fetchDirectData(); // On rafraîchit tout pour être sûr de la cohérence
         }
-    };
+      )
+      .subscribe();
+
+    // On écoute aussi les changements sur l'événement lui-même
+    const eventChannel = supabase
+      .channel(`tv-event-${id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'events',
+          filter: `id=eq.${id}`
+        },
+        (payload) => {
+          setEvent(payload.new as Event);
+        }
+      )
+      .subscribe();
 
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
-    const refreshInterval = setInterval(loadData, 30000); // Polling de sécurité
     
     return () => {
-        bc.close();
-        clearInterval(timer);
-        clearInterval(refreshInterval);
+      supabase.removeChannel(victimsChannel);
+      supabase.removeChannel(eventChannel);
+      clearInterval(timer);
     };
   }, [id]);
 
