@@ -23,7 +23,7 @@ export const adminService = {
         try {
           const db = await initDB();
           const conf = await db.get('config', 'main');
-          return { ...DEFAULT_CONFIG, ...conf };
+          return { ...DEFAULT_CONFIG, ...conf } as AppConfig;
         } catch { return DEFAULT_CONFIG; }
     },
     
@@ -35,8 +35,7 @@ export const adminService = {
           await db.put('config', config, 'main');
           
           // Préparation d'un objet propre pour Supabase (évite les undefined qui causent des erreurs JSONB/SQL)
-          const cleanConfig = {
-              id: 'main',
+          const cleanConfig: AppConfig = {
               hospitals: Array.isArray(config.hospitals) ? config.hospitals : [],
               teams: Array.isArray(config.teams) ? config.teams : [],
               voiceUri: config.voiceUri || '',

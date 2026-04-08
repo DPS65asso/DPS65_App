@@ -139,7 +139,7 @@ export const AdminPage: React.FC = () => {
   // --- CONFIG HANDLERS ---
   const handleUpdateCode = async () => {
       if (!appConfig) return;
-      const updatedConfig = { ...appConfig, signupCode: signupCode.trim() };
+      const updatedConfig: AppConfig = { ...appConfig, signupCode: signupCode.trim() };
       setAppConfig(updatedConfig);
       await adminService.saveConfig(updatedConfig);
       alert("Code d'accès mis à jour !");
@@ -147,7 +147,7 @@ export const AdminPage: React.FC = () => {
 
   const handleAddTeam = async () => {
       if (!appConfig || !newTeam.trim()) return;
-      const updatedConfig = { ...appConfig, teams: [...appConfig.teams, newTeam.trim()] };
+      const updatedConfig: AppConfig = { ...appConfig, teams: [...appConfig.teams, newTeam.trim()] };
       setAppConfig(updatedConfig); // Optimistic UI
       await adminService.saveConfig(updatedConfig);
       setNewTeam('');
@@ -155,14 +155,14 @@ export const AdminPage: React.FC = () => {
 
   const handleDeleteTeam = async (team: string) => {
       if (!appConfig || !confirm(`Supprimer l'équipe "${team}" ?`)) return;
-      const updatedConfig = { ...appConfig, teams: appConfig.teams.filter(t => t !== team) };
+      const updatedConfig: AppConfig = { ...appConfig, teams: appConfig.teams.filter(t => t !== team) };
       setAppConfig(updatedConfig);
       await adminService.saveConfig(updatedConfig);
   };
 
   const handleAddHospital = async () => {
       if (!appConfig || !newHospital.trim()) return;
-      const updatedConfig = { ...appConfig, hospitals: [...appConfig.hospitals, newHospital.trim()] };
+      const updatedConfig: AppConfig = { ...appConfig, hospitals: [...appConfig.hospitals, newHospital.trim()] };
       setAppConfig(updatedConfig);
       await adminService.saveConfig(updatedConfig);
       setNewHospital('');
@@ -170,14 +170,14 @@ export const AdminPage: React.FC = () => {
 
   const handleDeleteHospital = async (hosp: string) => {
       if (!appConfig || !confirm(`Supprimer l'hôpital "${hosp}" ?`)) return;
-      const updatedConfig = { ...appConfig, hospitals: appConfig.hospitals.filter(h => h !== hosp) };
+      const updatedConfig: AppConfig = { ...appConfig, hospitals: appConfig.hospitals.filter(h => h !== hosp) };
       setAppConfig(updatedConfig);
       await adminService.saveConfig(updatedConfig);
   };
 
   const handleAddMedication = async () => {
       if (!appConfig || !newMedication.trim()) return;
-      const updatedConfig = { ...appConfig, medications: [...(appConfig.medications || []), newMedication.trim()] };
+      const updatedConfig: AppConfig = { ...appConfig, medications: [...(appConfig.medications || []), newMedication.trim()] };
       setAppConfig(updatedConfig);
       await adminService.saveConfig(updatedConfig);
       setNewMedication('');
@@ -185,14 +185,14 @@ export const AdminPage: React.FC = () => {
 
   const handleDeleteMedication = async (med: string) => {
       if (!appConfig || !confirm(`Supprimer le médicament "${med}" ?`)) return;
-      const updatedConfig = { ...appConfig, medications: (appConfig.medications || []).filter(m => m !== med) };
+      const updatedConfig: AppConfig = { ...appConfig, medications: (appConfig.medications || []).filter(m => m !== med) };
       setAppConfig(updatedConfig);
       await adminService.saveConfig(updatedConfig);
   };
 
   const handleAddSolute = async () => {
       if (!appConfig || !newSolute.trim()) return;
-      const updatedConfig = { ...appConfig, solutes: [...(appConfig.solutes || []), newSolute.trim()] };
+      const updatedConfig: AppConfig = { ...appConfig, solutes: [...(appConfig.solutes || []), newSolute.trim()] };
       setAppConfig(updatedConfig);
       await adminService.saveConfig(updatedConfig);
       setNewSolute('');
@@ -200,7 +200,7 @@ export const AdminPage: React.FC = () => {
 
   const handleDeleteSolute = async (sol: string) => {
       if (!appConfig || !confirm(`Supprimer le soluté "${sol}" ?`)) return;
-      const updatedConfig = { ...appConfig, solutes: (appConfig.solutes || []).filter(s => s !== sol) };
+      const updatedConfig: AppConfig = { ...appConfig, solutes: (appConfig.solutes || []).filter(s => s !== sol) };
       setAppConfig(updatedConfig);
       await adminService.saveConfig(updatedConfig);
   };
@@ -212,22 +212,9 @@ export const AdminPage: React.FC = () => {
       setIsActionLoading(true);
       try {
           const config = await adminService.getConfig();
-          const newConfig = { ...config, serviceResetTimestamp: Date.now() };
-          
-          // 1. Sauvegarde locale + Sync Queue
+          const newConfig: AppConfig = { ...config, serviceResetTimestamp: Date.now() };
           await adminService.saveConfig(newConfig);
-          
-          // 2. Tentative de push direct Supabase pour plus de réactivité
-          try {
-              const { supabase } = await import('../services/supabaseClient');
-              await supabase.from('config').upsert({
-                  id: 'main',
-                  service_reset_timestamp: newConfig.serviceResetTimestamp
-              });
-          } catch (err) {
-              console.warn("Direct Supabase push failed, relying on sync queue", err);
-          }
-
+          // On force le traitement de la file pour être sûr que ça parte
           await syncService.processQueue(true);
           alert("Ordre de fin de service envoyé à tous les appareils.");
       } catch(e) {
@@ -278,21 +265,6 @@ export const AdminPage: React.FC = () => {
   };
 
   // --- OTHER HANDLERS ---
-
-  const handleDeleteMember = async (id: string) => {
-      if (!confirm("Supprimer définitivement ce membre ? Cette action est irréversible.")) return;
-      
-      setIsActionLoading(true);
-      try {
-          await authService.deleteProfile(id);
-          loadData(true);
-          alert("Membre supprimé.");
-      } catch (e) {
-          alert("Erreur lors de la suppression.");
-      } finally {
-          setIsActionLoading(false);
-      }
-  };
 
   const handleSaveMember = async () => {
       if (!editingMember) return;
@@ -441,22 +413,7 @@ export const AdminPage: React.FC = () => {
           setIsActionLoading(true);
           try {
               const config = await adminService.getConfig();
-              const newConfig = { ...config, securityMode: 'WIPE_AND_LOCK' };
-              
-              // 1. Sauvegarde locale + Sync Queue
-              await adminService.saveConfig(newConfig);
-
-              // 2. Tentative de push direct Supabase
-              try {
-                  const { supabase } = await import('../services/supabaseClient');
-                  await supabase.from('config').upsert({
-                      id: 'main',
-                      security_mode: 'WIPE_AND_LOCK'
-                  });
-              } catch (err) {
-                  console.warn("Direct Supabase push failed, relying on sync queue", err);
-              }
-
+              await adminService.saveConfig({ ...config, securityMode: 'WIPE_AND_LOCK' } as AppConfig);
               await syncService.processQueue(true);
               alert("COMMANDE DE SUPPRESSION ENVOYÉE.");
           } catch (e) {
