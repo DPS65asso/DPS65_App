@@ -1,7 +1,7 @@
 
 import React, { useEffect, useState, Suspense, lazy, useMemo } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
-import { Loader2, WifiOff, Battery, Maximize, ArrowLeft, Users, AlertCircle, Activity, Bed, CheckCircle2, Monitor, Map as MapIcon } from 'lucide-react';
+import { useParams } from 'react-router-dom';
+import { Loader2, WifiOff, Battery, Maximize, Users, AlertCircle, Activity, Bed, CheckCircle2, Monitor, Map as MapIcon } from 'lucide-react';
 import { supabase } from '../services/supabaseClient';
 import { Event, Victim, TriageColor, Outcome, TeamLocation, CustomMarker } from '../types';
 
@@ -13,6 +13,7 @@ const EventMap = lazy(() => import('../components/EventMap').then(module => ({
     liveTeams?: TeamLocation[];
     liveMarkers?: CustomMarker[];
     liveEvent?: Event | null;
+    readOnly?: boolean;
   }> 
 })));
 const EventMap3D = lazy(() => import('../components/EventMap3D').then(module => ({ 
@@ -22,11 +23,11 @@ const EventMap3D = lazy(() => import('../components/EventMap3D').then(module => 
     liveTeams?: TeamLocation[];
     liveMarkers?: CustomMarker[];
     liveEvent?: Event | null;
+    readOnly?: boolean;
   }> 
 })));
 
 export const FullscreenMapPage: React.FC = () => {
-  const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const [event, setEvent] = useState<Event | null>(null);
   const [victims, setVictims] = useState<Victim[]>([]);
@@ -153,7 +154,7 @@ export const FullscreenMapPage: React.FC = () => {
     <div className="h-screen w-screen flex flex-col bg-slate-950 overflow-hidden text-white relative">
       {/* Header Overlay Tactique */}
       <div className="absolute top-0 left-0 right-0 z-[1000] bg-gradient-to-b from-black/95 via-black/80 to-transparent p-6 flex flex-col md:flex-row justify-between items-center md:items-start pointer-events-none gap-6">
-        <div className="flex items-center gap-6 pointer-events-auto pl-16">
+        <div className="flex items-center gap-6 pointer-events-auto">
             <div className="flex flex-col items-center md:items-start">
                 <h1 className="text-4xl font-black uppercase tracking-tighter text-blue-500 drop-shadow-[0_2px_10px_rgba(59,130,246,0.5)]">
                     {event ? event.name : (isLoading ? 'CHARGEMENT...' : 'ÉVÉNEMENT INTROUVABLE')}
@@ -171,24 +172,6 @@ export const FullscreenMapPage: React.FC = () => {
             </div>
             <div className="text-xs text-blue-400 font-black uppercase tracking-[0.3em] mt-1">Temps Réel Opérationnel</div>
         </div>
-
-        {/* Controls */}
-        <div className="flex items-center gap-4 pointer-events-auto pr-6">
-            <button 
-                onClick={() => setIs3D(!is3D)}
-                className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-xl font-bold transition-all shadow-lg shadow-blue-900/20 border border-blue-400/30"
-            >
-                {is3D ? <MapIcon className="w-5 h-5" /> : <Activity className="w-5 h-5" />}
-                {is3D ? "Passer en 2D" : "Passer en 3D"}
-            </button>
-            <button 
-                onClick={() => navigate(`/event/${id}`)}
-                className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded-xl font-bold transition-all border border-white/10"
-            >
-                <ArrowLeft className="w-5 h-5" />
-                Quitter
-            </button>
-        </div>
       </div>
 
       {/* Map Container */}
@@ -201,6 +184,7 @@ export const FullscreenMapPage: React.FC = () => {
                   liveTeams={teamLocations} 
                   liveMarkers={customMarkers}
                   liveEvent={event}
+                  readOnly={true}
                 />
             ) : (
                 <EventMap 
@@ -209,20 +193,10 @@ export const FullscreenMapPage: React.FC = () => {
                   liveTeams={teamLocations} 
                   liveMarkers={customMarkers}
                   liveEvent={event}
+                  readOnly={true}
                 />
             )}
          </Suspense>
-      </div>
-
-      {/* TOGGLE 3D/2D */}
-      <div className="absolute top-4 right-4 z-[1000] flex flex-col gap-2 pointer-events-auto">
-          <button 
-            onClick={() => setIs3D(!is3D)}
-            className={`flex items-center gap-3 px-4 py-3 rounded-xl border font-black uppercase tracking-widest text-xs transition-all shadow-2xl ${is3D ? 'bg-blue-600 border-blue-400 text-white shadow-blue-600/40' : 'bg-slate-900/90 border-slate-700 text-slate-400 hover:text-white'}`}
-          >
-              <div className={`w-3 h-3 rounded-full ${is3D ? 'bg-white animate-pulse' : 'bg-slate-600'}`}></div>
-              {is3D ? '3D' : '2D'}
-          </button>
       </div>
 
       {/* STATS OVERLAY - LEFT SIDE */}

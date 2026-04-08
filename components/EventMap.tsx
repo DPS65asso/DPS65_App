@@ -337,6 +337,7 @@ interface Props {
   liveTeams?: TeamLocation[];
   liveMarkers?: CustomMarker[];
   liveEvent?: Event | null;
+  readOnly?: boolean;
 }
 
 export const EventMap: React.FC<Props> = ({ 
@@ -344,7 +345,8 @@ export const EventMap: React.FC<Props> = ({
     isFullscreen = false,
     liveTeams,
     liveMarkers,
-    liveEvent
+    liveEvent,
+    readOnly = false
 }) => {
   const { isEcoMode } = useTheme();
   const [latestLocations, setLatestLocations] = useState<Record<string, TeamLocation>>({});
@@ -415,9 +417,13 @@ export const EventMap: React.FC<Props> = ({
 
   useEffect(() => {
     if (isEcoMode && !forceLoad) return;
-    if (liveTeams || liveMarkers || liveEvent) return; // Skip local loading if in live mode
 
     const loadEventData = async () => {
+        if (liveEvent) {
+            if (liveEvent.trackData) setEventTrack(liveEvent.trackData);
+            if (liveEvent.tracks) setEventTracks(liveEvent.tracks);
+            return;
+        }
         try {
             const event = await storageService.getEventById(eventId);
             if (event) {
@@ -428,6 +434,12 @@ export const EventMap: React.FC<Props> = ({
     };
 
     const loadLocs = async () => {
+        if (liveTeams) {
+            const latest: Record<string, TeamLocation> = {};
+            liveTeams.forEach(l => { latest[l.team_name] = l; });
+            setLatestLocations(latest);
+            return;
+        }
         try {
             const db = await initDB();
             const locs = await db.getAll('team_locations');
@@ -446,6 +458,10 @@ export const EventMap: React.FC<Props> = ({
     };
 
     const loadMarkers = async () => {
+        if (liveMarkers) {
+            setCustomMarkers(liveMarkers);
+            return;
+        }
         try {
             const markers = await storageService.getCustomMarkers(eventId);
             setCustomMarkers(markers);
@@ -460,9 +476,9 @@ export const EventMap: React.FC<Props> = ({
 
     const bc = new BroadcastChannel('dps65_gps_channel');
     bc.onmessage = (e) => {
-        if (e.data.type === 'NEW_LOCATION') {
+        if (e.data.type === 'NEW_LOCATION' && !liveTeams) {
             loadLocs();
-        } else if (e.data.type === 'UPDATE_CUSTOM_MARKERS') {
+        } else if (e.data.type === 'UPDATE_CUSTOM_MARKERS' && !liveMarkers) {
             loadMarkers();
         }
     };
@@ -528,25 +544,27 @@ export const EventMap: React.FC<Props> = ({
   return (
     <div className={`${isFullscreen ? 'h-full' : 'h-[60vh]'} w-full rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 shadow-sm relative z-0`}>
         {/* BOUTON MODE ÉDITION & BLITZORTUNG - Aligné avec 3D */}
-        <div className="absolute top-48 left-3 z-[1000] flex flex-col gap-2">
-            <button 
-                onClick={() => setIsEditMode(!isEditMode)} 
-                className={`p-3 rounded-full shadow-lg border-2 transition-all active:scale-95 ${isEditMode ? 'bg-orange-500 border-orange-600 text-white animate-pulse' : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-200'}`}
-                title={isEditMode ? "Quitter mode ajout" : "Ajouter un point"}
-            >
-                {isEditMode ? <X className="w-6 h-6" /> : <MapPin className="w-6 h-6" />}
-            </button>
+        {!readOnly && (
+            <div className="absolute top-48 left-3 z-[1000] flex flex-col gap-2">
+                <button 
+                    onClick={() => setIsEditMode(!isEditMode)} 
+                    className={`p-3 rounded-full shadow-lg border-2 transition-all active:scale-95 ${isEditMode ? 'bg-orange-500 border-orange-600 text-white animate-pulse' : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-200'}`}
+                    title={isEditMode ? "Quitter mode ajout" : "Ajouter un point"}
+                >
+                    {isEditMode ? <X className="w-6 h-6" /> : <MapPin className="w-6 h-6" />}
+                </button>
 
-            <a 
-                href="https://www.lightningmaps.org" 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="p-3 rounded-full shadow-lg border-2 bg-yellow-500 border-yellow-600 text-white transition-all active:scale-95 flex items-center justify-center"
-                title="Ouvrir Carte Foudre (Blitzortung)"
-            >
-                <Zap className="w-6 h-6" />
-            </a>
-        </div>
+                <a 
+                    href="https://www.lightningmaps.org" 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="p-3 rounded-full shadow-lg border-2 bg-yellow-500 border-yellow-600 text-white transition-all active:scale-95 flex items-center justify-center"
+                    title="Ouvrir Carte Foudre (Blitzortung)"
+                >
+                    <Zap className="w-6 h-6" />
+                </a>
+            </div>
+        )}
 
         {/* LAYERS CONTROL - TOP RIGHT (UNDER RECENTER) */}
         <div className="absolute top-36 right-4 z-[1000] flex flex-col items-end gap-2">

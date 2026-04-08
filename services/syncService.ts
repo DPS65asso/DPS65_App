@@ -323,31 +323,35 @@ class SyncService {
                 let errorMessage = '';
 
                 try {
-                    // Timeout de 15 secondes pour éviter le blocage infini
-                    const controller = new AbortController();
-                    const timeoutId = setTimeout(() => controller.abort(), 15000);
-
                     // Mapping eventId -> event_id pour Supabase
                     const dataToPush = { ...item.data };
                     if (dataToPush.eventId && !dataToPush.event_id) {
                         dataToPush.event_id = dataToPush.eventId;
                     }
 
-                    if (item.action === 'UPSERT') {
-                        sessionStorage.setItem(`local_create_${item.data.id}`, 'true');
-                        const { error } = await supabase.from(item.table).upsert(dataToPush);
-                        if (!error) success = true;
-                        else errorMessage = error.message;
-                    } else if (item.action === 'DELETE') {
-                        const { error } = await supabase.from(item.table).delete().eq('id', item.data.id);
-                        if (!error) success = true;
-                        else errorMessage = error.message;
-                    }
+                    // Timeout de 10 secondes pour l'appel Supabase
+                    const supabaseCall = async () => {
+                        if (item.action === 'UPSERT') {
+                            sessionStorage.setItem(`local_create_${item.data.id}`, 'true');
+                            return await supabase.from(item.table).upsert(dataToPush);
+                        } else if (item.action === 'DELETE') {
+                            return await supabase.from(item.table).delete().eq('id', item.data.id);
+                        }
+                        return { error: { message: 'Action inconnue' } };
+                    };
+
+                    const timeoutPromise = new Promise((_, reject) => 
+                        setTimeout(() => reject(new Error('Supabase Timeout (10s)')), 10000)
+                    );
+
+                    const result: any = await Promise.race([supabaseCall(), timeoutPromise]);
                     
-                    clearTimeout(timeoutId);
+                    if (result && !result.error) success = true;
+                    else errorMessage = result?.error?.message || 'Erreur inconnue';
+
                 } catch (err: any) {
                     errorMessage = err.message || 'Unknown error';
-                    console.error(`Sync: Critical error for table ${item.table}:`, err);
+                    console.error(`Sync: Error for table ${item.table}:`, err);
                 }
 
                 const freshDb = await initDB();
@@ -356,17 +360,22 @@ class SyncService {
                     console.log(`Sync: Success for ${item.table} (${item.id})`);
                 } else {
                     item.retries = (item.retries || 0) + 1;
-                    if (item.retries > 5) {
+                    if (item.retries > 3) { // Réduit à 3 tentatives pour être plus réactif
                         item.status = 'FAILED';
-                        console.error(`Sync: Permanent failure for ${item.table} after 5 retries: ${errorMessage}`);
+                        console.error(`Sync: Permanent failure for ${item.table} after 3 retries: ${errorMessage}`);
                     } else {
-                        console.warn(`Sync: Retry ${item.retries}/5 for ${item.table}: ${errorMessage}`);
+                        console.warn(`Sync: Retry ${item.retries}/3 for ${item.table}: ${errorMessage}`);
                     }
                     await freshDb.put('sync_queue', item);
+                    
+                    // Si c'est une erreur de timeout ou réseau, on arrête le traitement de la file pour l'instant
+                    if (errorMessage.includes('Timeout') || errorMessage.includes('Network') || errorMessage.includes('fetch')) {
+                        break;
+                    }
                 }
                 
                 // Petit délai pour ne pas saturer le réseau
-                await new Promise(r => setTimeout(r, 100));
+                await new Promise(r => setTimeout(r, 50));
             }
         } catch (e) {
             console.error("Sync: Global processQueue error:", e);

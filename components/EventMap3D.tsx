@@ -58,6 +58,7 @@ interface Props {
   liveTeams?: TeamLocation[];
   liveMarkers?: CustomMarker[];
   liveEvent?: Event | null;
+  readOnly?: boolean;
 }
 
 export const EventMap3D: React.FC<Props> = ({ 
@@ -65,7 +66,8 @@ export const EventMap3D: React.FC<Props> = ({
     isFullscreen = false,
     liveTeams,
     liveMarkers,
-    liveEvent
+    liveEvent,
+    readOnly = false
 }) => {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
@@ -478,7 +480,7 @@ export const EventMap3D: React.FC<Props> = ({
 
   // --- EDIT MODE CLICK HANDLER ---
   useEffect(() => {
-    if (!map.current || !mapLoaded) return;
+    if (!map.current || !mapLoaded || readOnly) return;
 
     const onClick = (e: maplibregl.MapMouseEvent) => {
         if (isEditMode) {
@@ -491,7 +493,7 @@ export const EventMap3D: React.FC<Props> = ({
 
     map.current.on('click', onClick);
     return () => { map.current?.off('click', onClick); };
-  }, [isEditMode, mapLoaded]);
+  }, [isEditMode, mapLoaded, readOnly]);
 
   const handleSaveMarker = async () => {
     if (!newMarkerPos || !newMarkerLabel) return;
@@ -708,25 +710,27 @@ export const EventMap3D: React.FC<Props> = ({
       <div ref={mapContainer} className="w-full h-full" />
       
       {/* BOUTONS MODE ÉDITION & BLITZORTUNG - Positionnés à gauche (sous le zoom) comme en 2D */}
-      <div className="absolute top-48 left-3 z-[1000] flex flex-col gap-2">
-          <button 
-              onClick={() => setIsEditMode(!isEditMode)} 
-              className={`p-3 rounded-full shadow-lg border-2 transition-all active:scale-95 ${isEditMode ? 'bg-orange-500 border-orange-600 text-white animate-pulse' : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-200'}`}
-              title={isEditMode ? "Quitter mode ajout" : "Ajouter un point"}
-          >
-              {isEditMode ? <X className="w-6 h-6" /> : <MapPin className="w-6 h-6" />}
-          </button>
+      {!readOnly && (
+          <div className="absolute top-48 left-3 z-[1000] flex flex-col gap-2">
+              <button 
+                  onClick={() => setIsEditMode(!isEditMode)} 
+                  className={`p-3 rounded-full shadow-lg border-2 transition-all active:scale-95 ${isEditMode ? 'bg-orange-500 border-orange-600 text-white animate-pulse' : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-200'}`}
+                  title={isEditMode ? "Quitter mode ajout" : "Ajouter un point"}
+              >
+                  {isEditMode ? <X className="w-6 h-6" /> : <MapPin className="w-6 h-6" />}
+              </button>
 
-          <a 
-              href="https://www.lightningmaps.org" 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="p-3 rounded-full shadow-lg border-2 bg-yellow-500 border-yellow-600 text-white transition-all active:scale-95 flex items-center justify-center"
-              title="Ouvrir Carte Foudre (Blitzortung)"
-          >
-              <Zap className="w-6 h-6" />
-          </a>
-      </div>
+              <a 
+                  href="https://www.lightningmaps.org" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="p-3 rounded-full shadow-lg border-2 bg-yellow-500 border-yellow-600 text-white transition-all active:scale-95 flex items-center justify-center"
+                  title="Ouvrir Carte Foudre (Blitzortung)"
+              >
+                  <Zap className="w-6 h-6" />
+              </a>
+          </div>
+      )}
 
       {/* INSTRUCTION FLOTTANTE */}
       {isEditMode && (

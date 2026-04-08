@@ -121,6 +121,15 @@ class GeoService {
         // Persistance de l'état pour reprise après crash/reload
         this.persistSession();
 
+        // Fix immédiat au démarrage
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                (pos) => this.handlePosition(pos),
+                (err) => console.warn("GPS Initial Fix failed:", err.message),
+                { enableHighAccuracy: true, timeout: 5000 }
+            );
+        }
+
         this.startWatch();
     }
 
