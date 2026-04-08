@@ -1,7 +1,7 @@
 
 import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap, LayersControl, useMapEvents, LayerGroup, Polyline, Polygon } from 'react-leaflet';
-import { TeamLocation, CustomMarker, MarkerType, Track } from '../types';
+import { TeamLocation, CustomMarker, MarkerType, Track, Event } from '../types';
 import { initDB } from '../services/db';
 import { storageService } from '../services/storageService';
 import { generateUUID } from '../utils/security';
@@ -334,9 +334,18 @@ const RainViewerOverlay = ({ timestamp }: { timestamp: number | null }) => {
 interface Props {
   eventId: string;
   isFullscreen?: boolean;
+  liveTeams?: TeamLocation[];
+  liveMarkers?: CustomMarker[];
+  liveEvent?: Event | null;
 }
 
-export const EventMap: React.FC<Props> = ({ eventId, isFullscreen = false }) => {
+export const EventMap: React.FC<Props> = ({ 
+    eventId, 
+    isFullscreen = false,
+    liveTeams,
+    liveMarkers,
+    liveEvent
+}) => {
   const { isEcoMode } = useTheme();
   const [latestLocations, setLatestLocations] = useState<Record<string, TeamLocation>>({});
   const [customMarkers, setCustomMarkers] = useState<CustomMarker[]>([]);
@@ -358,6 +367,26 @@ export const EventMap: React.FC<Props> = ({ eventId, isFullscreen = false }) => 
     dz: false,
     dae: false
   });
+
+  // --- GESTION DU MODE LIVE (TV) ---
+  useEffect(() => {
+      if (liveTeams) {
+          const latest: Record<string, TeamLocation> = {};
+          liveTeams.forEach(l => { latest[l.team_name] = l; });
+          setLatestLocations(latest);
+      }
+  }, [liveTeams]);
+
+  useEffect(() => {
+      if (liveMarkers) setCustomMarkers(liveMarkers);
+  }, [liveMarkers]);
+
+  useEffect(() => {
+      if (liveEvent) {
+          if (liveEvent.trackData) setEventTrack(liveEvent.trackData);
+          if (liveEvent.tracks) setEventTracks(liveEvent.tracks);
+      }
+  }, [liveEvent]);
 
   // Fetch RainViewer latest data
   useEffect(() => {
@@ -386,6 +415,7 @@ export const EventMap: React.FC<Props> = ({ eventId, isFullscreen = false }) => 
 
   useEffect(() => {
     if (isEcoMode && !forceLoad) return;
+    if (liveTeams || liveMarkers || liveEvent) return; // Skip local loading if in live mode
 
     const loadEventData = async () => {
         try {
@@ -441,7 +471,7 @@ export const EventMap: React.FC<Props> = ({ eventId, isFullscreen = false }) => 
         clearInterval(interval);
         bc.close();
     };
-  }, [eventId, isEcoMode, forceLoad]);
+  }, [eventId, isEcoMode, forceLoad, liveTeams, liveMarkers, liveEvent]);
 
   const handleMapClick = (e: L.LeafletMouseEvent) => {
       setNewMarkerPos({ lat: e.latlng.lat, lng: e.latlng.lng });

@@ -1,19 +1,37 @@
 
 import React, { useEffect, useState, Suspense, lazy, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Loader2, WifiOff, Battery, Maximize, ArrowLeft, Users, AlertCircle, Activity, Bed, CheckCircle2, Monitor } from 'lucide-react';
+import { Loader2, WifiOff, Battery, Maximize, ArrowLeft, Users, AlertCircle, Activity, Bed, CheckCircle2, Monitor, Map as MapIcon } from 'lucide-react';
 import { supabase } from '../services/supabaseClient';
-import { Event, Victim, TriageColor, Outcome } from '../types';
+import { Event, Victim, TriageColor, Outcome, TeamLocation, CustomMarker } from '../types';
 
 // Lazy load map components
-const EventMap = lazy(() => import('../components/EventMap').then(module => ({ default: module.EventMap as React.ComponentType<{ eventId: string; isFullscreen?: boolean }> })));
-const EventMap3D = lazy(() => import('../components/EventMap3D').then(module => ({ default: module.EventMap3D as React.ComponentType<{ eventId: string; isFullscreen?: boolean }> })));
+const EventMap = lazy(() => import('../components/EventMap').then(module => ({ 
+  default: module.EventMap as React.ComponentType<{ 
+    eventId: string; 
+    isFullscreen?: boolean;
+    liveTeams?: TeamLocation[];
+    liveMarkers?: CustomMarker[];
+    liveEvent?: Event | null;
+  }> 
+})));
+const EventMap3D = lazy(() => import('../components/EventMap3D').then(module => ({ 
+  default: module.EventMap3D as React.ComponentType<{ 
+    eventId: string; 
+    isFullscreen?: boolean;
+    liveTeams?: TeamLocation[];
+    liveMarkers?: CustomMarker[];
+    liveEvent?: Event | null;
+  }> 
+})));
 
 export const FullscreenMapPage: React.FC = () => {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const [event, setEvent] = useState<Event | null>(null);
   const [victims, setVictims] = useState<Victim[]>([]);
+  const [teamLocations, setTeamLocations] = useState<TeamLocation[]>([]);
+  const [customMarkers, setCustomMarkers] = useState<CustomMarker[]>([]);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [isLoading, setIsLoading] = useState(true);
   const [is3D, setIs3D] = useState(true);
@@ -22,33 +40,53 @@ export const FullscreenMapPage: React.FC = () => {
     if (!id) return;
     
     try {
-      // 1. Récupération directe de l'événement
-      const { data: eventData, error: eventError } = await supabase
+      // 1. Événement
+      const { data: eventData } = await supabase
         .from('events')
         .select('*')
         .eq('id', id)
         .maybeSingle();
 
-      if (eventData) {
-        setEvent(eventData);
-      }
+      if (eventData) setEvent(eventData);
 
-      // 2. Récupération directe des victimes
-      const { data: victimsData, error: victimsError } = await supabase
+      // 2. Victimes
+      const { data: victimsData } = await supabase
         .from('victims')
         .select('*')
         .eq('event_id', id);
 
       if (victimsData) {
-        // Mapping event_id -> eventId pour la compatibilité avec les types de l'app
-        const mappedVictims = victimsData.map((v: any) => ({
+        setVictims(victimsData.map((v: any) => ({
           ...v,
           eventId: v.event_id || v.eventId
-        }));
-        setVictims(mappedVictims);
+        })));
       }
+
+      // 3. Équipes (GPS)
+      const { data: teamsData } = await supabase
+        .from('team_locations')
+        .select('*');
+      
+      if (teamsData) {
+        // On filtre les équipes de cet événement ou les équipes libres
+        const STALE_THRESHOLD = 15 * 60 * 1000;
+        const filteredTeams = teamsData.filter((l: any) => {
+          const isStale = (Date.now() - l.timestamp) > STALE_THRESHOLD;
+          return !isStale && (!l.event_id || l.event_id === id);
+        });
+        setTeamLocations(filteredTeams);
+      }
+
+      // 4. Marqueurs Perso
+      const { data: markersData } = await supabase
+        .from('custom_markers')
+        .select('*')
+        .eq('event_id', id);
+      
+      if (markersData) setCustomMarkers(markersData);
+
     } catch (err) {
-      console.error("Erreur lors du fetch direct Supabase:", err);
+      console.error("Erreur fetch direct:", err);
     } finally {
       setIsLoading(false);
     }
@@ -59,48 +97,40 @@ export const FullscreenMapPage: React.FC = () => {
 
     fetchDirectData();
 
-    // ABONNEMENT TEMPS RÉEL SUPABASE
-    // On écoute tous les changements sur la table victims pour cet événement
+    // ABONNEMENTS TEMPS RÉEL
+    // Note: On écoute sans filtre sur DELETE pour être sûr de capter les suppressions
     const victimsChannel = supabase
       .channel(`tv-victims-${id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'victims',
-          filter: `event_id=eq.${id}`
-        },
-        (payload) => {
-          console.log('Changement victime reçu en direct:', payload);
-          fetchDirectData(); // On rafraîchit tout pour être sûr de la cohérence
-        }
-      )
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'victims' }, () => fetchDirectData())
       .subscribe();
 
-    // On écoute aussi les changements sur l'événement lui-même
+    const teamsChannel = supabase
+      .channel(`tv-teams-${id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'team_locations' }, () => fetchDirectData())
+      .subscribe();
+
+    const markersChannel = supabase
+      .channel(`tv-markers-${id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'custom_markers' }, () => fetchDirectData())
+      .subscribe();
+
     const eventChannel = supabase
       .channel(`tv-event-${id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'events',
-          filter: `id=eq.${id}`
-        },
-        (payload) => {
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'events', filter: `id=eq.${id}` }, (payload) => {
           setEvent(payload.new as Event);
-        }
-      )
+      })
       .subscribe();
 
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+    const slowRefresh = setInterval(fetchDirectData, 60000); // Sécurité
     
     return () => {
       supabase.removeChannel(victimsChannel);
+      supabase.removeChannel(teamsChannel);
+      supabase.removeChannel(markersChannel);
       supabase.removeChannel(eventChannel);
       clearInterval(timer);
+      clearInterval(slowRefresh);
     };
   }, [id]);
 
@@ -141,15 +171,45 @@ export const FullscreenMapPage: React.FC = () => {
             </div>
             <div className="text-xs text-blue-400 font-black uppercase tracking-[0.3em] mt-1">Temps Réel Opérationnel</div>
         </div>
+
+        {/* Controls */}
+        <div className="flex items-center gap-4 pointer-events-auto pr-6">
+            <button 
+                onClick={() => setIs3D(!is3D)}
+                className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-xl font-bold transition-all shadow-lg shadow-blue-900/20 border border-blue-400/30"
+            >
+                {is3D ? <MapIcon className="w-5 h-5" /> : <Activity className="w-5 h-5" />}
+                {is3D ? "Passer en 2D" : "Passer en 3D"}
+            </button>
+            <button 
+                onClick={() => navigate(`/event/${id}`)}
+                className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded-xl font-bold transition-all border border-white/10"
+            >
+                <ArrowLeft className="w-5 h-5" />
+                Quitter
+            </button>
+        </div>
       </div>
 
       {/* Map Container */}
       <div className="flex-1 w-full h-full bg-slate-900 relative z-0">
          <Suspense fallback={<div className="flex h-full items-center justify-center bg-slate-950"><Loader2 className="w-16 h-16 text-blue-600 animate-spin" /></div>}>
             {is3D ? (
-                <EventMap3D eventId={id} isFullscreen={true} />
+                <EventMap3D 
+                  eventId={id} 
+                  isFullscreen={true} 
+                  liveTeams={teamLocations} 
+                  liveMarkers={customMarkers}
+                  liveEvent={event}
+                />
             ) : (
-                <EventMap eventId={id} isFullscreen={true} />
+                <EventMap 
+                  eventId={id} 
+                  isFullscreen={true} 
+                  liveTeams={teamLocations} 
+                  liveMarkers={customMarkers}
+                  liveEvent={event}
+                />
             )}
          </Suspense>
       </div>

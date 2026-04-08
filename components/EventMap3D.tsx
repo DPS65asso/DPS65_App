@@ -2,7 +2,7 @@
 import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import { TeamLocation, CustomMarker, Track, MarkerType } from '../types';
+import { TeamLocation, CustomMarker, Track, MarkerType, Event } from '../types';
 import { initDB } from '../services/db';
 import { storageService } from '../services/storageService';
 import { Battery, BatteryCharging, Mountain, Radio, Target, Move, Trash2, Tent, Truck, AlertTriangle, MapPin, User, Car, Zap, Compass, Layers, Save, X, Phone, Activity, CheckCircle2, Monitor } from 'lucide-react';
@@ -55,9 +55,18 @@ const KNOWN_DEAD_ZONES = [
 interface Props {
   eventId: string;
   isFullscreen?: boolean;
+  liveTeams?: TeamLocation[];
+  liveMarkers?: CustomMarker[];
+  liveEvent?: Event | null;
 }
 
-export const EventMap3D: React.FC<Props> = ({ eventId, isFullscreen = false }) => {
+export const EventMap3D: React.FC<Props> = ({ 
+    eventId, 
+    isFullscreen = false,
+    liveTeams,
+    liveMarkers,
+    liveEvent
+}) => {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
   const [latestLocations, setLatestLocations] = useState<Record<string, TeamLocation>>({});
@@ -66,6 +75,25 @@ export const EventMap3D: React.FC<Props> = ({ eventId, isFullscreen = false }) =
   const [mapLoaded, setMapLoaded] = useState(false);
   const [currentStyle, setCurrentStyle] = useState<'satellite' | 'topo' | 'standard'>('satellite');
   const [rainViewerTimestamp, setRainViewerTimestamp] = useState<number | null>(null);
+
+  // --- GESTION DU MODE LIVE (TV) ---
+  useEffect(() => {
+      if (liveTeams) {
+          const latest: Record<string, TeamLocation> = {};
+          liveTeams.forEach(l => { latest[l.team_name] = l; });
+          setLatestLocations(latest);
+      }
+  }, [liveTeams]);
+
+  useEffect(() => {
+      if (liveMarkers) setCustomMarkers(liveMarkers);
+  }, [liveMarkers]);
+
+  useEffect(() => {
+      if (liveEvent) {
+          if (liveEvent.tracks) setEventTracks(liveEvent.tracks);
+      }
+  }, [liveEvent]);
 
   // Custom Marker States (Edit Mode)
   const [isEditMode, setIsEditMode] = useState(false);
@@ -112,6 +140,8 @@ export const EventMap3D: React.FC<Props> = ({ eventId, isFullscreen = false }) =
 
   // --- DATA LOADING ---
   useEffect(() => {
+    if (liveTeams || liveMarkers || liveEvent) return; // Skip local loading if in live mode
+
     const loadEventData = async () => {
         try {
             const event = await storageService.getEventById(eventId);
@@ -157,7 +187,7 @@ export const EventMap3D: React.FC<Props> = ({ eventId, isFullscreen = false }) =
         clearInterval(interval);
         bc.close();
     };
-  }, [eventId]);
+  }, [eventId, liveTeams, liveMarkers, liveEvent]);
 
   // --- MAP INITIALIZATION ---
   useEffect(() => {
