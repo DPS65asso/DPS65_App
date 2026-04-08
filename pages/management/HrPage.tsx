@@ -114,6 +114,8 @@ export const HrPage: React.FC = () => {
     const loadData = async () => {
         loadDailyQuiz();
         const data = await storageService.getCourses();
+        // Marquer comme vu pour le badge du dashboard
+        localStorage.setItem('dps65_seen_courses', (data || []).length.toString());
         setCourses(data || []);
     };
 

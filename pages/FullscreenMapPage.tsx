@@ -123,7 +123,7 @@ export const FullscreenMapPage: React.FC = () => {
       .subscribe();
 
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
-    const slowRefresh = setInterval(fetchDirectData, 60000); // Sécurité
+    const slowRefresh = setInterval(fetchDirectData, 30000); // Sécurité
     
     return () => {
       supabase.removeChannel(victimsChannel);
@@ -161,6 +161,15 @@ export const FullscreenMapPage: React.FC = () => {
                 </h1>
                 <div className="flex items-center gap-4 text-sm font-mono text-slate-300 mt-1">
                     <span className="flex items-center gap-2"><Maximize className="w-4 h-4 text-blue-400" /> {event?.location}</span>
+                    <button 
+                      onClick={() => setIs3D(!is3D)}
+                      className="ml-4 flex items-center gap-2 bg-blue-600/20 hover:bg-blue-600/40 border border-blue-500/30 px-3 py-1 rounded-full transition-all active:scale-95"
+                    >
+                      <MapIcon className="w-3 h-3 text-blue-400" />
+                      <span className="text-[10px] font-black uppercase tracking-widest">
+                        Mode {is3D ? '2D' : '3D'}
+                      </span>
+                    </button>
                 </div>
             </div>
         </div>

@@ -62,6 +62,11 @@ export const adminService = {
           });
           await tx.done;
           
+          // Broadcast local pour mise à jour immédiate des composants (SecurityMonitor, HomePage)
+          const localBc = new BroadcastChannel('dps65_config_channel');
+          localBc.postMessage({ type: 'UPDATE_CONFIG' });
+          localBc.close();
+
           console.log("Admin: Config saved locally and added to sync queue.");
           syncService.processQueue();
           auditService.log('CONFIG_UPDATE', `Mode: ${config.securityMode}`);

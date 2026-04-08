@@ -44,6 +44,9 @@ export const LogisticsPage: React.FC = () => {
     const loadData = async () => {
         const checks = await storageService.getVehicleChecks();
         const fleetData = await storageService.getFleet();
+        // Marquer comme vu pour le badge du dashboard
+        localStorage.setItem('dps65_seen_fleet', fleetData.length.toString());
+
         setRecentChecks(checks);
         setFleet(fleetData);
         if (fleetData.length > 0 && !reportForm.vehicle) {

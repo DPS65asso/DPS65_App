@@ -111,7 +111,7 @@ export const TacticalDashboardPage: React.FC = () => {
                         <Button onClick={() => setShowMap(!showMap)} className={`flex-1 min-w-[120px] whitespace-nowrap ${showMap ? 'bg-slate-700' : 'bg-blue-600 hover:bg-blue-500'}`} icon={showMap ? <X className="w-5 h-5" /> : <MapIcon className="w-5 h-5" />} disabled={!selectedEventId}>
                             {showMap ? "Masquer Carte" : "Afficher Carte"}
                         </Button>
-                        <Button onClick={handleOpenMapWindow} className="bg-slate-800 hover:bg-slate-700 border border-slate-600 flex-1 min-w-[80px] whitespace-nowrap" icon={<Monitor className="w-5 h-5" />} disabled={!selectedEventId}>TV</Button>
+                        <Button onClick={handleOpenMapWindow} className="hidden md:flex bg-slate-800 hover:bg-slate-700 border border-slate-600 flex-1 min-w-[80px] whitespace-nowrap" icon={<Monitor className="w-5 h-5" />} disabled={!selectedEventId}>TV</Button>
                     </div>
                 </div>
                 <div className="mt-4">

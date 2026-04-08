@@ -213,8 +213,21 @@ export const AdminPage: React.FC = () => {
       try {
           const config = await adminService.getConfig();
           const newConfig = { ...config, serviceResetTimestamp: Date.now() };
+          
+          // 1. Sauvegarde locale + Sync Queue
           await adminService.saveConfig(newConfig);
-          // On force le traitement de la file pour être sûr que ça parte
+          
+          // 2. Tentative de push direct Supabase pour plus de réactivité
+          try {
+              const { supabase } = await import('../services/supabaseClient');
+              await supabase.from('config').upsert({
+                  id: 'main',
+                  service_reset_timestamp: newConfig.serviceResetTimestamp
+              });
+          } catch (err) {
+              console.warn("Direct Supabase push failed, relying on sync queue", err);
+          }
+
           await syncService.processQueue(true);
           alert("Ordre de fin de service envoyé à tous les appareils.");
       } catch(e) {
@@ -265,6 +278,21 @@ export const AdminPage: React.FC = () => {
   };
 
   // --- OTHER HANDLERS ---
+
+  const handleDeleteMember = async (id: string) => {
+      if (!confirm("Supprimer définitivement ce membre ? Cette action est irréversible.")) return;
+      
+      setIsActionLoading(true);
+      try {
+          await authService.deleteProfile(id);
+          loadData(true);
+          alert("Membre supprimé.");
+      } catch (e) {
+          alert("Erreur lors de la suppression.");
+      } finally {
+          setIsActionLoading(false);
+      }
+  };
 
   const handleSaveMember = async () => {
       if (!editingMember) return;
@@ -413,7 +441,22 @@ export const AdminPage: React.FC = () => {
           setIsActionLoading(true);
           try {
               const config = await adminService.getConfig();
-              await adminService.saveConfig({ ...config, securityMode: 'WIPE_AND_LOCK' });
+              const newConfig = { ...config, securityMode: 'WIPE_AND_LOCK' };
+              
+              // 1. Sauvegarde locale + Sync Queue
+              await adminService.saveConfig(newConfig);
+
+              // 2. Tentative de push direct Supabase
+              try {
+                  const { supabase } = await import('../services/supabaseClient');
+                  await supabase.from('config').upsert({
+                      id: 'main',
+                      security_mode: 'WIPE_AND_LOCK'
+                  });
+              } catch (err) {
+                  console.warn("Direct Supabase push failed, relying on sync queue", err);
+              }
+
               await syncService.processQueue(true);
               alert("COMMANDE DE SUPPRESSION ENVOYÉE.");
           } catch (e) {

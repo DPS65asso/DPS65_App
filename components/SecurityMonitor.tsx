@@ -32,7 +32,7 @@ export const SecurityMonitor: React.FC = () => {
                     await authService.logout();
                     
                     // 5. Redirection Force vers Login et RECHARGEMENT pour vider la mémoire
-                    window.location.href = '/login';
+                    window.location.hash = '/login';
                     window.location.reload();
                 }
             } catch (e) {

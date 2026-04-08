@@ -29,6 +29,9 @@ export const AssoLifePage: React.FC = () => {
             setNews(n);
             
             const d = await adminService.getDocuments();
+            // Marquer comme vu pour le badge du dashboard
+            localStorage.setItem('dps65_seen_docs', (n.length + d.length).toString());
+
             // Filtre les documents réservés aux admins
             const filteredDocs = d.filter(doc => !doc.adminOnly || isAdmin);
             setDocuments(filteredDocs);

@@ -87,7 +87,7 @@ export const HomePage: React.FC = () => {
           setConfig(cfg);
           
           if (cfg.serviceResetTimestamp && currentTeam) {
-              const serviceStart = parseInt(sessionStorage.getItem('dps65_service_start_time') || '0');
+              const serviceStart = parseInt(localStorage.getItem('dps65_service_start_time') || '0');
               if (serviceStart > 0 && serviceStart < cfg.serviceResetTimestamp) {
                   // Le service a commencé AVANT la demande de reset global -> On coupe
                   executeEndService();
@@ -195,13 +195,13 @@ export const HomePage: React.FC = () => {
       setSessionTeam(null);
       setCurrentBag(null);
       setShowEndServiceConfirm(false);
-      sessionStorage.removeItem('dps65_service_start_time'); // Clear start time
+      localStorage.removeItem('dps65_service_start_time'); // Clear start time
   };
 
   const handleTeamSelected = async (team: string) => {
       setSessionTeam(team);
       // Enregistrement du début de service pour comparaison avec reset global
-      sessionStorage.setItem('dps65_service_start_time', Date.now().toString());
+      localStorage.setItem('dps65_service_start_time', Date.now().toString());
       
       setShowTeamSelect(false);
       setLoadingBags(true);

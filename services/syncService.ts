@@ -23,7 +23,17 @@ class SyncService {
         });
         window.addEventListener('offline', () => { this.isOnline = false; this.notifyListeners(); });
         this.initializeRealtime();
-        if (this.isOnline) { this.processQueue(); this.pullLatestData(); }
+        if (this.isOnline) { 
+            this.processQueue(); 
+            this.pullLatestData(); 
+        }
+
+        // Polling de secours toutes les 2 minutes
+        setInterval(() => {
+            if (this.isOnline) {
+                this.pullLatestData();
+            }
+        }, 120000);
     }
 
     private async initializeRealtime() {

@@ -34,6 +34,9 @@ export const PlanningPage: React.FC = () => {
 
     const loadMissions = async () => {
         const data = await storageService.getMissions();
+        // Marquer comme vu pour le badge du dashboard
+        localStorage.setItem('dps65_seen_missions', data.length.toString());
+        
         const safeData = data.map(m => ({
             ...m,
             registeredUserIds: Array.isArray(m.registeredUserIds) ? m.registeredUserIds : [],
