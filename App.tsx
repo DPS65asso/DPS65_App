@@ -30,6 +30,7 @@ const ScanPage = lazy(() => import('./pages/ScanPage').then(module => ({ default
 const TacticalDashboardPage = lazy(() => import('./pages/TacticalDashboardPage').then(module => ({ default: module.TacticalDashboardPage })));
 const FullscreenMapPage = lazy(() => import('./pages/FullscreenMapPage').then(module => ({ default: module.FullscreenMapPage })));
 const TvDebugPage = lazy(() => import('./pages/TvDebugPage').then(module => ({ default: module.TvDebugPage })));
+const DiagnosticsPage = lazy(() => import('./pages/DiagnosticsPage').then(module => ({ default: module.DiagnosticsPage })));
 const AiPage = lazy(() => import('./pages/AiPage').then(module => ({ default: module.AiPage })));
 const ManagementDashboardPage = lazy(() => import('./pages/ManagementDashboardPage').then(module => ({ default: module.ManagementDashboardPage })));
 const PlanningPage = lazy(() => import('./pages/management/PlanningPage').then(module => ({ default: module.PlanningPage })));
@@ -69,6 +70,7 @@ const AppRoutes: React.FC = () => {
               <Route path="/tactical" element={<ProtectedRoute><TacticalDashboardPage /></ProtectedRoute>} />
               <Route path="/map/:id" element={<FullscreenMapPage />} />
               <Route path="/tv-debug/:id" element={<TvDebugPage />} />
+              <Route path="/admin/diagnostics" element={<ProtectedRoute><DiagnosticsPage /></ProtectedRoute>} />
               <Route path="/management" element={<ProtectedRoute><ManagementDashboardPage /></ProtectedRoute>} />
               <Route path="/management/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
               <Route path="/management/planning" element={<ProtectedRoute><PlanningPage /></ProtectedRoute>} />

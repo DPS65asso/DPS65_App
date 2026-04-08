@@ -264,6 +264,7 @@ class SyncService {
                 });
                 channel.close();
             }
+            this.notifyListeners();
         } catch (e) {
             console.error("Error handling remote change:", e);
         }
@@ -300,90 +301,96 @@ class SyncService {
         console.log("Sync: Starting queue processing...");
         
         try {
-            const db = await initDB();
-            const allItems = await db.getAll('sync_queue');
-            let pendingItems = allItems.filter(i => i.status === 'PENDING');
-            
-            if (forceAll) {
-                const failedItems = allItems.filter(i => i.status === 'FAILED');
-                pendingItems = [...pendingItems, ...failedItems];
-            }
-            
-            if (pendingItems.length === 0) {
-                console.log(`Sync: No pending items (Total in queue: ${allItems.length})`);
-                return;
-            }
-
-            pendingItems.sort((a, b) => a.timestamp - b.timestamp);
-            
-            for (const item of pendingItems) {
-                if (!navigator.onLine) break;
+            // Utilisation d'une boucle while pour traiter les nouveaux éléments ajoutés pendant le traitement
+            let hasMore = true;
+            while (hasMore && navigator.onLine) {
+                const db = await initDB();
+                const allItems = await db.getAll('sync_queue');
+                let pendingItems = allItems.filter(i => i.status === 'PENDING');
                 
-                let success = false;
-                let errorMessage = '';
-
-                try {
-                    // Mapping eventId -> event_id pour Supabase
-                    const dataToPush = { ...item.data };
-                    if (dataToPush.eventId && !dataToPush.event_id) {
-                        dataToPush.event_id = dataToPush.eventId;
-                    }
-
-                    // Timeout de 10 secondes pour l'appel Supabase
-                    const supabaseCall = async () => {
-                        if (item.action === 'UPSERT') {
-                            sessionStorage.setItem(`local_create_${item.data.id}`, 'true');
-                            return await supabase.from(item.table).upsert(dataToPush);
-                        } else if (item.action === 'DELETE') {
-                            return await supabase.from(item.table).delete().eq('id', item.data.id);
-                        }
-                        return { error: { message: 'Action inconnue' } };
-                    };
-
-                    const timeoutPromise = new Promise((_, reject) => 
-                        setTimeout(() => reject(new Error('Supabase Timeout (10s)')), 10000)
-                    );
-
-                    const result: any = await Promise.race([supabaseCall(), timeoutPromise]);
-                    
-                    if (result && !result.error) success = true;
-                    else errorMessage = result?.error?.message || 'Erreur inconnue';
-
-                } catch (err: any) {
-                    errorMessage = err.message || 'Unknown error';
-                    console.error(`Sync: Error for table ${item.table}:`, err);
+                if (forceAll) {
+                    const failedItems = allItems.filter(i => i.status === 'FAILED');
+                    pendingItems = [...pendingItems, ...failedItems];
+                }
+                
+                if (pendingItems.length === 0) {
+                    hasMore = false;
+                    break;
                 }
 
-                const freshDb = await initDB();
-                if (success) {
-                    await freshDb.delete('sync_queue', item.id);
-                    console.log(`Sync: Success for ${item.table} (${item.id})`);
-                } else {
-                    item.retries = (item.retries || 0) + 1;
-                    if (item.retries > 3) { // Réduit à 3 tentatives pour être plus réactif
-                        item.status = 'FAILED';
-                        console.error(`Sync: Permanent failure for ${item.table} after 3 retries: ${errorMessage}`);
-                    } else {
-                        console.warn(`Sync: Retry ${item.retries}/3 for ${item.table}: ${errorMessage}`);
-                    }
-                    await freshDb.put('sync_queue', item);
-                    
-                    // Si c'est une erreur de timeout ou réseau, on arrête le traitement de la file pour l'instant
-                    if (errorMessage.includes('Timeout') || errorMessage.includes('Network') || errorMessage.includes('fetch')) {
+                pendingItems.sort((a, b) => a.timestamp - b.timestamp);
+                
+                for (const item of pendingItems) {
+                    if (!navigator.onLine) {
+                        hasMore = false;
                         break;
                     }
+                    
+                    let success = false;
+                    let errorMessage = '';
+
+                    try {
+                        const dataToPush = { ...item.data };
+                        if (dataToPush.eventId && !dataToPush.event_id) {
+                            dataToPush.event_id = dataToPush.eventId;
+                        }
+
+                        const supabaseCall = async () => {
+                            if (item.action === 'UPSERT') {
+                                sessionStorage.setItem(`local_create_${item.data.id}`, 'true');
+                                return await supabase.from(item.table).upsert(dataToPush);
+                            } else if (item.action === 'DELETE') {
+                                return await supabase.from(item.table).delete().eq('id', item.data.id);
+                            }
+                            return { error: { message: 'Action inconnue' } };
+                        };
+
+                        const timeoutPromise = new Promise((_, reject) => 
+                            setTimeout(() => reject(new Error('Supabase Timeout (10s)')), 10000)
+                        );
+
+                        const result: any = await Promise.race([supabaseCall(), timeoutPromise]);
+                        
+                        if (result && !result.error) success = true;
+                        else errorMessage = result?.error?.message || 'Erreur inconnue';
+
+                    } catch (err: any) {
+                        errorMessage = err.message || 'Unknown error';
+                        console.error(`Sync: Error for table ${item.table}:`, err);
+                    }
+
+                    const freshDb = await initDB();
+                    if (success) {
+                        await freshDb.delete('sync_queue', item.id);
+                        console.log(`Sync: Success for ${item.table} (${item.id})`);
+                    } else {
+                        item.retries = (item.retries || 0) + 1;
+                        if (item.retries > 3) {
+                            item.status = 'FAILED';
+                            console.error(`Sync: Permanent failure for ${item.table} after 3 retries: ${errorMessage}`);
+                        } else {
+                            console.warn(`Sync: Retry ${item.retries}/3 for ${item.table}: ${errorMessage}`);
+                        }
+                        await freshDb.put('sync_queue', item);
+                        
+                        if (errorMessage.includes('Timeout') || errorMessage.includes('Network') || errorMessage.includes('fetch')) {
+                            hasMore = false;
+                            break;
+                        }
+                    }
+                    
+                    await new Promise(r => setTimeout(r, 50));
                 }
                 
-                // Petit délai pour ne pas saturer le réseau
-                await new Promise(r => setTimeout(r, 50));
+                // On revérifie s'il y a de nouveaux éléments PENDING avant de quitter la boucle while
+                const checkDb = await initDB();
+                const remainingItems = await checkDb.getAll('sync_queue');
+                const stillPending = remainingItems.filter(i => i.status === 'PENDING').length;
+                if (stillPending === 0) hasMore = false;
             }
         } catch (e) {
             console.error("Sync: Global processQueue error:", e);
         } finally { 
-            const remaining = await this.getPendingCount();
-            if (remaining === 0) {
-                this.hasError = false; 
-            }
             this.isProcessing = false; 
             this.notifyListeners(); 
             console.log("Sync: Queue processing finished.");

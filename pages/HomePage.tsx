@@ -101,7 +101,19 @@ export const HomePage: React.FC = () => {
 
       // Check lors des syncs
       const unsub = syncService.subscribe(() => checkServiceReset());
-      return () => unsub();
+
+      // Check immédiat sur signal Broadcast (depuis SyncService)
+      const bc = new BroadcastChannel('dps65_config_channel');
+      bc.onmessage = (e) => {
+          if (e.data.type === 'UPDATE_CONFIG') {
+              checkServiceReset();
+          }
+      };
+
+      return () => {
+          unsub();
+          bc.close();
+      };
   }, [currentTeam]);
 
   // Surveiller l'équipe actuelle pour charger le sac correspondant

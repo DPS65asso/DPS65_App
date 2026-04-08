@@ -7,6 +7,7 @@ import { generateUUID, getLocalDateString } from '../utils/security';
 import { storageService } from '../services/storageService';
 import { authService } from '../services/authService';
 import { adminService } from '../services/features/adminService';
+import { initDB } from '../services/db';
 import { logisticsService } from '../services/features/logisticsService';
 import { testConnection } from '../services/supabaseClient'; 
 import { syncService } from '../services/syncService';
@@ -61,6 +62,7 @@ export const AdminPage: React.FC = () => {
   }, [profile, navigate]);
   const [resourceTab, setResourceTab] = useState<'MISSIONS' | 'ACTUALITÉ' | 'DOCUMENTS' | 'FORMATION' | 'VÉHICULE' | 'CONFIG'>('MISSIONS');
   
+  const [isActionLoading, setIsActionLoading] = useState(false);
   const [diagStatus, setDiagStatus] = useState<'IDLE' | 'TESTING' | 'SUCCESS' | 'ERROR'>('IDLE');
   const [diagMessage, setDiagMessage] = useState('');
   const [dbLatency, setDbLatency] = useState(0);
@@ -207,12 +209,47 @@ export const AdminPage: React.FC = () => {
   const handleGlobalServiceStop = async () => {
       if (!confirm("ATTENTION : Cela va déconnecter l'équipe de TOUS les téléphones actifs (Fin de Service forcée).\n\nLes utilisateurs seront déconnectés de leur indicatif et le suivi GPS s'arrêtera.\n\nConfirmer ?")) return;
       
+      setIsActionLoading(true);
       try {
           const config = await adminService.getConfig();
-          await adminService.saveConfig({ ...config, serviceResetTimestamp: Date.now() });
+          const newConfig = { ...config, serviceResetTimestamp: Date.now() };
+          await adminService.saveConfig(newConfig);
+          // On force le traitement de la file pour être sûr que ça parte
+          await syncService.processQueue(true);
           alert("Ordre de fin de service envoyé à tous les appareils.");
       } catch(e) {
           alert("Erreur lors de l'envoi de la commande.");
+      } finally {
+          setIsActionLoading(false);
+      }
+  };
+
+  const handleRepairProfiles = async () => {
+      if (!confirm("Cette action va re-synchroniser tous les profils locaux vers Supabase. Utile si certains membres manquent sur le serveur. Continuer ?")) return;
+      
+      setIsActionLoading(true);
+      try {
+          const db = await initDB();
+          const allProfiles = await db.getAll('profiles');
+          
+          for (const p of allProfiles) {
+              await db.put('sync_queue', {
+                  id: generateUUID(),
+                  table: 'profiles',
+                  action: 'UPSERT',
+                  data: p,
+                  timestamp: Date.now(),
+                  status: 'PENDING',
+                  retries: 0
+              });
+          }
+          
+          await syncService.processQueue(true);
+          alert(`${allProfiles.length} profils mis en file de synchronisation.`);
+      } catch (e) {
+          alert("Erreur lors de la réparation des profils.");
+      } finally {
+          setIsActionLoading(false);
       }
   };
 
@@ -373,8 +410,17 @@ export const AdminPage: React.FC = () => {
   const handleRemoteWipe = async () => {
       const confirmCode = prompt("ATTENTION : CELA EFFACERA TOUTES LES DONNÉES DE TOUS LES APPAREILS CONNECTÉS.\nTapez 'CONFIRMER' pour exécuter :");
       if (confirmCode === 'CONFIRMER') {
-          await adminService.saveConfig({ ...await adminService.getConfig(), securityMode: 'WIPE_AND_LOCK' });
-          alert("COMMANDE DE SUPPRESSION ENVOYÉE.");
+          setIsActionLoading(true);
+          try {
+              const config = await adminService.getConfig();
+              await adminService.saveConfig({ ...config, securityMode: 'WIPE_AND_LOCK' });
+              await syncService.processQueue(true);
+              alert("COMMANDE DE SUPPRESSION ENVOYÉE.");
+          } catch (e) {
+              alert("Erreur lors de l'envoi de la commande.");
+          } finally {
+              setIsActionLoading(false);
+          }
       }
   };
 
@@ -412,11 +458,22 @@ export const AdminPage: React.FC = () => {
                             fullWidth 
                             size="sm" 
                             variant="outline" 
-                            onClick={handleForceSync}
+                            onClick={() => navigate('/admin/diagnostics')}
+                            icon={<Shield className="w-4 h-4" />}
+                            className="dark:text-slate-200 dark:border-slate-600"
+                        >
+                            Diagnostics Avancés
+                        </Button>
+                        <Button 
+                            fullWidth 
+                            size="sm" 
+                            variant="outline" 
+                            onClick={handleRepairProfiles}
+                            disabled={isActionLoading}
                             icon={<RefreshCw className="w-4 h-4" />}
                             className="dark:text-slate-200 dark:border-slate-600"
                         >
-                            Sync Forcée
+                            Réparer Profils
                         </Button>
                     </div>
 
@@ -708,9 +765,11 @@ export const AdminPage: React.FC = () => {
                 </p>
                 <button
                     onClick={handleGlobalServiceStop}
-                    className="w-full py-3 bg-orange-600 hover:bg-orange-700 text-white font-black uppercase rounded-lg shadow-lg flex items-center justify-center gap-2"
+                    disabled={isActionLoading}
+                    className="w-full py-3 bg-orange-600 hover:bg-orange-700 disabled:opacity-50 text-white font-black uppercase rounded-lg shadow-lg flex items-center justify-center gap-2"
                 >
-                    <Power className="w-5 h-5" /> FIN DE SERVICE GÉNÉRALE
+                    {isActionLoading ? <Loader2 className="animate-spin" /> : <Power className="w-5 h-5" />} 
+                    FIN DE SERVICE GÉNÉRALE
                 </button>
             </div>
 
@@ -721,9 +780,11 @@ export const AdminPage: React.FC = () => {
                 </p>
                 <button 
                     onClick={handleRemoteWipe}
-                    className="w-full py-3 bg-red-600 hover:bg-red-700 text-white font-black uppercase rounded-lg shadow-lg flex items-center justify-center gap-2 animate-pulse"
+                    disabled={isActionLoading}
+                    className="w-full py-3 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white font-black uppercase rounded-lg shadow-lg flex items-center justify-center gap-2 animate-pulse"
                 >
-                    <Trash2 className="w-5 h-5" /> SUPPRESSION DISTANTE (WIPE)
+                    {isActionLoading ? <Loader2 className="animate-spin" /> : <Trash2 className="w-5 h-5" />} 
+                    SUPPRESSION DISTANTE (WIPE)
                 </button>
             </div>
         </AdminCard>
