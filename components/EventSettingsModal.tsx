@@ -61,14 +61,16 @@ export const EventSettingsModal: React.FC<Props> = ({ isOpen, event, onClose, on
                     
                     let trackName = xmlDoc.getElementsByTagName("name")[0]?.textContent || file.name.replace('.gpx', '');
                     
-                    const newTrack: Track = {
-                        id: generateUUID(),
-                        name: trackName,
-                        data: coords,
-                        color: ['#2563eb', '#dc2626', '#16a34a', '#eab308', '#9333ea', '#ea580c', '#0891b2'][Math.floor(Math.random() * 7)]
-                    };
-                    
-                    setTracks(prev => [...prev, newTrack]);
+                    setTracks(prev => {
+                        const isFirst = prev.length === 0;
+                        const newTrack: Track = {
+                            id: generateUUID(),
+                            name: trackName,
+                            data: coords,
+                            color: isFirst ? '#2563eb' : ['#dc2626', '#16a34a', '#eab308', '#9333ea', '#ea580c', '#0891b2'][Math.floor(Math.random() * 6)]
+                        };
+                        return [...prev, newTrack];
+                    });
                 } catch (err) {
                     alert(`Erreur fichier ${file.name}`);
                 }

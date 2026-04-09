@@ -15,9 +15,8 @@ const ModuleCard: React.FC<{
     color: CardColor;
     onClick: () => void; 
     className?: string;
-    hasBadge?: boolean;
     wide?: boolean; // Option pour affichage large
-}> = ({ title, desc, icon, color, onClick, className, hasBadge, wide = false }) => {
+}> = ({ title, desc, icon, color, onClick, className, wide = false }) => {
     
     // CONFIGURATION DES "IMAGES" (LOGOS)
     // On simule une image d'app avec des dégradés riches et des ombres
@@ -39,14 +38,6 @@ const ModuleCard: React.FC<{
             flex ${wide ? 'flex-row items-center gap-4' : 'flex-col justify-between'} h-full min-h-0
             ${className}`}
         >
-            {/* Notification Dot */}
-            {hasBadge && (
-                <span className="absolute top-2 right-2 flex h-3 w-3 z-20">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500 border-2 border-white dark:border-slate-800"></span>
-                </span>
-            )}
-            
             {/* LOGO / IMAGE */}
             <div className={`
                 ${wide ? 'w-14 h-14' : 'w-12 h-12 mb-3'} 
@@ -83,31 +74,22 @@ export const ManagementDashboardPage: React.FC = () => {
     }, [profile, navigate]);
 
     const [counts, setCounts] = useState({ missions: 0, docs: 0, courses: 0, fleet: 0 });
-    const [badges, setBadges] = useState({ planning: false, life: false, hr: false, logistics: false });
 
     // Rôle SNU ne voit pas le vestiaire
     const isSnu = profile?.role === 'snu';
 
-    useEffect(() => { checkUpdates(); }, []);
-
-    const checkUpdates = async () => {
-        try {
-            const [missions, news, docs, courses, fleet] = await Promise.all([
-                storageService.getMissions(), storageService.getNews(), storageService.getDocuments(),
-                storageService.getCourses(), storageService.getFleet()
-            ]);
-            const currentCounts = { missions: missions.length, docs: news.length + docs.length, courses: courses.length, fleet: fleet.length };
-            setCounts(currentCounts);
-            const seenMissions = parseInt(localStorage.getItem('dps65_seen_missions') || '0');
-            const seenDocs = parseInt(localStorage.getItem('dps65_seen_docs') || '0');
-            const seenCourses = parseInt(localStorage.getItem('dps65_seen_courses') || '0');
-            const seenFleet = parseInt(localStorage.getItem('dps65_seen_fleet') || '0');
-            setBadges({
-                planning: currentCounts.missions > seenMissions, life: currentCounts.docs > seenDocs,
-                hr: currentCounts.courses > seenCourses, logistics: currentCounts.fleet > seenFleet
-            });
-        } catch (e) {}
-    };
+    useEffect(() => { 
+        const loadCounts = async () => {
+            try {
+                const [missions, news, docs, courses, fleet] = await Promise.all([
+                    storageService.getMissions(), storageService.getNews(), storageService.getDocuments(),
+                    storageService.getCourses(), storageService.getFleet()
+                ]);
+                setCounts({ missions: missions.length, docs: news.length + docs.length, courses: courses.length, fleet: fleet.length });
+            } catch (e) {}
+        };
+        loadCounts();
+    }, []);
 
     const handleNavigation = (path: string, type: 'missions' | 'docs' | 'courses' | 'fleet') => {
         localStorage.setItem(`dps65_seen_${type}`, counts[type].toString());
@@ -164,7 +146,6 @@ export const ManagementDashboardPage: React.FC = () => {
                             icon={<CalendarDays />}
                             color="blue"
                             onClick={() => handleNavigation('/management/planning', 'missions')}
-                            hasBadge={badges.planning}
                             wide
                             className="h-full"
                         />
@@ -177,7 +158,6 @@ export const ManagementDashboardPage: React.FC = () => {
                         icon={<Truck />}
                         color="orange"
                         onClick={() => handleNavigation('/management/logistics', 'fleet')}
-                        hasBadge={badges.logistics}
                     />
 
                     {/* MATÉRIEL */}
@@ -207,7 +187,6 @@ export const ManagementDashboardPage: React.FC = () => {
                         icon={<GraduationCap />}
                         color="purple"
                         onClick={() => handleNavigation('/management/hr', 'courses')}
-                        hasBadge={badges.hr}
                     />
 
                     {/* DASHBOARD */}
@@ -226,7 +205,6 @@ export const ManagementDashboardPage: React.FC = () => {
                         icon={<MessageSquare />}
                         color="pink"
                         onClick={() => handleNavigation('/management/life', 'docs')}
-                        hasBadge={badges.life}
                     />
                 </div>
             </div>

@@ -49,14 +49,16 @@ export const CreateEventPage: React.FC = () => {
                   // Extraire le nom du tracé du GPX ou utiliser le nom du fichier
                   let trackName = xmlDoc.getElementsByTagName("name")[0]?.textContent || file.name.replace('.gpx', '');
                   
-                  const newTrack: Track = {
-                      id: generateUUID(),
-                      name: trackName,
-                      data: coords,
-                      color: getRandomColor()
-                  };
-                  
-                  setTracks(prev => [...prev, newTrack]);
+                  setTracks(prev => {
+                      const isFirst = prev.length === 0;
+                      const newTrack: Track = {
+                          id: generateUUID(),
+                          name: trackName,
+                          data: coords,
+                          color: isFirst ? '#2563eb' : getRandomColor()
+                      };
+                      return [...prev, newTrack];
+                  });
               } catch (err) {
                   alert(`Erreur lors de la lecture du fichier ${file.name}. Format invalide.`);
                   console.error(err);
@@ -70,7 +72,7 @@ export const CreateEventPage: React.FC = () => {
   };
 
   const getRandomColor = () => {
-      const colors = ['#2563eb', '#dc2626', '#16a34a', '#eab308', '#9333ea', '#ea580c', '#0891b2'];
+      const colors = ['#dc2626', '#16a34a', '#eab308', '#9333ea', '#ea580c', '#0891b2'];
       return colors[Math.floor(Math.random() * colors.length)];
   };
 
