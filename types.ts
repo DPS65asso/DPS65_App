@@ -181,9 +181,7 @@ export interface AppConfig {
   teams: string[];     
   voiceUri?: string;
   yaplaLink?: string; 
-  securityMode?: 'NORMAL' | 'WIPE_AND_LOCK'; // KILL SWITCH
   signupCode?: string; // Code d'accès inscription
-  serviceResetTimestamp?: number; // Timestamp de la dernière demande de fin de service générale
   medications?: string[];
   solutes?: string[];
 }

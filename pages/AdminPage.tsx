@@ -12,7 +12,7 @@ import { logisticsService } from '../services/features/logisticsService';
 import { testConnection } from '../services/supabaseClient'; 
 import { syncService } from '../services/syncService';
 import { Event, UserProfile, VehicleDefinition, TrainingCourse, Mission, NewsPost, AssociationDocument, Diploma, UserRole, AppConfig } from '../types';
-import { Activity, Trash2, Plus, X, List, Loader2, FileText, Truck, Users, Database, GraduationCap, Link as LinkIcon, Video, RefreshCw, Pencil, Shield, Award, Save, Lock, AlertTriangle, Siren, CheckCircle2, AlertCircle, Settings, Building2, Radio, Power, Pill, Syringe } from 'lucide-react';
+import { Activity, Trash2, Plus, X, List, Loader2, FileText, Truck, Users, Database, GraduationCap, Link as LinkIcon, Video, RefreshCw, Pencil, Shield, Award, Save, Lock, AlertTriangle, CheckCircle2, AlertCircle, Settings, Building2, Radio, Pill, Syringe } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { SyncIndicator } from '../components/SyncIndicator';
 
@@ -206,24 +206,6 @@ export const AdminPage: React.FC = () => {
   };
 
   // --- ACTIONS GLOBALES ---
-  const handleGlobalServiceStop = async () => {
-      if (!confirm("ATTENTION : Cela va déconnecter l'équipe de TOUS les téléphones actifs (Fin de Service forcée).\n\nLes utilisateurs seront déconnectés de leur indicatif et le suivi GPS s'arrêtera.\n\nConfirmer ?")) return;
-      
-      setIsActionLoading(true);
-      try {
-          const config = await adminService.getConfig();
-          const newConfig: AppConfig = { ...config, serviceResetTimestamp: Date.now() };
-          await adminService.saveConfig(newConfig);
-          // On force le traitement de la file pour être sûr que ça parte
-          await syncService.processQueue(true);
-          alert("Ordre de fin de service envoyé à tous les appareils.");
-      } catch(e) {
-          alert("Erreur lors de l'envoi de la commande.");
-      } finally {
-          setIsActionLoading(false);
-      }
-  };
-
   const handleRepairProfiles = async () => {
       if (!confirm("Cette action va re-synchroniser tous les profils locaux vers Supabase. Utile si certains membres manquent sur le serveur. Continuer ?")) return;
       
@@ -404,23 +386,6 @@ export const AdminPage: React.FC = () => {
           await syncService.pullLatestData();
           loadData(); // Will stop loader
           alert("Synchronisation effectuée.");
-      }
-  };
-
-  const handleRemoteWipe = async () => {
-      const confirmCode = prompt("ATTENTION : CELA EFFACERA TOUTES LES DONNÉES DE TOUS LES APPAREILS CONNECTÉS.\nTapez 'CONFIRMER' pour exécuter :");
-      if (confirmCode === 'CONFIRMER') {
-          setIsActionLoading(true);
-          try {
-              const config = await adminService.getConfig();
-              await adminService.saveConfig({ ...config, securityMode: 'WIPE_AND_LOCK' } as AppConfig);
-              await syncService.processQueue(true);
-              alert("COMMANDE DE SUPPRESSION ENVOYÉE.");
-          } catch (e) {
-              alert("Erreur lors de l'envoi de la commande.");
-          } finally {
-              setIsActionLoading(false);
-          }
       }
   };
 
@@ -752,40 +717,6 @@ export const AdminPage: React.FC = () => {
                         </div>
                     </div>
                 )}
-            </div>
-        </AdminCard>
-
-        {/* DANGER ZONE (LAST) */}
-        <AdminCard title="Zone de Danger" icon={<Siren className="w-5 h-5" />} color="bg-red-100 text-red-600">
-            {/* BOUTON FIN SERVICE GENERAL */}
-            <div className="bg-orange-50 dark:bg-orange-900/10 p-3 rounded-lg border border-orange-200 dark:border-orange-800 text-center mb-4">
-                <h4 className="text-xs font-bold text-orange-700 dark:text-orange-300 uppercase mb-2">Fin Opérationnelle</h4>
-                <p className="text-[10px] text-orange-600 dark:text-orange-400 mb-3">
-                    Force l'arrêt du service et du suivi GPS sur tous les appareils connectés. Les données sont conservées.
-                </p>
-                <button
-                    onClick={handleGlobalServiceStop}
-                    disabled={isActionLoading}
-                    className="w-full py-3 bg-orange-600 hover:bg-orange-700 disabled:opacity-50 text-white font-black uppercase rounded-lg shadow-lg flex items-center justify-center gap-2"
-                >
-                    {isActionLoading ? <Loader2 className="animate-spin" /> : <Power className="w-5 h-5" />} 
-                    FIN DE SERVICE GÉNÉRALE
-                </button>
-            </div>
-
-            <div className="bg-red-50 dark:bg-red-900/10 p-3 rounded-lg border border-red-200 dark:border-red-900 text-center">
-                <h4 className="text-xs font-bold text-red-700 dark:text-red-300 uppercase mb-2">Urgence Absolue</h4>
-                <p className="text-[10px] text-red-600 dark:text-red-400 mb-3">
-                    Cette action efface les données de TOUS les téléphones connectés, désactive le GPS et déconnecte tout le monde.
-                </p>
-                <button 
-                    onClick={handleRemoteWipe}
-                    disabled={isActionLoading}
-                    className="w-full py-3 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white font-black uppercase rounded-lg shadow-lg flex items-center justify-center gap-2 animate-pulse"
-                >
-                    {isActionLoading ? <Loader2 className="animate-spin" /> : <Trash2 className="w-5 h-5" />} 
-                    SUPPRESSION DISTANTE (WIPE)
-                </button>
             </div>
         </AdminCard>
 

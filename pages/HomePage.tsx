@@ -80,33 +80,24 @@ export const HomePage: React.FC = () => {
     initGps();
   }, []);
 
-  // Surveiller la config pour l'arrêt forcé du service
+  // Surveiller la config pour les mises à jour
   useEffect(() => {
-      const checkServiceReset = async () => {
+      const updateConfig = async () => {
           const cfg = await storageService.getConfig();
           setConfig(cfg);
-          
-          if (cfg.serviceResetTimestamp && currentTeam) {
-              const serviceStart = parseInt(localStorage.getItem('dps65_service_start_time') || '0');
-              if (serviceStart > 0 && serviceStart < cfg.serviceResetTimestamp) {
-                  // Le service a commencé AVANT la demande de reset global -> On coupe
-                  executeEndService();
-                  alert("⚠️ FIN DE SERVICE GÉNÉRALE DÉCLENCHÉE PAR LE PC.");
-              }
-          }
       };
 
       // Check immédiat
-      checkServiceReset();
+      updateConfig();
 
       // Check lors des syncs
-      const unsub = syncService.subscribe(() => checkServiceReset());
+      const unsub = syncService.subscribe(() => updateConfig());
 
       // Check immédiat sur signal Broadcast (depuis SyncService)
       const bc = new BroadcastChannel('dps65_config_channel');
       bc.onmessage = (e) => {
           if (e.data.type === 'UPDATE_CONFIG') {
-              checkServiceReset();
+              updateConfig();
           }
       };
 
@@ -114,7 +105,7 @@ export const HomePage: React.FC = () => {
           unsub();
           bc.close();
       };
-  }, [currentTeam]);
+  }, []);
 
   // Surveiller l'équipe actuelle pour charger le sac correspondant
   useEffect(() => {

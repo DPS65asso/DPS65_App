@@ -11,7 +11,6 @@ import { DiplomaExpiryNotifier } from './components/DiplomaExpiryNotifier';
 import { FleetNotificationSystem } from './components/FleetNotificationSystem'; 
 import { MissionReminder } from './components/MissionReminder';
 import { UpdatePrompt } from './components/UpdatePrompt';
-import { SecurityMonitor } from './components/SecurityMonitor';
 import { TrackingGuard } from './components/TrackingGuard'; // NOUVEAU
 import { storageService } from './services/storageService';
 import { Loader2 } from 'lucide-react';
@@ -94,7 +93,6 @@ const App: React.FC = () => {
           <AuthProvider>
               <HashRouter>
                   <GlobalAlerts />
-                  <SecurityMonitor />
                   <TrackingGuard /> {/* Protection GPS */}
                   <ExpiryNotifier />
                   <DiplomaExpiryNotifier />

@@ -11,9 +11,7 @@ const DEFAULT_CONFIG: AppConfig = {
     teams: ['Alpha', 'Bravo', 'Charlie', 'Delta', 'Echo', 'Tango'],
     voiceUri: '',
     yaplaLink: 'https://dispositif-premiers-secours-65.s2.yapla.com/fr/espace-membres',
-    securityMode: 'NORMAL',
     signupCode: 'DPS65-2025', // Code par défaut
-    serviceResetTimestamp: 0, // Timestamp 0 par défaut
     medications: ['Paracétamol', 'Ibuprofène', 'Spasfon', 'Gaviscon'],
     solutes: ['NaCl 0.9%', 'G5%', 'Ringer Lactate']
 };
@@ -40,9 +38,7 @@ export const adminService = {
               teams: Array.isArray(config.teams) ? config.teams : [],
               voiceUri: config.voiceUri || '',
               yaplaLink: config.yaplaLink || '',
-              securityMode: config.securityMode || 'NORMAL',
               signupCode: config.signupCode || '',
-              serviceResetTimestamp: config.serviceResetTimestamp || 0,
               medications: Array.isArray(config.medications) ? config.medications : [],
               solutes: Array.isArray(config.solutes) ? config.solutes : []
           };
@@ -68,7 +64,7 @@ export const adminService = {
 
           console.log("Admin: Config saved locally and added to sync queue.");
           syncService.processQueue();
-          auditService.log('CONFIG_UPDATE', `Mode: ${config.securityMode}`);
+          auditService.log('CONFIG_UPDATE', 'Configuration mise à jour');
         } catch (e) { console.error(e); }
     },
 
