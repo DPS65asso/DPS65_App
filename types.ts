@@ -178,6 +178,7 @@ export interface LogbookEntry {
 }
 
 export interface AppConfig {
+  id?: string;
   hospitals: string[]; 
   teams: string[];     
   voiceUri?: string;

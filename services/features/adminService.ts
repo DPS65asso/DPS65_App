@@ -34,6 +34,7 @@ export const adminService = {
           
           // Préparation d'un objet propre pour Supabase (évite les undefined qui causent des erreurs JSONB/SQL)
           const cleanConfig: AppConfig = {
+              id: 'main', // ID fixe pour la ligne de configuration unique
               hospitals: Array.isArray(config.hospitals) ? config.hospitals : [],
               teams: Array.isArray(config.teams) ? config.teams : [],
               voiceUri: config.voiceUri || '',
