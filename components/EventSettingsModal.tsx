@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { X, FileUp, Trash2, Save, Loader2, User, Phone } from 'lucide-react';
+import { X, FileUp, Trash2, Save, Loader2, User, Phone, FileText } from 'lucide-react';
 import { Event, Track } from '../types';
 import { storageService } from '../services/storageService';
 import { generateUUID, sanitizeInput } from '../utils/security';
@@ -20,8 +20,10 @@ export const EventSettingsModal: React.FC<Props> = ({ isOpen, event, onClose, on
     const [supervisorPhone, setSupervisorPhone] = useState(event.supervisorPhone || '');
     const [organizerCode, setOrganizerCode] = useState(event.organizer_code || '');
     const [tracks, setTracks] = useState<Track[]>(event.tracks || []);
+    const [mapPdfUrl, setMapPdfUrl] = useState(event.mapPdfUrl || '');
     const [isSaving, setIsSaving] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const pdfInputRef = useRef<HTMLInputElement>(null);
     
     // Bloquer le scroll du body quand la modale est ouverte
     useEffect(() => {
@@ -90,6 +92,7 @@ export const EventSettingsModal: React.FC<Props> = ({ isOpen, event, onClose, on
             supervisorPhone: sanitizeInput(supervisorPhone),
             organizer_code: sanitizeInput(organizerCode).toUpperCase(),
             tracks: tracks.length > 0 ? tracks : undefined,
+            mapPdfUrl: mapPdfUrl || undefined,
             trackData: tracks.length > 0 ? tracks[0].data : undefined
         };
         await storageService.saveEvent(updatedEvent);
@@ -193,6 +196,51 @@ export const EventSettingsModal: React.FC<Props> = ({ isOpen, event, onClose, on
                             <FileUp className="w-5 h-5" />
                             <span className="text-xs font-bold uppercase">Ajouter GPX</span>
                         </button>
+                    </div>
+
+                    <div>
+                        <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Plan de cartographie (PDF)</label>
+                        {mapPdfUrl ? (
+                            <div className="flex items-center justify-between bg-slate-50 dark:bg-slate-900 p-3 rounded-lg border border-slate-200 dark:border-slate-700 mb-3">
+                                <div className="flex items-center gap-3">
+                                    <FileText className="w-5 h-5 text-red-500" />
+                                    <span className="text-sm font-bold text-slate-700 dark:text-slate-200">Document PDF enregistré</span>
+                                </div>
+                                <button onClick={() => setMapPdfUrl('')} className="text-slate-400 hover:text-red-500">
+                                    <Trash2 className="w-4 h-4" />
+                                </button>
+                            </div>
+                        ) : (
+                            <>
+                                <input 
+                                    type="file" 
+                                    accept=".pdf" 
+                                    ref={pdfInputRef} 
+                                    className="hidden" 
+                                    onChange={(e) => {
+                                        const file = e.target.files?.[0];
+                                        if (!file) return;
+                                        if (file.size > 5 * 1024 * 1024) {
+                                            alert("Le fichier est trop volumineux (max 5 Mo)");
+                                            return;
+                                        }
+                                        const reader = new FileReader();
+                                        reader.onload = (event) => {
+                                            setMapPdfUrl(event.target?.result as string);
+                                        };
+                                        reader.readAsDataURL(file);
+                                    }} 
+                                />
+                                <button 
+                                    type="button"
+                                    onClick={() => pdfInputRef.current?.click()}
+                                    className="w-full py-3 border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-lg text-slate-500 hover:text-red-500 hover:border-red-400 hover:bg-red-50 dark:hover:bg-red-900/10 transition-all flex items-center justify-center gap-2"
+                                >
+                                    <FileUp className="w-5 h-5" />
+                                    <span className="text-xs font-bold uppercase">Ajouter Plan PDF</span>
+                                </button>
+                            </>
+                        )}
                     </div>
                 </div>
 

@@ -22,6 +22,7 @@ export interface Event {
   trackData?: [number, number][]; // Tableau de coordonnées [lat, lng] pour le tracé GPX (Legacy)
   tracks?: Track[]; // NOUVEAU: Plusieurs tracés GPX
   organizer_code?: string; // Code d'accès pour l'organisateur
+  mapPdfUrl?: string; // URL ou DataURL du PDF de cartographie détaillé
 }
 
 export interface TeamLocation {

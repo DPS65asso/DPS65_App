@@ -4,15 +4,17 @@ import { useNavigate } from 'react-router-dom';
 import { Layout } from '../components/Layout';
 import { Button } from '../components/Button';
 import { storageService } from '../services/storageService';
-import { Calendar, MapPin, Type, Loader2, FileUp, CheckCircle, X, Plus, Phone, User } from 'lucide-react';
+import { Calendar, MapPin, Type, Loader2, FileUp, CheckCircle, X, Plus, Phone, User, FileText } from 'lucide-react';
 import { generateUUID, sanitizeInput, MAX_INPUT_LENGTH, getLocalDateString } from '../utils/security';
 import { Event, Track } from '../types';
 
 export const CreateEventPage: React.FC = () => {
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const pdfInputRef = useRef<HTMLInputElement>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [tracks, setTracks] = useState<Track[]>([]);
+  const [mapPdf, setMapPdf] = useState<{ name: string, data: string } | null>(null);
   const [formData, setFormData] = useState({
     name: '',
     date: getLocalDateString(),
@@ -95,6 +97,7 @@ export const CreateEventPage: React.FC = () => {
       supervisorPhone: sanitizeInput(formData.supervisorPhone),
       createdAt: Date.now(),
       tracks: tracks.length > 0 ? tracks : undefined,
+      mapPdfUrl: mapPdf?.data,
       // On garde trackData pour la compatibilité avec le premier tracé
       trackData: tracks.length > 0 ? tracks[0].data : undefined
     };
@@ -238,6 +241,59 @@ export const CreateEventPage: React.FC = () => {
                   <FileUp className="w-6 h-6" />
                   <span className="text-xs font-bold uppercase tracking-wider">Ajouter des fichiers .GPX</span>
               </button>
+          </div>
+
+          {/* SECTION PDF CARTOGRAPHIE */}
+          <div className="bg-slate-50 dark:bg-slate-900/50 p-4 rounded-xl border border-slate-200 dark:border-slate-700">
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Cartographie détaillée (PDF)</label>
+              
+              <input 
+                  type="file" 
+                  accept=".pdf" 
+                  ref={pdfInputRef} 
+                  className="hidden" 
+                  onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      if (file.size > 5 * 1024 * 1024) {
+                          alert("Le fichier est trop volumineux (max 5 Mo)");
+                          return;
+                      }
+                      const reader = new FileReader();
+                      reader.onload = (event) => {
+                          setMapPdf({ name: file.name, data: event.target?.result as string });
+                      };
+                      reader.readAsDataURL(file);
+                  }}
+              />
+
+              {mapPdf ? (
+                  <div className="flex items-center justify-between bg-white dark:bg-slate-800 p-3 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm">
+                      <div className="flex items-center gap-3">
+                          <FileText className="w-5 h-5 text-red-500" />
+                          <div className="flex flex-col">
+                              <span className="text-sm font-bold text-slate-700 dark:text-slate-200 truncate max-w-[200px]">{mapPdf.name}</span>
+                              <span className="text-[10px] text-slate-500 uppercase font-bold">Document PDF</span>
+                          </div>
+                      </div>
+                      <button 
+                          type="button" 
+                          onClick={() => setMapPdf(null)}
+                          className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                      >
+                          <X className="w-4 h-4" />
+                      </button>
+                  </div>
+              ) : (
+                  <button 
+                      type="button"
+                      onClick={() => pdfInputRef.current?.click()}
+                      className="w-full py-4 border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-lg text-slate-500 hover:text-red-500 hover:border-red-400 hover:bg-red-50 dark:hover:bg-red-900/10 transition-all flex flex-col items-center justify-center gap-1"
+                  >
+                      <FileUp className="w-6 h-6" />
+                      <span className="text-xs font-bold uppercase tracking-wider">Ajouter un plan PDF</span>
+                  </button>
+              )}
           </div>
 
           <div className="pt-4">

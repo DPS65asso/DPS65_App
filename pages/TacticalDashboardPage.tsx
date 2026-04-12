@@ -4,7 +4,7 @@ import { useVitalsNotifications } from '../hooks/useVitalsNotifications';
 import { Layout } from '../components/Layout';
 import { storageService } from '../services/storageService';
 import { Event, Victim, TriageColor, Outcome } from '../types';
-import { Loader2, AlertCircle, Users, Activity, Bed, Monitor, ExternalLink, Map as MapIcon, X, RefreshCw } from 'lucide-react';
+import { Loader2, AlertCircle, Users, Activity, Bed, Monitor, ExternalLink, Map as MapIcon, X, RefreshCw, FileText } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../components/Button';
 import { useAuth } from '../context/AuthContext';
@@ -20,6 +20,7 @@ export const TacticalDashboardPage: React.FC = () => {
     const [lastRefresh, setLastRefresh] = useState(Date.now());
     const [isLoading, setIsLoading] = useState(false);
     const [showMap, setShowMap] = useState(false);
+    const [showPdf, setShowPdf] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     
     useVitalsNotifications(victims);
@@ -90,6 +91,8 @@ export const TacticalDashboardPage: React.FC = () => {
         if (newWindow) newWindow.focus();
     };
 
+    const selectedEvent = useMemo(() => events.find(e => e.id === selectedEventId), [events, selectedEventId]);
+
     const filteredVictims = useMemo(() => {
         return victims
             .filter(v => v.fullName.toLowerCase().includes(searchQuery.toLowerCase()) || (v.bibNumber && v.bibNumber.includes(searchQuery)))
@@ -111,6 +114,11 @@ export const TacticalDashboardPage: React.FC = () => {
                         <Button onClick={() => setShowMap(!showMap)} className={`flex-1 min-w-[120px] whitespace-nowrap ${showMap ? 'bg-slate-700' : 'bg-blue-600 hover:bg-blue-500'}`} icon={showMap ? <X className="w-5 h-5" /> : <MapIcon className="w-5 h-5" />} disabled={!selectedEventId}>
                             {showMap ? "Masquer Carte" : "Afficher Carte"}
                         </Button>
+                        {selectedEvent?.mapPdfUrl && (
+                            <Button onClick={() => setShowPdf(!showPdf)} className={`flex-1 min-w-[120px] whitespace-nowrap ${showPdf ? 'bg-slate-700' : 'bg-red-600 hover:bg-red-500'}`} icon={showPdf ? <X className="w-5 h-5" /> : <FileText className="w-5 h-5" />}>
+                                {showPdf ? "Masquer Plan" : "Plan PDF"}
+                            </Button>
+                        )}
                         <Button onClick={handleOpenMapWindow} className="hidden md:flex bg-slate-800 hover:bg-slate-700 border border-slate-600 flex-1 min-w-[80px] whitespace-nowrap" icon={<Monitor className="w-5 h-5" />} disabled={!selectedEventId}>TV</Button>
                     </div>
                 </div>
@@ -135,6 +143,18 @@ export const TacticalDashboardPage: React.FC = () => {
                         <Suspense fallback={<div className="flex h-full items-center justify-center text-white"><Loader2 className="w-8 h-8 animate-spin" /></div>}>
                             <EventMap eventId={selectedEventId} />
                         </Suspense>
+                    </div>
+                </div>
+            )}
+
+            {showPdf && selectedEvent?.mapPdfUrl && (
+                <div className="mb-6 animate-in fade-in slide-in-from-top-4 duration-300">
+                    <div className="bg-slate-900 rounded-xl overflow-hidden border-2 border-red-500 shadow-2xl relative h-[800px]">
+                        <iframe 
+                            src={selectedEvent.mapPdfUrl} 
+                            className="w-full h-full border-none"
+                            title="Plan de cartographie détaillé"
+                        />
                     </div>
                 </div>
             )}

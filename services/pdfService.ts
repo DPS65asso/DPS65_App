@@ -46,29 +46,35 @@ const getVictimRows = (victims: Victim[]) => {
     let lastVital = null;
     
     if (victim.vitals && victim.vitals.length > 0) {
-        const sortedVitals = [...victim.vitals].sort((a, b) => b.time.localeCompare(a.time));
-        lastVital = sortedVitals[0];
-        if (victim.vitals.length > 1) constantsText.push(`(Total: ${victim.vitals.length} relevés)`);
+        const sortedVitals = [...victim.vitals].sort((a, b) => a.time.localeCompare(b.time));
+        sortedVitals.forEach(v => {
+            let line = `[${v.time}] `;
+            if (v.pulse) line += `FC:${v.pulse} `;
+            if (v.sao2) line += `SpO2:${v.sao2}% `;
+            if (v.bp) line += `TA:${v.bp} `;
+            if (v.glycemia) line += `Gly:${v.glycemia} `;
+            if (v.temp) line += `T:${v.temp}° `;
+            if (v.eva) line += `EVA:${v.eva}/10 `;
+            constantsText.push(line.trim());
+        });
     } else if (victim.pulse || victim.bp || victim.sao2 || victim.glycemia || victim.temp || victim.eva) {
-        lastVital = {
-            pulse: victim.pulse, bp: victim.bp, sao2: victim.sao2, glycemia: victim.glycemia, temp: victim.temp, eva: victim.eva, time: ''
-        };
-    }
-
-    if (lastVital) {
-        if (lastVital.time) constantsText.push(`@ ${lastVital.time}`);
-        if (lastVital.pulse) constantsText.push(`FC: ${lastVital.pulse}`);
-        if (lastVital.sao2) constantsText.push(`SaO2: ${lastVital.sao2}%`);
-        if (lastVital.bp) constantsText.push(`TA: ${lastVital.bp}`);
-        if (lastVital.glycemia) constantsText.push(`Gly: ${lastVital.glycemia}`);
-        if (lastVital.temp) constantsText.push(`T: ${lastVital.temp}°C`);
-        if (lastVital.eva) constantsText.push(`EVA: ${lastVital.eva}/10`);
+        let line = "";
+        if (victim.pulse) line += `FC:${victim.pulse} `;
+        if (victim.sao2) line += `SpO2:${victim.sao2}% `;
+        if (victim.bp) line += `TA:${victim.bp} `;
+        if (victim.glycemia) line += `Gly:${victim.glycemia} `;
+        if (victim.temp) line += `T:${victim.temp}° `;
+        if (victim.eva) line += `EVA:${victim.eva}/10 `;
+        constantsText.push(line.trim());
     }
 
     const formattedConstants = constantsText.length > 0 ? constantsText.join('\n') : '-';
 
     let interventionLines = [`Motif: ${victim.reason}`];
     
+    if (victim.allergies && victim.allergies !== 'Aucune') interventionLines.push(`Allergies: ${victim.allergies}`);
+    if (victim.treatments && victim.treatments !== 'Aucun') interventionLines.push(`TTT: ${victim.treatments}`);
+
     if (victim.resourceUsed && victim.resourceUsed !== 'none') {
         interventionLines.push(`Install.: ${victim.resourceUsed === 'stretcher' ? 'Brancard' : 'Chaise'}`);
     }
@@ -210,6 +216,73 @@ export const generateSingleVictimReport = async (event: Event, victim: Victim) =
     }
     const fileName = `DPS65_Fiche_${victim.bibNumber || 'Inconnu'}_${victim.fullName.replace(/\s+/g, '_')}.pdf`;
     return { fileName, blob: doc.output('blob') };
+};
+
+export const generateEventReport = async (event: Event, victims: Victim[]) => {
+    const doc = new jsPDF('landscape');
+    await addHeaderLogo(doc);
+    doc.setFontSize(22);
+    doc.setTextColor(220, 38, 38);
+    doc.text('DPS65 - Registre des Interventions', 40, 20);
+    doc.setFontSize(12);
+    doc.setTextColor(0, 0, 0);
+    doc.text(`Événement : ${event.name}`, 40, 30);
+    doc.text(`Date : ${safeDateFormat(event.date)} | Lieu : ${event.location}`, 14, 40);
+    doc.text(`Total victimes : ${victims.length}`, 14, 46);
+
+    autoTable(doc, {
+        head: [TABLE_COLUMNS],
+        body: getVictimRows(victims),
+        startY: 50,
+        theme: 'grid',
+        headStyles: { fillColor: [220, 38, 38] },
+        styles: { fontSize: 7, cellPadding: 2, overflow: 'linebreak' },
+        columnStyles: { 
+            0: { cellWidth: 15 }, // Arr.
+            1: { cellWidth: 15 }, // Dép.
+            2: { cellWidth: 12 }, // Dos.
+            3: { cellWidth: 35 }, // Nom
+            4: { cellWidth: 35 }, // Interv.
+            5: { cellWidth: 35 }, // Constantes
+            6: { cellWidth: 80 }, // Interventions
+            7: { cellWidth: 40 }  // Devenir
+        },
+        didDrawCell: (data) => {
+            if (data.column.index === 7 && data.cell.section === 'body') {
+                const victim = victims[data.row.index];
+                let signatureToDraw = null;
+                let signatureLabel = "";
+                if (victim.outcome === Outcome.REFUSED_CARE && victim.signatureData) {
+                    signatureToDraw = victim.signatureData;
+                    signatureLabel = "(Victime)";
+                } else if (victim.outcome === Outcome.DECEASED && victim.doctorSignatureData) {
+                    signatureToDraw = victim.doctorSignatureData;
+                    signatureLabel = "(Médecin)";
+                }
+                if (signatureToDraw) {
+                    try {
+                        const imgHeight = 8;
+                        const imgWidth = 20;
+                        const x = data.cell.x + 2;
+                        const y = data.cell.y + data.cell.height - imgHeight - 1;
+                        doc.addImage(signatureToDraw, 'PNG', x, y, imgWidth, imgHeight);
+                        doc.setFontSize(5);
+                        doc.text(signatureLabel, x, y - 1);
+                    } catch(e) {}
+                }
+            }
+        }
+    });
+
+    const pageCount = (doc as any).internal.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.setFontSize(8);
+        doc.setTextColor(150);
+        doc.text(`Page ${i} sur ${pageCount} - Registre DPS65`, 280, 205, { align: 'right' });
+    }
+
+    doc.save(`Registre_${event.name.replace(/\s+/g, '_')}_${safeDateFormat(event.date)}.pdf`);
 };
 
 export const generateMissionOrder = async (mission: Mission, participants: UserProfile[]) => {

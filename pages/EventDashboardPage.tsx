@@ -7,7 +7,7 @@ import { ConfirmDialog } from '../components/ConfirmDialog';
 import { storageService } from '../services/storageService';
 import { Event, Victim, Outcome, TriageColor, AppConfig } from '../types';
 import { safeDateFormat, safeTimeFormat, getLocalDateString } from '../utils/security';
-import { generateEventReportPDF } from '../utils/pdfGenerator';
+import { generateEventReport } from '../services/pdfService';
 import { UserPlus, Loader2, Pencil, Trash2, Search, Calendar, MapPin, Bed, Settings, AlertCircle, Siren, X, Filter, Stethoscope, RefreshCw, FileText } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
@@ -302,7 +302,7 @@ export const EventDashboardPage: React.FC = () => {
                      <button onClick={loadData} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-full transition-colors hidden lg:block">
                         <RefreshCw className="w-5 h-5" />
                      </button>
-                     <button onClick={() => generateEventReportPDF(event, victims)} className="p-2 text-slate-400 hover:text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-full transition-colors">
+                     <button onClick={() => generateEventReport(event, victims)} className="p-2 text-slate-400 hover:text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-full transition-colors">
                         <FileText className="w-5 h-5" />
                      </button>
                      {profile?.role === 'admin' && (
