@@ -113,6 +113,7 @@ export const ScanPage: React.FC = () => {
                 const d = json.d;
                 const reconstructed: Partial<Victim> = {
                     fullName: d.a || 'Inconnu',
+                    birthDate: d.j || '',
                     bibNumber: d.b || '',
                     triageColor: d.c,
                     reason: d.d || '',

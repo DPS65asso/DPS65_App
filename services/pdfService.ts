@@ -23,6 +23,7 @@ const getVictimRows = (victims: Victim[]) => {
     }
 
     let nameText = victim.fullName;
+    if (victim.birthDate) nameText += `\nNé(e) le: ${safeDateFormat(victim.birthDate)}`;
     if (victim.triageColor) nameText = `[${victim.triageColor}] ${nameText}`;
     if (victim.phoneNumber) nameText += `\nTél: ${victim.phoneNumber}`;
     if (victim.emergencyContact) nameText += `\nICE: ${victim.emergencyContact}`;

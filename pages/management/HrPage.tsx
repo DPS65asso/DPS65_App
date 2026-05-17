@@ -102,8 +102,12 @@ export const HrPage: React.FC = () => {
     
     // Suivi des réponses
     const [userAnswers, setUserAnswers] = useState<Record<number, number>>({});
-    // Étape actuelle (0, 1, 2 ou 3 pour fini)
+    // Étape actuelle (0, 1, 2, 3, 4 ou 5 pour fini)
     const [currentStep, setCurrentStep] = useState(0);
+    
+    const [difficulty, setDifficulty] = useState<'facile' | 'moyen' | 'expert'>(
+        (localStorage.getItem('dps65_quiz_difficulty') as any) || 'moyen'
+    );
     
     const [showResources, setShowResources] = useState(false);
 
@@ -121,7 +125,7 @@ export const HrPage: React.FC = () => {
 
     const loadDailyQuiz = async () => {
         const today = getLocalDateString();
-        const storageKey = `dps65_daily_quiz_${today}_${profile?.role || 'secouriste'}_v3`; 
+        const storageKey = `dps65_daily_quiz_${today}_${profile?.role || 'secouriste'}_difficulty_${difficulty}_v4`; 
         
         try {
             const storedQuizStr = localStorage.getItem(storageKey);
@@ -153,17 +157,24 @@ export const HrPage: React.FC = () => {
         // 1. Essai avec IA (Gemini)
         if (process.env.API_KEY && navigator.onLine) {
             try {
-                const themes = ["PSE", "ACR", "Trauma", "Légal", "Bilan", "Hygiène"];
+                const themes = ["PSE", "ACR", "Trauma", "Légal", "Bilan", "Hygiène", "Pédiatrie", "Soutien Sanitaire"];
                 const theme = themes[Math.floor(Math.random() * themes.length)];
 
                 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-                const prompt = `Génère un Quiz Secourisme de 3 questions (rôle cible: ${userRole}, thème: ${theme}). 
+                const prompt = `Génère un Quiz Secourisme avec EXACTEMENT 5 questions.
+                Rôle cible: ${userRole}. 
+                Thème principal: ${theme}. 
+                Difficulté: ${difficulty} (facile=notions de base, moyen=niveau professionnel, expert=bilans complexes et cas rares).
+                Les questions doivent être variées.
+                
                 Format JSON strict: 
                 { 
                   "questions": [
                     { "question": "...", "options": ["...", "...", "...", "..."], "answerIndex": 0, "explanation": "..." },
                     { "question": "...", "options": ["...", "...", "...", "..."], "answerIndex": 1, "explanation": "..." },
-                    { "question": "...", "options": ["...", "...", "...", "..."], "answerIndex": 2, "explanation": "..." }
+                    { "question": "...", "options": ["...", "...", "...", "..."], "answerIndex": 2, "explanation": "..." },
+                    { "question": "...", "options": ["...", "...", "...", "..."], "answerIndex": 3, "explanation": "..." },
+                    { "question": "...", "options": ["...", "...", "...", "..."], "answerIndex": 4, "explanation": "..." }
                   ]
                 }`;
 
@@ -175,10 +186,10 @@ export const HrPage: React.FC = () => {
 
                 const quizData = JSON.parse(response.text || '{}');
                 
-                if (quizData.questions && Array.isArray(quizData.questions) && quizData.questions.length === 3) {
+                if (quizData.questions && Array.isArray(quizData.questions) && quizData.questions.length === 5) {
                     const fullQuiz: DailyQuiz = { 
                         date, 
-                        theme, 
+                        theme: `${theme} (${difficulty})`, 
                         questions: quizData.questions,
                         targetRole: userRole 
                     };
@@ -192,10 +203,10 @@ export const HrPage: React.FC = () => {
 
         // 2. Fallback Local
         const relevantPool = QUESTION_POOL.filter(q => q.role === userRole || (userRole === 'admin' && q.role === 'secouriste'));
-        const poolToUse = relevantPool.length >= 3 ? relevantPool : QUESTION_POOL.filter(q => q.role === 'secouriste');
+        const poolToUse = relevantPool.length >= 5 ? relevantPool : QUESTION_POOL;
         
         const shuffled = [...poolToUse].sort(() => 0.5 - Math.random());
-        const selectedQuestions = shuffled.slice(0, 3).map(q => ({
+        const selectedQuestions = shuffled.slice(0, 5).map(q => ({
             question: q.question,
             options: q.options,
             answerIndex: q.answerIndex,
@@ -222,8 +233,14 @@ export const HrPage: React.FC = () => {
         const newAnswers = { ...userAnswers, [currentStep]: optionIdx };
         setUserAnswers(newAnswers);
         
-        const storageKey = `dps65_daily_quiz_${getLocalDateString()}_${profile?.role || 'secouriste'}_v3`;
+        const storageKey = `dps65_daily_quiz_${getLocalDateString()}_${profile?.role || 'secouriste'}_difficulty_${difficulty}_v4`;
         localStorage.setItem(`dps65_quiz_answers_${storageKey}`, JSON.stringify(newAnswers));
+    };
+
+    const updateDifficulty = (newDiff: 'facile' | 'moyen' | 'expert') => {
+        setDifficulty(newDiff);
+        localStorage.setItem('dps65_quiz_difficulty', newDiff);
+        // On ne recharge pas immédiatement pour ne pas casser le quiz en cours
     };
 
     const nextQuestion = () => {
@@ -234,28 +251,47 @@ export const HrPage: React.FC = () => {
         if (loading) return <div className="py-20 text-center"><Loader2 className="animate-spin mx-auto w-10 h-10 text-white opacity-80" /></div>;
         if (!quiz) return <p className="text-center text-sm opacity-60 py-10">Aucun quiz disponible aujourd'hui.</p>;
 
-        // ÉTAT FINI : 3 questions répondues
-        if (currentStep >= 3) {
+        // ÉTAT FINI : 5 questions répondues
+        if (currentStep >= 5) {
             return (
                 <div className="text-center py-8 px-4 animate-in zoom-in duration-500">
                     <div className="inline-block p-4 bg-white/20 rounded-full mb-4 animate-bounce">
                         <PartyPopper className="w-12 h-12 text-yellow-300" />
                     </div>
                     <h3 className="text-2xl font-black text-white mb-2">MISSION ACCOMPLIE !</h3>
-                    <p className="text-blue-100 mb-6 text-lg leading-relaxed">
+                    <p className="text-blue-100 mb-6 text-sm leading-relaxed">
                         Bien joué soldat ! 🫡 <br/>
                         Tu as validé tes connaissances du jour.<br/>
-                        Repose tes neurones et reviens demain pour un nouveau défi !
+                        Repose tes neurones et reviens demain !
                     </p>
-                    <div className="bg-white/10 rounded-xl p-4 border border-white/20">
-                        <p className="text-xs font-bold uppercase tracking-widest text-blue-200 mb-2">Récapitulatif</p>
-                        <div className="flex justify-center gap-2">
+                    
+                    <div className="bg-white/10 rounded-xl p-4 border border-white/20 mb-6">
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-blue-200 mb-2">Tes résultats</p>
+                        <div className="flex justify-center gap-2 mb-4">
                             {quiz.questions.map((q, idx) => {
                                 const isCorrect = userAnswers[idx] === q.answerIndex;
                                 return (
                                     <div key={idx} className={`w-3 h-3 rounded-full ${isCorrect ? 'bg-green-400' : 'bg-red-400'}`}></div>
                                 );
                             })}
+                        </div>
+                    </div>
+
+                    <div className="bg-black/20 rounded-2xl p-4 border border-white/10">
+                        <p className="text-[10px] font-black uppercase text-blue-200 mb-3 tracking-tighter">Réglages pour demain</p>
+                        <div className="flex flex-col gap-2">
+                            <p className="text-[10px] text-white/50 mb-1">Ajuste la difficulté du prochain quiz :</p>
+                            <div className="grid grid-cols-3 gap-1">
+                                {(['facile', 'moyen', 'expert'] as const).map(d => (
+                                    <button 
+                                        key={d}
+                                        onClick={() => updateDifficulty(d)}
+                                        className={`py-2 rounded-lg text-[10px] font-black uppercase transition-all border ${difficulty === d ? 'bg-white text-indigo-700 border-white shadow-lg' : 'bg-white/5 text-white/60 border-white/10 hover:bg-white/10'}`}
+                                    >
+                                        {d}
+                                    </button>
+                                ))}
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -270,7 +306,7 @@ export const HrPage: React.FC = () => {
         return (
             <div className="animate-in slide-in-from-right duration-300">
                 <div className="flex justify-between items-center mb-4 opacity-80">
-                    <span className="text-xs font-bold uppercase tracking-wider bg-black/20 px-2 py-1 rounded">Question {currentStep + 1} / 3</span>
+                    <span className="text-xs font-bold uppercase tracking-wider bg-black/20 px-2 py-1 rounded">Question {currentStep + 1} / 5</span>
                     <span className="text-[10px] font-mono">{quiz.theme}</span>
                 </div>
 
@@ -311,7 +347,7 @@ export const HrPage: React.FC = () => {
                             onClick={nextQuestion}
                             className="w-full py-4 bg-white text-indigo-700 font-black rounded-xl shadow-xl hover:bg-indigo-50 active:scale-95 transition-all flex items-center justify-center gap-2"
                         >
-                            {currentStep < 2 ? "Question Suivante" : "Terminer le Quiz"} <ArrowRight className="w-5 h-5" />
+                            {currentStep < 4 ? "Question Suivante" : "Terminer le Quiz"} <ArrowRight className="w-5 h-5" />
                         </button>
                     </div>
                 )}

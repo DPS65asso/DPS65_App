@@ -74,6 +74,7 @@ export const AddVictimPage: React.FC = () => {
 
   const [formData, setFormData] = useState<Partial<Victim>>({
     fullName: '',
+    birthDate: '',
     bibNumber: '',
     phoneNumber: '',
     emergencyContact: '',
@@ -152,6 +153,7 @@ export const AddVictimPage: React.FC = () => {
 
               setFormData({
                 ...victim,
+                birthDate: victim.birthDate || '',
                 arrivalTime: getLocalDateTimeString(victim.arrivalTime),
                 careOnSiteTime: victim.careOnSiteTime ? getLocalDateTimeString(victim.careOnSiteTime) : '',
                 departureTime: victim.departureTime ? getLocalDateTimeString(victim.departureTime) : '',
@@ -290,6 +292,7 @@ export const AddVictimPage: React.FC = () => {
     const victimData = {
       ...formData,
       eventId: id,
+      birthDate: formData.birthDate || undefined,
       arrivalTime: safeArrivalTime,
       careOnSiteTime: safeCareTime,
       departureTime: safeDepartureTime,
@@ -455,6 +458,7 @@ export const AddVictimPage: React.FC = () => {
                 </div>
                 <div className="col-span-1"><label className={labelClass}>Dossard n°</label><input type="text" className={`${inputClass} text-lg font-mono`} placeholder="123" value={formData.bibNumber} onChange={e => handleChange('bibNumber', e.target.value)} maxLength={20} disabled={isSubmitting} /></div>
                 <div className="col-span-1 sm:col-span-2"><label className={labelClass}>Nom Complet de la Victime</label><input type="text" required className={inputClass} placeholder="Inconnu / Jean Dupont" value={formData.fullName} onChange={e => handleChange('fullName', e.target.value)} maxLength={MAX_INPUT_LENGTH} disabled={isSubmitting} /></div>
+                <div className="col-span-1"><label className={labelClass}>Date de naissance</label><input type="date" className={`${inputClass} dark:[color-scheme:dark]`} value={formData.birthDate || ''} onChange={e => handleChange('birthDate', e.target.value)} disabled={isSubmitting} /></div>
                 <div className="col-span-1"><label className={`${labelClass} flex items-center gap-1`}><Phone className="w-3 h-3" /> Téléphone</label><input type="tel" className={inputClass} placeholder="06..." value={formData.phoneNumber} onChange={e => handleChange('phoneNumber', e.target.value)} maxLength={MAX_PHONE_LENGTH} disabled={isSubmitting} /></div>
                 <div className="col-span-1"><label className={labelClass}>Contact Urgence (ICE)</label><input type="text" className={inputClass} placeholder="Nom & Numéro" value={formData.emergencyContact} onChange={e => handleChange('emergencyContact', e.target.value)} maxLength={MAX_INPUT_LENGTH} disabled={isSubmitting} /></div>
             </div>

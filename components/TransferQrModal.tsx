@@ -36,6 +36,7 @@ export const TransferQrModal: React.FC<Props> = ({ isOpen, onClose, victim }) =>
       // On n'inclut les champs que s'ils ont une valeur (pour gagner de la place)
       const d: any = {};
       if (victim.fullName) d.a = victim.fullName;       // a = identity
+      if (victim.birthDate) d.j = victim.birthDate;     // j = birthDate
       if (victim.bibNumber) d.b = victim.bibNumber;     // b = bib
       if (victim.triageColor) d.c = victim.triageColor; // c = color
       if (victim.reason) d.d = victim.reason;           // d = description/reason

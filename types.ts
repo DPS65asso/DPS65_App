@@ -122,6 +122,7 @@ export interface Victim {
   updatedAt?: number; // Delta Sync
   bibNumber: string;
   fullName: string;
+  birthDate?: string;
   phoneNumber?: string;
   emergencyContact?: string;
   arrivalTime: string;

@@ -236,11 +236,17 @@ export const AdminPage: React.FC = () => {
   };
 
   const handleRegenerateQuiz = () => {
-      if(confirm("Voulez-vous forcer la régénération du Quiz IA du jour pour tous les rôles ? (Cela remplacera le quiz actuel)")) {
+      if(confirm("Voulez-vous forcer la régénération du Quiz IA du jour pour tous les rôles et toutes les difficultés ? (Cela remplacera le quiz actuel)")) {
           const roles = ['secouriste', 'infirmier', 'medecin'];
+          const diffs = ['facile', 'moyen', 'expert'];
           const today = getLocalDateString();
           roles.forEach(r => {
+              // Cleanup v3
               localStorage.removeItem(`dps65_daily_quiz_${today}_${r}_v3`);
+              // Cleanup v4 (with difficulties)
+              diffs.forEach(d => {
+                  localStorage.removeItem(`dps65_daily_quiz_${today}_${r}_difficulty_${d}_v4`);
+              });
           });
           alert("Quiz réinitialisés. Ils seront régénérés à la prochaine ouverture de la page Formation.");
       }
