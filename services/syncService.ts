@@ -239,8 +239,21 @@ class SyncService {
                     }
                     if (data) {
                         const db = await initDB();
+                        
+                        // Récupérer les éléments en attente de suppression pour cette table
+                        const queue = await db.getAll('sync_queue');
+                        const pendingDeletes = new Set(
+                            queue
+                                .filter(item => item.table === tableName && item.action === 'DELETE')
+                                .map(item => item.data.id)
+                        );
+
                         const tx = db.transaction(dbStoreName as any, 'readwrite');
                         for (const remote of data) {
+                            if (pendingDeletes.has(remote.id)) {
+                                console.log(`[Sync Pull] Ignoré car en cours de suppression locale: ${tableName}:${remote.id}`);
+                                continue;
+                            }
                             // Mapping event_id -> eventId pour la compatibilité locale
                             const localData = { ...remote };
                             if (localData.event_id && !localData.eventId) {
@@ -289,8 +302,21 @@ class SyncService {
                 const { data, error } = await supabase.from(tableName).select('*').eq('event_id', eventId);
                 if (!error && data) {
                     const db = await initDB();
+                    
+                    // Récupérer les éléments en attente de suppression pour cette table
+                    const queue = await db.getAll('sync_queue');
+                    const pendingDeletes = new Set(
+                        queue
+                            .filter(item => item.table === tableName && item.action === 'DELETE')
+                            .map(item => item.data.id)
+                    );
+
                     const tx = db.transaction(dbStoreName as any, 'readwrite');
                     for (const remote of data) {
+                        if (pendingDeletes.has(remote.id)) {
+                            console.log(`[Sync Pull Filtered] Ignoré car en cours de suppression locale: ${tableName}:${remote.id}`);
+                            continue;
+                        }
                         const localData = { ...remote };
                         if (localData.event_id && !localData.eventId) {
                             localData.eventId = localData.event_id;
@@ -323,6 +349,16 @@ class SyncService {
         try {
             if (eventType === 'INSERT' || eventType === 'UPDATE') {
                 if (!localData) return;
+
+                // --- SÉCURITÉ CONTRE LA RÉSURRECTION D'ÉLÉMENTS SUPPRIMÉS LOCALEMENT ---
+                if (localData.id) {
+                    const queue = await db.getAll('sync_queue');
+                    const isLocallyDeleted = queue.some(item => item.table === table && item.action === 'DELETE' && item.data.id === localData.id);
+                    if (isLocallyDeleted) {
+                        console.log(`[Sync Realtime] Rejet de l'écriture distante pour ${table}:${localData.id} car une suppression locale est en attente.`);
+                        return;
+                    }
+                }
 
                 // --- GESTION OPTIMISÉE DES CONFLITS (LAST WRITE WINS) ---
                 if (localData.id) {

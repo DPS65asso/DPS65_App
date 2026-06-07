@@ -409,7 +409,7 @@ CREATE POLICY update_victims ON public.victims
 
 CREATE POLICY delete_victims ON public.victims
     FOR DELETE TO authenticated
-    USING (public.current_user_role() = 'admin');
+    USING (public.current_user_role() IN ('admin', 'secouriste', 'infirmier', 'medecin'));
 
 -- ----------------- TABLE: LOGBOOK -----------------
 CREATE POLICY select_logbook ON public.logbook

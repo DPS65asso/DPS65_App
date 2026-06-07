@@ -433,9 +433,9 @@ export const HomePage: React.FC = () => {
                     onClick={() => navigate('/management')}
                     className="bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 rounded-xl flex items-center gap-3 p-3 shadow-xs hover:border-blue-500/40 hover:shadow-md transition-all active:scale-95 group text-left relative"
                 >
-                    <div className="p-2.5 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg group-hover:scale-105 transition-transform shrink-0 relative">
+                    <NewContentBadge show={hasPortalBadges} className="absolute top-2.5 right-2.5 border border-white dark:border-slate-800 shadow-xs z-10" />
+                    <div className="p-2.5 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg group-hover:scale-105 transition-transform shrink-0">
                         <Users className="w-5 h-5" />
-                        <NewContentBadge show={hasPortalBadges} className="absolute top-0 right-0 transform translate-x-1/3 -translate-y-1/3" />
                     </div>
                     <div className="flex flex-col min-w-0">
                         <span className="font-extrabold text-sm text-slate-805 dark:text-white uppercase tracking-wider truncate">ASSO</span>
