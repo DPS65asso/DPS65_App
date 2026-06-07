@@ -304,13 +304,15 @@ class SyncService {
     private async handleRemoteChange(table: string, payload: any) {
         const db = await initDB();
         const { eventType, new: newRecord, old: oldRecord } = payload;
+        
+        const localData = newRecord ? { ...newRecord } : null;
+        if (localData && localData.event_id && !localData.eventId) {
+            localData.eventId = localData.event_id;
+        }
+
         try {
             if (eventType === 'INSERT' || eventType === 'UPDATE') {
-                const localData = { ...newRecord };
-                // Mapping event_id -> eventId pour la compatibilité locale
-                if (localData.event_id && !localData.eventId) {
-                    localData.eventId = localData.event_id;
-                }
+                if (!localData) return;
 
                 // --- GESTION OPTIMISÉE DES CONFLITS (LAST WRITE WINS) ---
                 if (localData.id) {
@@ -357,7 +359,7 @@ class SyncService {
                 'team_locations': 'dps65_gps_channel'
             };
             
-            const eventId = newRecord?.eventId || newRecord?.event_id;
+            const eventId = localData?.eventId || localData?.event_id || oldRecord?.event_id || oldRecord?.eventId;
             const type = table === 'team_locations' ? 'NEW_LOCATION' : 'UPDATE_' + table.toUpperCase();
             
             if (bcMap[table]) {
@@ -365,7 +367,7 @@ class SyncService {
                 channel.postMessage({ 
                     type, 
                     eventId, 
-                    entry: newRecord 
+                    entry: localData || oldRecord 
                 });
                 channel.close();
             }
@@ -436,8 +438,10 @@ class SyncService {
 
                     try {
                         const dataToPush = { ...item.data };
-                        if (dataToPush.eventId && !dataToPush.event_id) {
-                            dataToPush.event_id = dataToPush.eventId;
+                        // Convert any eventId to event_id and remove eventId to match Supabase's schema
+                        if ('eventId' in dataToPush) {
+                            dataToPush.event_id = dataToPush.eventId || dataToPush.event_id;
+                            delete dataToPush.eventId;
                         }
 
                         const supabaseCall = async () => {
