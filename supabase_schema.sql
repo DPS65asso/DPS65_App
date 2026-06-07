@@ -639,3 +639,60 @@ DROP POLICY IF EXISTS "delete_victim_photos" ON storage.objects;
 CREATE POLICY "delete_victim_photos" ON storage.objects
     FOR DELETE TO authenticated
     USING (bucket_id = 'victim_photos' AND public.current_user_role() = 'admin');
+
+
+-- ----------------------------------------------------
+-- 10. CONFIGURATION DU TEMPS RÉEL & CDC (SUPABASE REALTIME)
+-- ----------------------------------------------------
+
+-- Activation de l'identité de réplication complète pour toutes les tables.
+-- Cela garantit que toutes les colonnes (nouvelles et anciennes) sont incluses dans les logs de réplication (nécessaire pour les UPDATE et les DELETE)
+ALTER TABLE public.events REPLICA IDENTITY FULL;
+ALTER TABLE public.victims REPLICA IDENTITY FULL;
+ALTER TABLE public.logbook REPLICA IDENTITY FULL;
+ALTER TABLE public.team_locations REPLICA IDENTITY FULL;
+ALTER TABLE public.custom_markers REPLICA IDENTITY FULL;
+ALTER TABLE public.missions REPLICA IDENTITY FULL;
+ALTER TABLE public.profiles REPLICA IDENTITY FULL;
+ALTER TABLE public.bags REPLICA IDENTITY FULL;
+ALTER TABLE public.bag_items REPLICA IDENTITY FULL;
+ALTER TABLE public.uniforms REPLICA IDENTITY FULL;
+ALTER TABLE public.fleet REPLICA IDENTITY FULL;
+ALTER TABLE public.news REPLICA IDENTITY FULL;
+ALTER TABLE public.documents REPLICA IDENTITY FULL;
+ALTER TABLE public.courses REPLICA IDENTITY FULL;
+ALTER TABLE public.vehicle_checks REPLICA IDENTITY FULL;
+ALTER TABLE public.config REPLICA IDENTITY FULL;
+
+-- Ajout sécurisé et idempotent des tables à la publication de temps réel 'supabase_realtime'
+DO $$
+DECLARE
+    t text;
+    tables_to_add text[] := ARRAY[
+        'events', 'victims', 'logbook', 'team_locations', 'custom_markers', 
+        'missions', 'profiles', 'bags', 'bag_items', 'uniforms', 
+        'fleet', 'news', 'documents', 'courses', 'vehicle_checks', 'config'
+    ];
+BEGIN
+    -- Crée la publication 'supabase_realtime' si elle n'existe pas encore (scénario offline/self-hosted)
+    IF NOT EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime') THEN
+        CREATE PUBLICATION supabase_realtime;
+    END IF;
+
+    -- Ajoute chaque table de manière individuelle s'il n'est pas déjà présent
+    FOREACH t IN ARRAY tables_to_add LOOP
+        IF NOT EXISTS (
+            SELECT 1 
+            FROM pg_publication_rel pr
+            JOIN pg_class c ON pr.prrelid = c.oid
+            JOIN pg_namespace n ON c.relnamespace = n.oid
+            JOIN pg_publication p ON pr.prpubid = p.oid
+            WHERE p.pubname = 'supabase_realtime' 
+              AND n.nspname = 'public' 
+              AND c.relname = t
+        ) THEN
+            EXECUTE format('ALTER PUBLICATION supabase_realtime ADD TABLE public.%I', t);
+        END IF;
+    END LOOP;
+END $$;
+

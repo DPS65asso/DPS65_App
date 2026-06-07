@@ -5,6 +5,16 @@ import { generateUUID } from '../utils/security';
 import { auditService } from './auditService';
 import { authService } from './authService';
 
+const getNormalizedTime = (val: any): number => {
+    if (!val) return 0;
+    if (typeof val === 'number') return val;
+    if (typeof val === 'string') {
+        const parsed = Date.parse(val);
+        return isNaN(parsed) ? 0 : parsed;
+    }
+    return 0;
+};
+
 type SyncStatusCallback = (pendingCount: number, isOnline: boolean, hasError: boolean) => void;
 
 class SyncService {
@@ -319,8 +329,8 @@ class SyncService {
                     try {
                         const localExisting = await db.get(table as any, localData.id);
                         if (localExisting) {
-                            const localTime = localExisting.updatedAt || localExisting.updated_at || localExisting.timestamp || 0;
-                            const remoteTime = localData.updatedAt || localData.updated_at || localData.timestamp || 0;
+                            const localTime = getNormalizedTime(localExisting.updatedAt || localExisting.updated_at || localExisting.timestamp);
+                            const remoteTime = getNormalizedTime(localData.updatedAt || localData.updated_at || localData.timestamp);
                             
                             // Si la version locale a un horodatage d'édition plus récent, on écarte la version distante
                             if (localTime > remoteTime) {
