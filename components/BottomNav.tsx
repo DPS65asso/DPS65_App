@@ -3,10 +3,13 @@ import React from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { Home, List, Sparkles, Activity, BookOpen } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useNewContent } from '../context/NewContentContext';
+import { NewContentBadge } from './NewContentBadge';
 
 export const BottomNav: React.FC = () => {
   const location = useLocation();
   const { profile } = useAuth();
+  const { badges } = useNewContent();
 
   const linkClass = (isActive: boolean) => 
     `flex flex-col items-center justify-center w-full h-full space-y-1 ${
@@ -33,7 +36,10 @@ export const BottomNav: React.FC = () => {
               </NavLink>
 
               <NavLink to="/events" className={({ isActive }) => linkClass(isActive)}>
-                <List className="w-6 h-6" />
+                <div className="relative">
+                    <List className="w-6 h-6" />
+                    <NewContentBadge show={badges.events} className="absolute -top-1 -right-1" />
+                </div>
                 <span className="text-[10px] font-medium">Events</span>
               </NavLink>
             </>

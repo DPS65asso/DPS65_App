@@ -3,9 +3,7 @@ import React, { useState } from 'react';
 import { Logo } from './Logo';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { ChevronLeft, HardDrive } from 'lucide-react';
-import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
-import { ScreenCurtain, CurtainTrigger } from './ScreenCurtain';
 import { BottomNav } from './BottomNav';
 import { Sidebar } from './Sidebar';
 import { SyncIndicator } from './SyncIndicator'; 
@@ -20,7 +18,6 @@ interface LayoutProps {
 }
 
 export const Layout: React.FC<LayoutProps> = ({ children, title, showBack = false, showStatus = false, hideHeaderTools = false, hideSync = false }) => {
-  const { isEcoMode } = useTheme();
   const { user } = useAuth();
   const isOrganizer = user?.role === 'organisateur';
   const navigate = useNavigate();

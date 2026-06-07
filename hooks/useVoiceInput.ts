@@ -1,8 +1,14 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 
 export const useVoiceInput = (onResult: (text: string) => void) => {
   const [isListening, setIsListening] = useState(false);
   const [recognition, setRecognition] = useState<any>(null);
+  const onResultRef = useRef(onResult);
+
+  // Keep the ref updated with the latest callback
+  useEffect(() => {
+    onResultRef.current = onResult;
+  }, [onResult]);
 
   useEffect(() => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -15,7 +21,7 @@ export const useVoiceInput = (onResult: (text: string) => void) => {
 
       rec.onresult = (event: any) => {
         const transcript = event.results[0][0].transcript;
-        onResult(transcript);
+        onResultRef.current(transcript);
         setIsListening(false);
       };
 
@@ -30,7 +36,7 @@ export const useVoiceInput = (onResult: (text: string) => void) => {
 
       setRecognition(rec);
     }
-  }, [onResult]);
+  }, []);
 
   const startListening = useCallback(() => {
     if (recognition) {

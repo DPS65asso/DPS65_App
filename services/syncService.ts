@@ -12,21 +12,25 @@ class SyncService {
     private listeners: SyncStatusCallback[] = [];
     private isOnline = navigator.onLine;
     private hasError = false;
+    private connectivityInterval: any = null;
     
     constructor() {
+        // En plus des évènements window, on fait un vrai ping actif toutes les 15 secondes
+        this.checkConnectivity();
+        
         window.addEventListener('online', () => {
-            this.isOnline = true; 
-            this.notifyListeners(); 
-            this.processQueue();
-            this.initializeRealtime(); 
-            this.pullLatestData(); 
+            this.checkConnectivity();
         });
-        window.addEventListener('offline', () => { this.isOnline = false; this.notifyListeners(); });
+        window.addEventListener('offline', () => { 
+            this.isOnline = false; 
+            this.notifyListeners(); 
+        });
+
+        this.connectivityInterval = setInterval(() => {
+            this.checkConnectivity();
+        }, 15000);
+
         this.initializeRealtime();
-        if (this.isOnline) { 
-            this.processQueue(); 
-            this.pullLatestData(); 
-        }
 
         // Polling de secours toutes les 2 minutes
         setInterval(() => {
@@ -36,8 +40,61 @@ class SyncService {
         }, 120000);
     }
 
+    public async checkConnectivity(): Promise<boolean> {
+        if (!navigator.onLine) {
+            if (this.isOnline) {
+                this.isOnline = false;
+                this.notifyListeners();
+            }
+            return false;
+        }
+
+        try {
+            // Un ping asynchrone ultra léger (HEAD) sur /index.html ou Supabase (évite portail captif)
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 4000);
+            
+            const response = await fetch('/index.html?t=' + Date.now(), {
+                method: 'HEAD',
+                signal: controller.signal,
+                cache: 'no-store'
+            });
+            clearTimeout(timeoutId);
+            
+            const online = response.ok;
+            if (this.isOnline !== online) {
+                this.isOnline = online;
+                this.notifyListeners();
+                if (online) {
+                    this.processQueue();
+                    this.initializeRealtime();
+                    this.pullLatestData();
+                }
+            }
+            return online;
+        } catch (e) {
+            if (this.isOnline) {
+                this.isOnline = false;
+                this.notifyListeners();
+            }
+            return false;
+        }
+    }
+
+    private realtimeRetryCount = 0;
+    private realtimeChannel: any = null;
+
     private async initializeRealtime() {
         if (!this.isOnline || !isLive) return;
+
+        // On nettoie le canal précédent s'il existe
+        if (this.realtimeChannel) {
+            try {
+                await supabase.removeChannel(this.realtimeChannel);
+            } catch(e) {}
+            this.realtimeChannel = null;
+        }
+
         const channel = supabase.channel('global_app_changes');
         
         const tables = ['events', 'victims', 'logbook', 'team_locations', 'missions', 'profiles', 'bags', 'bag_items', 'uniforms', 'fleet', 'news', 'documents', 'courses', 'vehicle_checks', 'config', 'custom_markers'];
@@ -49,7 +106,26 @@ class SyncService {
                 }
             });
         });
-        channel.subscribe();
+
+        channel.subscribe(async (status, err) => {
+            if (status === 'SUBSCRIBED') {
+                console.log("⚡ Supabase Realtime connecté avec succès.");
+                this.realtimeRetryCount = 0; // Reset
+            } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+                console.warn(`⚠️ Supabase Realtime déconnecté ou en erreur (${status}). Planification de tentative de reconnexion...`);
+                
+                // Exponential backoff + random jitter (2^retry * 1000ms + random_jitter)
+                this.realtimeRetryCount++;
+                const delay = Math.min(30000, Math.pow(2, this.realtimeRetryCount) * 1000) + (Math.random() * 1500);
+                
+                console.log(`[Realtime Reconnector] Reconnexion dans ${Math.round(delay)}ms (Essai #${this.realtimeRetryCount})`);
+                setTimeout(() => {
+                    this.initializeRealtime();
+                }, delay);
+            }
+        });
+
+        this.realtimeChannel = channel;
     }
 
     private async triggerNotification(table: string, data: any) {
@@ -234,6 +310,25 @@ class SyncService {
                 // Mapping event_id -> eventId pour la compatibilité locale
                 if (localData.event_id && !localData.eventId) {
                     localData.eventId = localData.event_id;
+                }
+
+                // --- GESTION OPTIMISÉE DES CONFLITS (LAST WRITE WINS) ---
+                if (localData.id) {
+                    try {
+                        const localExisting = await db.get(table as any, localData.id);
+                        if (localExisting) {
+                            const localTime = localExisting.updatedAt || localExisting.updated_at || localExisting.timestamp || 0;
+                            const remoteTime = localData.updatedAt || localData.updated_at || localData.timestamp || 0;
+                            
+                            // Si la version locale a un horodatage d'édition plus récent, on écarte la version distante
+                            if (localTime > remoteTime) {
+                                console.log(`[Sync Conflit] Rejet remote obsolète pour ${table} (Local: ${localTime} > Remote: ${remoteTime})`);
+                                return;
+                            }
+                        }
+                    } catch (conflictErr) {
+                        console.warn("Conflict comparison failed, default to put", conflictErr);
+                    }
                 }
 
                 if (table === 'config') {

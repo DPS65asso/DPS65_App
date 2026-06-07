@@ -68,7 +68,7 @@ export const TrackingGuard: React.FC = () => {
                 </p>
 
                 <div className="bg-slate-100 dark:bg-slate-800 p-3 rounded-lg text-xs text-slate-500 mb-4">
-                    <strong>Conseil :</strong> Utilisez le mode "Rideau Noir" (Bouton Éco) au lieu d'éteindre l'écran.
+                    <strong>Conseil :</strong> Gardez l'application ouverte et active au premier plan pour assurer un suivi GPS continu et précis.
                 </div>
 
                 <button 

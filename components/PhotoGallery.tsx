@@ -18,6 +18,7 @@ export const PhotoGallery: React.FC<PhotoGalleryProps> = ({ photos, onUpdate, re
   const workerRef = useRef<Worker | null>(null);
   const [isCompressing, setIsCompressing] = useState(false);
   const [fullscreenPhoto, setFullscreenPhoto] = useState<string | null>(null);
+  const [ecoMode, setEcoMode] = useState(false); // Mode Éco-Réseau / Photo compacte
 
   // Initialisation du Web Worker
   useEffect(() => {
@@ -42,7 +43,7 @@ export const PhotoGallery: React.FC<PhotoGalleryProps> = ({ photos, onUpdate, re
                     id: id, 
                     timestamp: Date.now(),
                     blob: blob, 
-                    description: ''
+                    description: ecoMode ? 'Mode Éco (Noir/Blanc)' : ''
                 };
                 onUpdate([...photos, newPhoto]);
             } else {
@@ -52,7 +53,7 @@ export const PhotoGallery: React.FC<PhotoGalleryProps> = ({ photos, onUpdate, re
             setIsCompressing(false);
           };
       }
-  }, [photos, onUpdate]);
+  }, [photos, onUpdate, ecoMode]);
 
   // OPTIMISATION CRITIQUE : Gestion stable des URLs pour les Blobs
   // Évite de recréer des URLs à chaque render (Memory Leak + Flickering)
@@ -96,8 +97,9 @@ export const PhotoGallery: React.FC<PhotoGalleryProps> = ({ photos, onUpdate, re
         workerRef.current.postMessage({ 
             file, 
             id: tempId,
-            maxWidth: 1280, // Full HD max
-            quality: 0.75 
+            maxWidth: ecoMode ? 600 : 1024, // Taille ultra optimisée en éco
+            quality: ecoMode ? 0.60 : 0.75, // Forte compression en éco
+            grayscale: ecoMode // En éco, on active le N&B pour réduire de 3x la taille du fichier
         });
     } else {
         alert("Erreur système (Worker manquant). Réessayez.");
@@ -117,6 +119,23 @@ export const PhotoGallery: React.FC<PhotoGalleryProps> = ({ photos, onUpdate, re
     <div className="space-y-4">
         {!readOnly && (
             <div className="flex flex-col gap-2">
+                {/* Sélecteur Mode Dégradé / Réseau Satin */}
+                <div className="flex items-center justify-between p-3 bg-slate-100 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
+                    <div className="text-left">
+                        <span className="block text-xs font-black uppercase text-slate-800 dark:text-slate-100">Réseau dégradé / Éco-Photo</span>
+                        <span className="block text-[10px] text-slate-500 dark:text-slate-400">Forces: Noir & Blanc, compression maximum (~20 Ko vs ~300 Ko)</span>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                        <input 
+                            type="checkbox" 
+                            className="sr-only peer" 
+                            checked={ecoMode} 
+                            onChange={(e) => setEcoMode(e.target.checked)} 
+                        />
+                        <div className="w-11 h-6 bg-slate-300 dark:bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                    </label>
+                </div>
+
                 <input 
                     type="file" 
                     accept="image/*" 

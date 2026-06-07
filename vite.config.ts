@@ -15,7 +15,8 @@ export default defineConfig(({ mode }) => {
     plugins: [
       react(),
       VitePWA({
-        registerType: 'prompt',
+        registerType: 'autoUpdate',
+        injectRegister: 'inline',
         devOptions: {
           enabled: true, // IMPORTANT: Active le SW en mode dev/preview pour éviter les crashs
           type: 'module',
@@ -51,8 +52,11 @@ export default defineConfig(({ mode }) => {
           ]
         },
         workbox: {
-          globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+          globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2,webmanifest,json}'],
           cleanupOutdatedCaches: true,
+          navigateFallback: 'index.html',
+          navigateFallbackDenylist: [/^\/api/],
+          maximumFileSizeToCacheInBytes: 4 * 1024 * 1024, // Augmente la limite pour les gros modules (PDF, MapLibre)
           runtimeCaching: [
               // Cache pour les tuiles de cartes (OSM & OpenTopoMap)
               {
@@ -75,6 +79,26 @@ export default defineConfig(({ mode }) => {
                     maxEntries: 1000,
                     maxAgeSeconds: 60 * 60 * 24 * 30 // 30 jours
                   }
+                }
+              },
+              // Cache pour CDN de scripts ESM (esm.sh) sauvegarde
+              {
+                urlPattern: /^https:\/\/esm\.sh\/.*/i,
+                handler: 'StaleWhileRevalidate',
+                options: {
+                  cacheName: 'esm-sh-cache',
+                  expiration: { maxEntries: 100, maxAgeSeconds: 60 * 60 * 24 * 30 },
+                  cacheableResponse: { statuses: [0, 200] }
+                }
+              },
+              // Cache pour CDN de style unpkg.com (Leaflet)
+              {
+                urlPattern: /^https:\/\/unpkg\.com\/.*/i,
+                handler: 'CacheFirst',
+                options: {
+                  cacheName: 'unpkg-cache',
+                  expiration: { maxEntries: 50, maxAgeSeconds: 60 * 60 * 24 * 365 },
+                  cacheableResponse: { statuses: [0, 200] }
                 }
               },
               // Cache pour CDN fonts/styles
@@ -113,13 +137,17 @@ export default defineConfig(({ mode }) => {
       outDir: 'dist',
       emptyOutDir: true,
       sourcemap: false,
+      minify: 'esbuild',
+      cssCodeSplit: true,
+      chunkSizeWarningLimit: 1500,
       rollupOptions: {
           output: {
               manualChunks: {
                   'leaflet-vendor': ['leaflet', 'react-leaflet'],
                   'pdf-vendor': ['jspdf', 'jspdf-autotable'],
                   'scanner-vendor': ['html5-qrcode', 'qrcode'],
-                  'ai-vendor': ['@google/genai']
+                  'ai-vendor': ['@google/genai'],
+                  'lucide-vendor': ['lucide-react']
               }
           }
       }

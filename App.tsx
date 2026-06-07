@@ -15,6 +15,7 @@ import { TrackingGuard } from './components/TrackingGuard'; // NOUVEAU
 import { storageService } from './services/storageService';
 import { Loader2 } from 'lucide-react';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { NewContentProvider } from './context/NewContentContext';
 
 // Lazy Loading
 const LoginPage = lazy(() => import('./pages/LoginPage').then(module => ({ default: module.LoginPage })));
@@ -99,7 +100,9 @@ const App: React.FC = () => {
                   <FleetNotificationSystem />
                   <MissionReminder />
                   <UpdatePrompt />
-                  <AppRoutes />
+                  <NewContentProvider>
+                      <AppRoutes />
+                  </NewContentProvider>
               </HashRouter>
           </AuthProvider>
         </ThemeProvider>

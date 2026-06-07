@@ -7,7 +7,6 @@ import { storageService } from '../services/storageService';
 import { generateUUID } from '../utils/security';
 import L from 'leaflet';
 import { Battery, BatteryCharging, Mountain, Radio, Map as MapIcon, Target, Phone, Trash2, Tent, Truck, AlertTriangle, MapPin, User, Save, X, Move, Car, Zap, Layers, Check, ChevronDown, ChevronUp } from 'lucide-react';
-import { useTheme } from '../context/ThemeContext';
 import { Button } from './Button';
 import { OPS_DATA } from '../data/opsData';
 
@@ -219,8 +218,8 @@ const MapEvents = ({ isEditMode, onMapClick }: { isEditMode: boolean, onMapClick
     return null;
 };
 
-// --- COMPOSANT MARQUEUR DÉPLAÇABLE ISOLÉ ---
-const DraggableMarker: React.FC<{ m: CustomMarker, onUpdate: (id: string, lat: number, lng: number) => void, onDelete: (id: string) => void }> = ({ m, onUpdate, onDelete }) => {
+// --- COMPOSANT MARQUEUR DÉPLAÇABLE ISOLÉ COMPLÈTEMENT MÉMOÏSÉ (Point 8) ---
+const DraggableMarker = React.memo(({ m, onUpdate, onDelete }: { m: CustomMarker, onUpdate: (id: string, lat: number, lng: number) => void, onDelete: (id: string) => void }) => {
     const markerRef = useRef<L.Marker>(null);
 
     const eventHandlers = useMemo(
@@ -258,7 +257,7 @@ const DraggableMarker: React.FC<{ m: CustomMarker, onUpdate: (id: string, lat: n
             </Popup>
         </Marker>
     );
-};
+});
 
 // Composant Marqueur Optimisé (Memoized)
 const TacticalMarker = React.memo(({ loc, zoomLevel }: { loc: TeamLocation; zoomLevel: number }) => {
@@ -348,12 +347,10 @@ export const EventMap: React.FC<Props> = ({
     liveEvent,
     readOnly = false
 }) => {
-  const { isEcoMode } = useTheme();
   const [latestLocations, setLatestLocations] = useState<Record<string, TeamLocation>>({});
   const [customMarkers, setCustomMarkers] = useState<CustomMarker[]>([]);
   const [eventTrack, setEventTrack] = useState<[number, number][]>([]);
   const [eventTracks, setEventTracks] = useState<Track[]>([]);
-  const [forceLoad, setForceLoad] = useState(false);
   const [zoomLevel, setZoomLevel] = useState(15); 
   const [rainViewerTimestamp, setRainViewerTimestamp] = useState<number | null>(null);
   const [currentStyle, setCurrentStyle] = useState<'standard' | 'topo' | 'satellite'>('standard');
@@ -416,8 +413,6 @@ export const EventMap: React.FC<Props> = ({
   const [newMarkerType, setNewMarkerType] = useState<MarkerType>('POST');
 
   useEffect(() => {
-    if (isEcoMode && !forceLoad) return;
-
     const loadEventData = async () => {
         if (liveEvent) {
             if (liveEvent.trackData) setEventTrack(liveEvent.trackData);
@@ -487,7 +482,7 @@ export const EventMap: React.FC<Props> = ({
         clearInterval(interval);
         bc.close();
     };
-  }, [eventId, isEcoMode, forceLoad, liveTeams, liveMarkers, liveEvent]);
+  }, [eventId, liveTeams, liveMarkers, liveEvent]);
 
   const handleMapClick = (e: L.LeafletMouseEvent) => {
       setNewMarkerPos({ lat: e.latlng.lat, lng: e.latlng.lng });
@@ -527,16 +522,6 @@ export const EventMap: React.FC<Props> = ({
       // Update local state to reflect new position without reload
       setCustomMarkers(prev => prev.map(m => m.id === id ? { ...m, lat, lng } : m));
   }, []);
-
-  if (isEcoMode && !forceLoad) {
-      return (
-          <div className={`${isFullscreen ? 'h-full' : 'h-[60vh]'} w-full rounded-xl overflow-hidden border border-slate-800 bg-black flex flex-col items-center justify-center text-slate-500`}>
-              <MapIcon className="w-16 h-16 mb-4 opacity-50" />
-              <p className="mb-6 font-bold uppercase tracking-wider">Carte en pause (Mode Éco)</p>
-              <Button onClick={() => setForceLoad(true)} variant="outline" className="border-slate-700 text-slate-300">Charger la carte</Button>
-          </div>
-      );
-  }
 
   const locs = Object.values(latestLocations) as TeamLocation[];
   const defaultCenter: [number, number] = [46.603354, 1.888334]; 

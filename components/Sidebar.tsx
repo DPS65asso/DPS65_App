@@ -4,9 +4,12 @@ import { NavLink } from 'react-router-dom';
 import { Home, List, Sparkles, Activity, BookOpen, User } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { Logo } from './Logo';
+import { useNewContent } from '../context/NewContentContext';
+import { NewContentBadge } from './NewContentBadge';
 
 export const Sidebar: React.FC = () => {
   const { profile } = useAuth();
+  const { badges } = useNewContent();
 
   const linkClass = (isActive: boolean) => 
     `flex items-center gap-4 px-4 py-3 rounded-xl transition-all duration-200 font-bold text-sm ${
@@ -37,7 +40,8 @@ export const Sidebar: React.FC = () => {
 
             <NavLink to="/events" className={({ isActive }) => linkClass(isActive)}>
                 <List className="w-5 h-5" />
-                <span>Événements</span>
+                <span className="flex-1">Événements</span>
+                <NewContentBadge show={badges.events} />
             </NavLink>
           </>
         )}

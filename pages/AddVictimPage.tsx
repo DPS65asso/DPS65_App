@@ -10,7 +10,7 @@ import { storageService } from '../services/storageService';
 import { bagService } from '../services/bagService';
 import { Outcome, Victim, Solute, VitalSign, AppConfig, TriageColor, Medication, Event, ResponderEntry } from '../types';
 import { useVoiceInput } from '../hooks/useVoiceInput';
-import { User, ClipboardList, AlertTriangle, Activity, Loader2, Clock, Phone, RefreshCw, Mic, MicOff, ShieldCheck, HeartPulse, Stethoscope, Syringe, CheckCircle2, Plus, Trash2, MapPin, Building2, History, ChevronDown, ChevronUp, PenTool, Bed, QrCode, Zap, Timer, Camera, Pill, Flame, FileText, ArrowDown, Maximize2, X, Eye, EyeOff } from 'lucide-react';
+import { User, ClipboardList, AlertTriangle, Activity, Loader2, Clock, Phone, RefreshCw, Mic, MicOff, ShieldCheck, HeartPulse, Stethoscope, Syringe, CheckCircle2, Plus, Trash2, MapPin, Building2, History, ChevronDown, ChevronUp, PenTool, Bed, QrCode, Zap, Timer, Camera, Pill, Flame, FileText, ArrowDown, Maximize2, X, Eye, EyeOff, Send, Check } from 'lucide-react';
 import { generateUUID, isValidPhoneNumber, MAX_INPUT_LENGTH, MAX_TEXTAREA_LENGTH, MAX_PHONE_LENGTH, getLocalDateTimeString } from '../utils/security';
 import { useAuth } from '../context/AuthContext';
 import { Sparkline } from '../components/Sparkline';
@@ -35,6 +35,50 @@ export const AddVictimPage: React.FC = () => {
   const [isResponderOpen, setIsResponderOpen] = useState(false);
   const [showQrModal, setShowQrModal] = useState(false);
   const [showFullCpr, setShowFullCpr] = useState(false);
+  const [copiedSms, setCopiedSms] = useState(false);
+
+  const handleCopySmsFormat = () => {
+      // Format: DPS65:ID|INIT|AGE|TRIAGE|OUTCOME|VITALS|GARROT
+      const initials = formData.fullName ? formData.fullName.split(' ').map(n => n[0] || '').join('').toUpperCase() : 'XX';
+      
+      let ageCode = 'XX';
+      if (formData.birthDate) {
+          try {
+              const birthYear = new Date(formData.birthDate).getFullYear();
+              const currentYear = new Date().getFullYear();
+              if (!isNaN(birthYear)) {
+                  ageCode = String(currentYear - birthYear);
+              }
+          } catch (e) {}
+      }
+
+      const triage = formData.triageColor || 'X';
+      const outcome = formData.outcome || 'X';
+      
+      // Get latest vital signs if any
+      let lastVitals = 'N/A';
+      if (formData.vitals && formData.vitals.length > 0) {
+          const sorted = [...formData.vitals].sort((a,b) => (b.time || '').localeCompare(a.time || ''));
+          const v = sorted[0];
+          lastVitals = `FC:${v.pulse || '?'}-TA:${v.bp || '?'}-SpO2:${v.sao2 || '?'}`;
+      }
+      
+      const compactId = victimId ? victimId.slice(0, 4) : 'TEMP';
+      const text = `DPS65:${compactId}|${initials}|${ageCode}|${triage}|${outcome}|${lastVitals}|${formData.hasTourniquet ? 'G_OK' : 'S_G'}`;
+      
+      if (navigator.clipboard) {
+          navigator.clipboard.writeText(text).then(() => {
+              setCopiedSms(true);
+              setTimeout(() => setCopiedSms(false), 2000);
+              alert(`Bilan SMS Copié !\n\n${text}\n\nCollez-le directement pour l'envoyer par SMS ou par radio.`);
+          }).catch(err => {
+              console.error("Clipboard error", err);
+              alert(`Bilan SMS généré :\n\n${text}`);
+          });
+      } else {
+          alert(`Bilan SMS généré (Veuillez le noter) :\n\n${text}`);
+      }
+  };
   
   const [showVitalList, setShowVitalList] = useState(false); 
   const [showFullChartModal, setShowFullChartModal] = useState(false);
@@ -44,7 +88,7 @@ export const AddVictimPage: React.FC = () => {
     if (profile?.role === 'organisateur') {
       navigate('/tactical', { replace: true });
     }
-  }, [profile, navigate]);
+  }, [profile?.role, navigate]);
 
   const [hospitalSelect, setHospitalSelect] = useState('');
   const [timeError, setTimeError] = useState(false);
@@ -358,21 +402,29 @@ export const AddVictimPage: React.FC = () => {
         )}
         
         {/* HEADER ACTIONS */}
-        <div className="flex justify-end -mt-2 gap-2">
+        <div className="grid grid-cols-3 gap-2 w-full -mt-2 mb-2">
+            <button 
+                type="button" 
+                onClick={(e) => { e.preventDefault(); handleCopySmsFormat(); }}
+                className="flex items-center justify-center gap-2 bg-amber-50 dark:bg-amber-950/20 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800 py-1.5 rounded-lg text-xs font-extrabold hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors shadow-sm"
+                title="Générer et copier un bilan condensé au format SMS Montagne"
+            >
+                {copiedSms ? <Check className="w-4 h-4 text-green-500 animate-bounce shrink-0" /> : <Send className="w-4 h-4 text-amber-500 shrink-0" />} <span>{copiedSms ? 'Copié !' : 'SMS'}</span>
+            </button>
             <button 
                 type="button" 
                 onClick={(e) => { e.preventDefault(); setShowQrModal(true); }}
-                className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors shadow-sm"
+                className="flex items-center justify-center gap-2 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 py-1.5 rounded-lg text-xs font-extrabold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors shadow-sm"
             >
-                <QrCode className="w-4 h-4" /> QR Transfert
+                <QrCode className="w-4 h-4 shrink-0" /> <span>QR Code</span>
             </button>
             <button 
                 type="button" 
                 onClick={(e) => { e.preventDefault(); handleExportPdf(); }}
                 disabled={isExporting}
-                className="flex items-center gap-2 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors shadow-sm"
+                className="flex items-center justify-center gap-2 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 py-1.5 rounded-lg text-xs font-extrabold hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors shadow-sm disabled:opacity-50"
             >
-                {isExporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />} PDF / Partager
+                {isExporting ? <Loader2 className="w-4 h-4 animate-spin shrink-0" /> : <FileText className="w-4 h-4 shrink-0" />} <span>PDF</span>
             </button>
         </div>
 
@@ -454,7 +506,7 @@ export const AddVictimPage: React.FC = () => {
                 </div>
                 <div className="col-span-1 sm:col-span-2 p-3 bg-slate-100 dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700 flex items-center justify-between gap-4">
                     <label className={`${labelClass} flex items-center gap-1 whitespace-nowrap mb-0`}><Bed className="w-4 h-4 text-blue-500"/> Installation immédiate :</label>
-                    <select className={`${inputClass} max-w-[200px] font-bold`} value={formData.resourceUsed || 'none'} onChange={e => handleChange('resourceUsed', e.target.value)}><option value="none">-- Aucune --</option><option value="stretcher">Brancard</option><option value="chair">Chaise</option></select>
+                    <select className={`${inputClass} max-w-[200px] font-bold`} value={formData.resourceUsed || 'none'} onChange={e => handleChange('resourceUsed', e.target.value)}><option value="none">--</option><option value="stretcher">Brancard</option><option value="chair">Chaise</option></select>
                 </div>
                 <div className="col-span-1"><label className={labelClass}>Dossard n°</label><input type="text" className={`${inputClass} text-lg font-mono`} placeholder="123" value={formData.bibNumber} onChange={e => handleChange('bibNumber', e.target.value)} maxLength={20} disabled={isSubmitting} /></div>
                 <div className="col-span-1 sm:col-span-2"><label className={labelClass}>Nom Complet de la Victime</label><input type="text" required className={inputClass} placeholder="Inconnu / Jean Dupont" value={formData.fullName} onChange={e => handleChange('fullName', e.target.value)} maxLength={MAX_INPUT_LENGTH} disabled={isSubmitting} /></div>

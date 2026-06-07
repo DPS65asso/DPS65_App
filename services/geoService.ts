@@ -48,6 +48,48 @@ class GeoService {
     private onStopCallback: (() => void) | null = null;
     public isTracking = false;
     private isFirstFix = false;
+    
+    // Suivi dynamique de la batterie et de la veille
+    private batteryLevel = 100;
+    private isCharging = false;
+    private lastMoveTime = Date.now();
+    private isSleeping = false;
+    private sleepPollIntervalId: any = null;
+
+    constructor() {
+        this.initBattery();
+    }
+
+    private async initBattery() {
+        try {
+            const batt = await (navigator as any).getBattery?.();
+            if (batt) {
+                this.batteryLevel = Math.round(batt.level * 100);
+                this.isCharging = batt.charging;
+                
+                batt.addEventListener('levelchange', () => {
+                    const newLvl = Math.round(batt.level * 100);
+                    const oldBelow20 = this.batteryLevel <= 20;
+                    const newBelow20 = newLvl <= 20;
+                    this.batteryLevel = newLvl;
+                    
+                    if (this.isTracking && oldBelow20 !== newBelow20) {
+                        console.log(`[Battery Monitor] Niveau critique changé: réajustement des options du GPS.`);
+                        this.restartWatch();
+                    }
+                });
+
+                batt.addEventListener('chargingchange', () => {
+                    this.isCharging = batt.charging;
+                    if (this.isTracking) {
+                        this.restartWatch();
+                    }
+                });
+            }
+        } catch(e) {
+            console.warn("API de statut de la batterie non supportée ou refusée.", e);
+        }
+    }
 
     public async requestPermissions(): Promise<boolean> {
         if (!navigator.geolocation) return false;
@@ -115,6 +157,8 @@ class GeoService {
         this.isFirstFix = true;
         this.lastSentPosition = null;
         this.lastSentTime = 0;
+        this.lastMoveTime = Date.now();
+        this.isSleeping = false;
         this.startTime = restoredStartTime || Date.now();
         this.onStopCallback = onStop || null;
 
@@ -147,19 +191,60 @@ class GeoService {
     }
 
     private startWatch() {
-        if (!navigator.geolocation) return;
+        if (!navigator.geolocation || this.isSleeping) return;
         
+        const below20 = this.batteryLevel <= 20 && !this.isCharging;
         const options = { 
-            enableHighAccuracy: true, 
-            timeout: 20000, 
-            maximumAge: 0 
+            enableHighAccuracy: !below20, // Si batterie critique (<20%) sans chargeur, on désactive le CPU GPS énergivore
+            timeout: below20 ? 40000 : 20000, 
+            maximumAge: below20 ? 30000 : 0 
         };
+        
+        console.log(`[GPS Watch] Démarrage (Précision=${options.enableHighAccuracy ? 'Haute' : 'Basse'}, Batterie: ${this.batteryLevel}%)`);
+
+        if (this.watchId !== null) {
+            navigator.geolocation.clearWatch(this.watchId);
+        }
         
         this.watchId = navigator.geolocation.watchPosition(
             this.handlePosition, 
             this.handleError, 
             options
         );
+    }
+
+    private restartWatch() {
+        if (!this.isTracking || this.isSleeping) return;
+        this.startWatch();
+    }
+
+    private startSleepPolling() {
+        if (this.watchId !== null) {
+            navigator.geolocation.clearWatch(this.watchId);
+            this.watchId = null;
+        }
+
+        console.log("[GPS Standby] Début du mode de veille GPS (Poll basse fréquence 10 min)");
+        if (this.sleepPollIntervalId) clearInterval(this.sleepPollIntervalId);
+
+        this.sleepPollIntervalId = setInterval(() => {
+            if (!this.isTracking) {
+                this.stopSleepPolling();
+                return;
+            }
+            navigator.geolocation.getCurrentPosition(
+                this.handlePosition,
+                (err) => console.warn("[GPS Standby] Poll de veille échoué:", err.message),
+                { enableHighAccuracy: false, timeout: 15000 }
+            );
+        }, 10 * 60 * 1000); // Poll de vérification toutes les 10 minutes
+    }
+
+    private stopSleepPolling() {
+        if (this.sleepPollIntervalId) {
+            clearInterval(this.sleepPollIntervalId);
+            this.sleepPollIntervalId = null;
+        }
     }
 
     private handleError = (error: GeolocationPositionError) => {
@@ -172,6 +257,7 @@ class GeoService {
     public stopTracking() {
         this.pauseTracking();
         this.clearSessionStorage(); // Suppression de la persistance
+        this.stopSleepPolling();
         
         if (this.onStopCallback) {
             this.onStopCallback();
@@ -240,6 +326,32 @@ class GeoService {
         };
 
         const now = Date.now();
+        
+        // --- LOGIQUE DE VEILLE COUPLÉE (Point 3 : Aucune position ne change de >5m sur 4h) ---
+        if (this.lastSentPosition) {
+            const distance = calculateDistance(this.lastSentPosition, currentPos);
+            if (distance > 5) {
+                // On réinitialise l'heure du dernier mouvement
+                this.lastMoveTime = now;
+                if (this.isSleeping) {
+                    console.log("🏃 Sortie de veille automatique du GPS (mouvement détecté >5m).");
+                    this.isSleeping = false;
+                    this.stopSleepPolling();
+                    this.startWatch();
+                }
+            } else {
+                // Aucun déplacement significatif. Sommes-nous immobiles depuis > 4h ?
+                if (!this.isSleeping && (now - this.lastMoveTime > 4 * 60 * 60 * 1000)) {
+                    console.log("💤 Stationnaire depuis > 4h. Mode veille GPS activé.");
+                    this.isSleeping = true;
+                    this.startSleepPolling();
+                    return; // On arrête là pour économiser de la batterie
+                }
+            }
+        } else {
+            this.lastMoveTime = now;
+        }
+
         let shouldSend = false;
 
         if (!this.lastSentPosition) {
@@ -248,9 +360,13 @@ class GeoService {
             const distance = calculateDistance(this.lastSentPosition, currentPos);
             const timeDiff = now - this.lastSentTime;
             
-            if (distance > MIN_DISTANCE_METERS && timeDiff > MOVING_INTERVAL_MS) {
+            const below20 = this.batteryLevel <= 20 && !this.isCharging;
+            const dynamicMovingInterval = below20 ? (MOVING_INTERVAL_MS * 4) : MOVING_INTERVAL_MS; // Multiplié par 4 si batterie faible
+            const dynamicStaticInterval = below20 ? (STATIC_INTERVAL_MS * 2) : STATIC_INTERVAL_MS;
+
+            if (distance > MIN_DISTANCE_METERS && timeDiff > dynamicMovingInterval) {
                 shouldSend = true;
-            } else if (timeDiff > STATIC_INTERVAL_MS) {
+            } else if (timeDiff > dynamicStaticInterval) {
                 shouldSend = true;
             }
         }
@@ -271,6 +387,19 @@ class GeoService {
 
     private savePosition = async (pos: GeoPosition) => {
         try {
+            // Lecture temps-réel de l'API Battery
+            let activeBatteryLevel = this.batteryLevel;
+            let activeIsCharging = this.isCharging;
+            try {
+                const batt = await (navigator as any).getBattery?.();
+                if (batt) {
+                    activeBatteryLevel = Math.round(batt.level * 100);
+                    activeIsCharging = batt.charging;
+                    this.batteryLevel = activeBatteryLevel;
+                    this.isCharging = activeIsCharging;
+                }
+            } catch (err) {}
+
             const db = await initDB();
             const loc = {
                 id: generateUUID(),
@@ -281,8 +410,8 @@ class GeoService {
                 accuracy: pos.accuracy,
                 altitude: pos.altitude || 0,
                 timestamp: pos.timestamp,
-                battery_level: 100,
-                is_charging: false
+                battery_level: activeBatteryLevel,
+                is_charging: activeIsCharging
             };
 
             const tx = db.transaction(['team_locations', 'sync_queue'], 'readwrite');
@@ -311,6 +440,44 @@ class GeoService {
         } catch (e) {
             console.warn("Erreur sauvegarde position GPS:", e);
         }
+    }
+
+    public async sendImmediateEmergencyLocation(teamName: string, eventId?: string): Promise<boolean> {
+        if (!navigator.geolocation) return false;
+        
+        return new Promise((resolve) => {
+            navigator.geolocation.getCurrentPosition(
+                async (pos) => {
+                    const currentPos: GeoPosition = {
+                        lat: pos.coords.latitude,
+                        lng: pos.coords.longitude,
+                        accuracy: pos.coords.accuracy,
+                        altitude: pos.coords.altitude,
+                        timestamp: Date.now()
+                    };
+                    
+                    const origTeam = this.teamName;
+                    const origEvent = this.eventId;
+                    
+                    this.teamName = teamName;
+                    this.eventId = eventId;
+                    
+                    await this.savePosition(currentPos);
+                    
+                    if (this.isTracking) {
+                        this.teamName = origTeam;
+                        this.eventId = origEvent;
+                    }
+                    
+                    resolve(true);
+                },
+                (err) => {
+                    console.warn("Immediate emergency location fix failed:", err.message);
+                    resolve(false);
+                },
+                { enableHighAccuracy: true, timeout: 10000 }
+            );
+        });
     }
 }
 

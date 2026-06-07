@@ -9,16 +9,16 @@ import { storageService } from '../services/storageService';
 import { geoService } from '../services/geoService';
 import { bagService } from '../services/bagService';
 import { authService } from '../services/authService';
-import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
-import { ScreenCurtain, CurtainTrigger } from '../components/ScreenCurtain';
 import { ConfirmDialog } from '../components/ConfirmDialog';
-import { Loader2, RefreshCw, HeartPulse, Settings, MapPin, QrCode, Battery, BatteryCharging, Users, Radio, Briefcase, ChevronRight, Power, Shield, Stethoscope, ShieldAlert, FlaskConical, User, GraduationCap, Package, Phone } from 'lucide-react';
+import { Loader2, RefreshCw, HeartPulse, Settings, MapPin, QrCode, Users, Radio, Briefcase, ChevronRight, Power, Shield, Stethoscope, ShieldAlert, FlaskConical, User, GraduationCap, Package, Phone } from 'lucide-react';
 import { AppConfig, Bag, UserRole, Event as DpsEvent } from '../types';
 import { generateUUID, getLocalDateString } from '../utils/security';
 import { useWakeLock } from '../hooks/useWakeLock';
 import { SyncIndicator } from '../components/SyncIndicator';
 import { syncService } from '../services/syncService';
+import { useNewContent } from '../context/NewContentContext';
+import { NewContentBadge } from '../components/NewContentBadge';
 
 // Mapping local pour l'affichage
 const BAG_LABELS: Record<string, string> = {
@@ -30,8 +30,9 @@ const BAG_LABELS: Record<string, string> = {
 
 export const HomePage: React.FC = () => {
   const navigate = useNavigate();
-  const { isEcoMode, toggleEcoMode } = useTheme();
   const { profile, currentTeam, setSessionTeam, isAdmin, refreshProfile } = useAuth();
+  const { badges } = useNewContent();
+  const hasPortalBadges = badges.missions || badges.fleet || badges.material || badges.courses || badges.docs;
 
   // Redirection automatique pour les organisateurs
   useEffect(() => {
@@ -40,7 +41,6 @@ export const HomePage: React.FC = () => {
     }
   }, [profile, navigate]);
   const [showEmergency, setShowEmergency] = useState(false);
-  const [showCurtain, setShowCurtain] = useState(false);
   
   const [isTracking, setIsTracking] = useState(false);
   const [showStopTrackingConfirm, setShowStopTrackingConfirm] = useState(false); 
@@ -55,8 +55,8 @@ export const HomePage: React.FC = () => {
   // État pour le sac actif
   const [currentBag, setCurrentBag] = useState<Bag | null>(null);
 
-  // Mode Critique (Urgence) ou Rideau Noir : Masque l'interface standard
-  const isCriticalMode = showEmergency || showCurtain;
+  // Mode Critique (Urgence) : Masque l'interface standard
+  const isCriticalMode = showEmergency;
   
   useWakeLock(isCriticalMode || isTracking);
 
@@ -132,13 +132,42 @@ export const HomePage: React.FC = () => {
 
       setShowEmergency(true);
       
+      const activeTeam = currentTeam || (profile ? `URG-${profile.lastName.toUpperCase()}` : 'URG-INCONNU');
+      const today = getLocalDateString();
+      let todayEvent: DpsEvent | null = null;
+      try {
+          const events = await storageService.getEvents();
+          todayEvent = events.find(e => e.date === today) || null;
+      } catch (e) {
+          console.error("Error loading events in emergency", e);
+      }
+      const eventId = todayEvent ? todayEvent.id : undefined;
+
+      // 1. Activation immédiate du GPS (si désactivé)
+      if (!isTracking) {
+          try {
+              const hasPermission = await geoService.requestPermissions();
+              if (hasPermission) {
+                  geoService.startTracking(activeTeam, () => setIsTracking(false), eventId);
+                  setIsTracking(true);
+              }
+          } catch (gpsErr) {
+              console.error("Error activating GPS in emergency", gpsErr);
+          }
+      }
+
+      // 2. Envoi instantané de la localisation (via table team_locations synced to Supabase)
+      try {
+          await geoService.sendImmediateEmergencyLocation(activeTeam, eventId);
+          syncService.retrySync();
+      } catch (locErr) {
+          console.error("Error sending emergency positioning", locErr);
+      }
+      
       try {
           const alertId = generateUUID();
           const authorName = profile ? `${profile.firstName} ${profile.lastName}` : 'MEMBRE ÉQUIPE';
-          const teamInfo = currentTeam ? `(${currentTeam})` : '';
-          const today = getLocalDateString();
-          const events = await storageService.getEvents();
-          const todayEvent = events.find(e => e.date === today);
+          const teamInfo = activeTeam ? `(${activeTeam})` : '';
           const eventContext = todayEvent ? `[${todayEvent.name}]` : '';
 
           const alertMessage = `URGENCE VITALE : DÉBUT R.C.P. PAR ${authorName.toUpperCase()} ${teamInfo} ${eventContext}`;
@@ -218,38 +247,13 @@ export const HomePage: React.FC = () => {
       }
   };
 
-  const activateGpsAuto = async (team: string) => {
-      const hasPermission = await geoService.requestPermissions();
-      if (hasPermission) {
-          const today = getLocalDateString();
-          const events = await storageService.getEvents();
-          const todayEvent = events.find(e => e.date === today);
-          const eventId = todayEvent ? todayEvent.id : undefined;
-          const eventName = todayEvent ? ` sur ${todayEvent.name}` : "";
-
-          geoService.startTracking(team, () => setIsTracking(false), eventId);
-          setIsTracking(true);
-          
-          // Solution 1: Synchronisation forcée immédiate (Push & Pull)
-          syncService.retrySync();
-          
-          return { success: true, eventName };
-      } else {
-          alert("Attention : Géolocalisation refusée. Le suivi ne sera pas actif.");
-          return { success: false, eventName: '' };
-      }
-  };
-
   const handleBagSelected = async (bag: Bag) => {
       if (!currentTeam) return;
       await bagService.assignBag(bag.id, currentTeam);
       setCurrentBag(bag);
       setShowBagSelect(false);
       
-      const { success, eventName } = await activateGpsAuto(currentTeam);
-      const gpsMsg = success ? `\n📡 GPS : Activé${eventName}` : "\n📡 GPS : Inactif";
-      
-      alert(`✅ Prise de service validée : ${currentTeam}\n🎒 Matériel : ${bag.name}${gpsMsg}`);
+      alert(`✅ Prise de service validée : ${currentTeam}\n🎒 Matériel : ${bag.name}`);
   };
 
   const handleSkipBag = async () => {
@@ -257,15 +261,11 @@ export const HomePage: React.FC = () => {
       setShowBagSelect(false);
       setCurrentBag(null);
       
-      const { success, eventName } = await activateGpsAuto(currentTeam);
-      const gpsMsg = success ? `\n📡 GPS : Activé${eventName}` : "\n📡 GPS : Inactif";
-
-      alert(`✅ Prise de service validée : ${currentTeam}\n🎒 Matériel : Aucun${gpsMsg}`);
+      alert(`✅ Prise de service validée : ${currentTeam}\n🎒 Matériel : Aucun`);
   };
 
   return (
     <Layout showStatus={false} hideHeaderTools={isCriticalMode} hideSync={true}>
-      {showCurtain && <ScreenCurtain onClose={() => setShowCurtain(false)} />}
 
       {!isCriticalMode && (
           <div className="absolute top-2 right-4 lg:right-10 z-20 flex gap-2">
@@ -289,18 +289,6 @@ export const HomePage: React.FC = () => {
 
       {!isCriticalMode && (
           <div className="absolute top-2 left-4 lg:left-10 z-20 flex flex-col gap-2 items-start">
-              <button 
-                onClick={toggleEcoMode}
-                className={`px-3 py-1.5 rounded-full flex items-center gap-1.5 transition-all text-[10px] font-bold uppercase tracking-wider ${
-                    isEcoMode 
-                    ? 'bg-slate-800 text-white border border-slate-600 shadow-[0_0_10px_rgba(255,255,255,0.2)]' 
-                    : 'bg-slate-200 text-slate-500 dark:bg-slate-800 dark:text-slate-400'
-                }`}
-              >
-                {isEcoMode ? <BatteryCharging className="w-4 h-4 animate-pulse" /> : <Battery className="w-4 h-4" />}
-                {isEcoMode ? 'ÉCO / GPS' : 'Mode Éco'}
-              </button>
-              
               <div className="mt-1">
                   <SyncIndicator />
               </div>
@@ -311,52 +299,48 @@ export const HomePage: React.FC = () => {
                       <MapPin className="w-3 h-3" /> GPS ON
                   </div>
               )}
-
-              {/* Bouton Rideau visible uniquement si en service */}
-              {currentTeam && (
-                <div className="animate-in fade-in slide-in-from-left-2">
-                   <CurtainTrigger onActivate={() => setShowCurtain(true)} />
-                </div>
-              )}
           </div>
       )}
 
-      <div className="flex flex-col lg:grid lg:grid-cols-2 lg:content-center items-center w-full max-w-4xl mx-auto h-[calc(100vh-140px)] lg:h-full justify-center gap-4 lg:gap-8 py-2">
-        <div className="w-full max-w-sm flex flex-col gap-4">
-            <div className="flex-shrink-0 flex justify-center w-full">
-                <div className="w-28 h-28 relative">
-                    <div className="absolute inset-0 bg-blue-500/10 dark:bg-blue-500/20 rounded-full blur-xl"></div>
+      <div className="flex flex-col lg:grid lg:grid-cols-2 items-center justify-center w-full max-w-4xl mx-auto gap-4 lg:gap-8 py-4 px-4 h-auto lg:h-[calc(100vh-140px)] my-auto">
+        {/* COLONNE GAUCHE: BRANDING & ENTRÉE DE SERVICE */}
+        <div className="w-full max-w-sm flex flex-col gap-3.5">
+            {/* BRANDING ZONE */}
+            <div className="flex-shrink-0 flex flex-col items-center justify-center w-full mb-1">
+                <div className="w-20 h-20 relative animate-in fade-in duration-300">
+                    <div className="absolute inset-0 bg-blue-500/10 dark:bg-blue-500/20 rounded-full blur-xl animate-pulse"></div>
                     <Logo variant="simple" className="w-full h-full object-contain relative z-10" />
                 </div>
             </div>
 
+            {/* PRISE / FIN DE SERVICE */}
             <div className="flex gap-3 w-full">
                 <button 
                     onClick={currentTeam ? handleEndService : handleStartService}
-                    className={`py-4 px-6 rounded-2xl flex items-center justify-between border-2 shadow-lg transition-all active:scale-95 group flex-shrink-0 ${
+                    className={`py-3 px-5 rounded-xl flex items-center justify-between border shadow-md transition-all active:scale-98 group flex-shrink-0 ${
                         currentTeam 
-                        ? 'flex-1 bg-white dark:bg-slate-800 border-red-500 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20' 
-                        : 'w-full bg-blue-600 text-white border-blue-500 hover:bg-blue-700'
+                        ? 'flex-1 bg-white dark:bg-slate-800 border-red-500/50 text-red-600 dark:text-red-400 hover:bg-red-50/50 dark:hover:bg-red-900/10' 
+                        : 'w-full bg-gradient-to-r from-blue-600 to-blue-500 text-white border-blue-500/50 hover:from-blue-700 hover:to-blue-600 shadow-blue-500/10'
                     }`}
                 >
-                    <div className="flex items-center gap-4">
-                        <div className={`p-3 rounded-xl ${currentTeam ? 'bg-red-100 dark:bg-red-900/30' : 'bg-white/20'}`}>
-                            {currentTeam ? <Power className="w-6 h-6" /> : <Radio className="w-6 h-6" />}
+                    <div className="flex items-center gap-3">
+                        <div className={`p-2.5 rounded-lg ${currentTeam ? 'bg-red-50 dark:bg-red-950/40' : 'bg-white/15'}`}>
+                            {currentTeam ? <Power className="w-5 h-5 text-red-500" /> : <Radio className="w-5 h-5 text-white" />}
                         </div>
-                        <div className="text-left">
-                            <span className="text-[10px] uppercase font-bold opacity-80 block tracking-wider">
+                        <div className="text-left col-span-1">
+                            <span className="text-[11px] sm:text-xs uppercase font-bold opacity-75 block tracking-wider">
                                 {currentTeam ? 'Statut : EN SERVICE' : 'Statut : HORS SERVICE'}
                             </span>
-                            <span className="font-black text-xl uppercase leading-none">
+                            <span className="font-extrabold text-lg uppercase leading-tight tracking-wide">
                                 {currentTeam ? `${currentTeam}` : 'PRISE DE SERVICE'}
                             </span>
                         </div>
                     </div>
-                    {/* L'indicateur GPS est aussi ici pour le contexte du bouton */}
+                    {/* GPS Status badge on Button */}
                     {currentTeam && isTracking && (
-                        <div className="flex flex-col items-center animate-pulse text-green-600 dark:text-green-400">
-                            <MapPin className="w-5 h-5 fill-current" />
-                            <span className="text-[8px] font-black uppercase">GPS ON</span>
+                        <div className="flex flex-col items-center animate-pulse text-green-500 ml-2">
+                            <MapPin className="w-4 h-4 fill-current" />
+                            <span className="text-[7px] font-black uppercase">GPS ON</span>
                         </div>
                     )}
                 </button>
@@ -364,54 +348,127 @@ export const HomePage: React.FC = () => {
                 {currentTeam && todayEvent?.supervisorPhone && (
                     <a 
                         href={`tel:${todayEvent.supervisorPhone}`}
-                        className="w-24 bg-emerald-600 text-white border-2 border-emerald-500 rounded-2xl flex flex-col items-center justify-center gap-1 shadow-lg hover:bg-emerald-700 transition-all active:scale-95 animate-in slide-in-from-right-4"
+                        className="w-20 bg-emerald-600 text-white border border-emerald-500 rounded-xl flex flex-col items-center justify-center gap-0.5 shadow-md hover:bg-emerald-700 transition-all active:scale-95 animate-in slide-in-from-right-2"
                     >
-                        <Phone className="w-6 h-6" />
-                        <span className="text-[9px] font-black uppercase text-center leading-tight">Appel<br/>Resp.</span>
+                        <Phone className="w-5 h-5" />
+                        <span className="text-[10px] font-bold uppercase text-center leading-tight">Responsable</span>
                     </a>
                 )}
             </div>
 
-            <div className="grid grid-cols-2 gap-3 w-full flex-1 min-h-0">
+            {/* GPS COMPACT MANUAL TOGGLE */}
+            {!isCriticalMode && (
+                <div className="w-full flex items-center justify-between px-3.5 py-2.5 bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 rounded-xl shadow-xs transition-all" id="gps-manual-toggle">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                        <div className={`p-1.5 rounded-lg shrink-0 ${isTracking ? 'bg-green-50 dark:bg-green-950 text-green-500' : 'bg-slate-50 dark:bg-slate-900 text-slate-400'}`}>
+                            <MapPin className={`w-4 h-4 ${isTracking ? 'animate-pulse' : ''}`} />
+                        </div>
+                        <div className="text-left min-w-0">
+                            <span className="text-[13px] sm:text-sm font-extrabold text-slate-800 dark:text-slate-200 block truncate">
+                                {isTracking ? 'GPS Actif' : 'GPS Inactif'}
+                            </span>
+                            {!currentTeam ? (
+                                <span className="text-[10px] sm:text-[11px] text-amber-600 dark:text-amber-400 block font-semibold leading-none mt-0.5">
+                                    Prendre le service
+                                </span>
+                            ) : (
+                                <span className="text-[10px] sm:text-[11px] text-slate-500 dark:text-slate-400 block font-semibold leading-none mt-0.5">
+                                    Position temps réel
+                                </span>
+                            )}
+                        </div>
+                    </div>
+                    
+                    <button
+                        id="gps-toggle-button"
+                        disabled={!currentTeam}
+                        onClick={async () => {
+                            if (isTracking) {
+                                geoService.stopTracking();
+                                setIsTracking(false);
+                            } else {
+                                if (!currentTeam) return;
+                                const hasPermission = await geoService.requestPermissions();
+                                if (hasPermission) {
+                                    const today = getLocalDateString();
+                                    const events = await storageService.getEvents();
+                                    const todayEvent = events.find(e => e.date === today);
+                                    const eventId = todayEvent ? todayEvent.id : undefined;
+                                    geoService.startTracking(currentTeam, () => setIsTracking(false), eventId);
+                                    setIsTracking(true);
+                                    syncService.processQueue();
+                                } else {
+                                    alert("Attention : Géolocalisation refusée ou indisponible. Le suivi ne sera pas actif.");
+                                }
+                            }
+                        }}
+                        className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                            !currentTeam ? 'opacity-30 cursor-not-allowed' : ''
+                        } ${isTracking ? 'bg-green-500' : 'bg-slate-200 dark:bg-slate-700'}`}
+                    >
+                        <span
+                            className={`pointer-events-none inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-xs ring-0 transition duration-200 ease-in-out ${
+                                isTracking ? 'translate-x-4' : 'translate-x-0'
+                            }`}
+                        />
+                    </button>
+                </div>
+            )}
+
+            {/* PORTAIL ASSO & SCANNER (COMPACT BENTO) */}
+            <div className="grid grid-cols-2 gap-3 w-full">
                 <button 
                     onClick={() => navigate('/management')}
-                    className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-2 border-slate-200 dark:border-slate-700 rounded-2xl flex flex-col items-center justify-center gap-2 shadow-sm hover:bg-slate-200 dark:hover:bg-slate-700 transition-all active:scale-95 group p-4"
+                    className="bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 rounded-xl flex items-center gap-3 p-3 shadow-xs hover:border-blue-500/40 hover:shadow-md transition-all active:scale-95 group text-left relative"
                 >
-                    <div className="p-3 bg-white dark:bg-slate-900 rounded-full shadow-sm group-hover:scale-110 transition-transform">
-                        <Users className="w-8 h-8 text-blue-600 dark:text-blue-400" />
+                    <div className="p-2.5 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg group-hover:scale-105 transition-transform shrink-0 relative">
+                        <Users className="w-5 h-5" />
+                        <NewContentBadge show={hasPortalBadges} className="absolute top-0 right-0 transform translate-x-1/3 -translate-y-1/3" />
                     </div>
-                    <span className="font-black text-sm uppercase tracking-wide">Portail Asso</span>
+                    <div className="flex flex-col min-w-0">
+                        <span className="font-extrabold text-sm text-slate-805 dark:text-white uppercase tracking-wider truncate">ASSO</span>
+                        <span className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 font-bold truncate mt-0.5">Membres</span>
+                    </div>
                 </button>
 
                 <button 
                     onClick={() => navigate('/scan')}
-                    className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-2 border-slate-200 dark:border-slate-700 rounded-2xl flex flex-col items-center justify-center gap-2 shadow-sm hover:bg-slate-200 dark:hover:bg-slate-700 transition-all active:scale-95 group p-4"
+                    className="bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 rounded-xl flex items-center gap-3 p-3 shadow-xs hover:border-indigo-500/40 hover:shadow-md transition-all active:scale-95 group text-left"
                 >
-                    <div className="p-3 bg-white dark:bg-slate-900 rounded-full shadow-sm group-hover:scale-110 transition-transform">
-                        <QrCode className="w-8 h-8 text-indigo-600 dark:text-indigo-400" />
+                    <div className="p-2.5 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-lg group-hover:scale-105 transition-transform shrink-0">
+                        <QrCode className="w-5 h-5" />
                     </div>
-                    <span className="font-black text-sm uppercase tracking-wide">Scanner</span>
+                    <div className="flex flex-col min-w-0">
+                        <span className="font-extrabold text-sm text-slate-805 dark:text-white uppercase tracking-wider truncate">SCAN</span>
+                        <span className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 font-bold truncate mt-0.5">QR Code</span>
+                    </div>
                 </button>
             </div>
         </div>
 
-        <div className="w-full max-w-sm flex flex-col gap-4">
+        {/* COLONNE DROITE: URGENCE & ÉCOUTEUX GPS/MATÉRIEL */}
+        <div className="w-full max-w-sm flex flex-col gap-3.5">
+            {/* ALERTE URGENCE VITALE */}
             <button 
                 onClick={handleEmergencyClick}
-                className="w-full py-4 px-6 rounded-2xl flex items-center justify-between border-2 shadow-lg transition-all active:scale-95 group flex-shrink-0 bg-red-600 text-white border-red-500 hover:bg-red-700"
+                className="w-full py-3.5 px-5 rounded-xl flex items-center justify-between border border-red-500 bg-red-600 text-white shadow-lg shadow-red-500/15 hover:bg-red-700 transition-all active:scale-98 group shrink-0 relative overflow-hidden"
             >
-                <div className="flex items-center gap-4">
-                    <div className="p-3 rounded-xl bg-white/20">
-                        <HeartPulse className="w-6 h-6" />
+                <div className="absolute inset-0 bg-red-500 opacity-5 group-hover:opacity-10 animate-pulse pointer-events-none" />
+                <div className="flex items-center gap-3 relative z-10">
+                    <div className="p-2 bg-white/20 rounded-lg text-white">
+                        <HeartPulse className="w-5 h-5 animate-pulse" />
                     </div>
                     <div className="text-left">
-                        <span className="text-[10px] uppercase font-bold opacity-80 block tracking-wider">
+                        <span className="text-[11px] sm:text-xs uppercase font-black tracking-widest text-red-100 block">
                             Alerte Générale
                         </span>
-                        <span className="font-black text-xl uppercase leading-none">
+                        <span className="font-black text-base sm:text-lg uppercase leading-none tracking-wide text-white block mt-1">
                             URGENCE VITALE
                         </span>
                     </div>
+                </div>
+                <div className="text-[10px] font-black uppercase text-red-100 border border-white/25 px-2.5 py-0.5 rounded-lg relative z-10 bg-white/10 group-hover:bg-white/20 transition-all">
+                    SOS
                 </div>
             </button>
             
@@ -419,26 +476,28 @@ export const HomePage: React.FC = () => {
             {!isCriticalMode && currentTeam && (
                 <button
                     onClick={() => navigate('/management/bags', { state: { autoSelect: true } })}
-                    className="w-full bg-white dark:bg-slate-800 border-2 border-blue-500/30 p-4 rounded-2xl shadow-sm flex items-center justify-between group active:scale-95 transition-all animate-in fade-in slide-in-from-bottom-2"
+                    className="w-full bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 p-3 rounded-xl shadow-xs flex items-center justify-between group active:scale-95 transition-all text-left"
                 >
-                    <div className="flex items-center gap-4">
-                        <div className="p-3 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-xl relative">
-                            <Briefcase className="w-6 h-6" />
-                            <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-white dark:border-slate-900"></div>
+                    <div className="flex items-center gap-3 min-w-0">
+                        <div className="p-2 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg shrink-0 relative">
+                            <Briefcase className="w-5 h-5" />
+                            <div className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-green-500 rounded-full border border-white dark:border-slate-800 animate-pulse"></div>
                         </div>
-                        <div className="text-left">
-                            <span className="text-[10px] font-bold uppercase text-slate-400 block tracking-wider">Mon Matériel</span>
-                            <span className="text-lg font-black text-slate-800 dark:text-white leading-none">
+                        <div className="text-left min-w-0">
+                            <span className="text-[11px] sm:text-xs font-bold uppercase text-slate-400 dark:text-slate-500 block tracking-wider leading-none">Matériel actif</span>
+                            <span className="text-base font-black text-slate-800 dark:text-white leading-tight block truncate mt-1">
                                 {currentBag ? currentBag.name : "Aucun sac assigné"}
                             </span>
-                            {currentBag && (
-                                <span className="text-[10px] bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded text-slate-600 dark:text-slate-300 mt-1 inline-block border border-slate-200 dark:border-slate-600">
-                                    {BAG_LABELS[currentBag.type] || currentBag.type}
-                                </span>
-                            )}
                         </div>
                     </div>
-                    <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-blue-500 transition-colors" />
+                    <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                        {currentBag && (
+                            <span className="text-[10px] sm:text-xs bg-slate-50 dark:bg-slate-900 px-1.5 py-0.5 rounded border border-slate-200/60 dark:border-slate-700 text-slate-500 dark:text-slate-400 font-bold shrink-0">
+                                {BAG_LABELS[currentBag.type] || currentBag.type}
+                            </span>
+                        )}
+                        <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-blue-500 transition-colors" />
+                    </div>
                 </button>
             )}
         </div>
