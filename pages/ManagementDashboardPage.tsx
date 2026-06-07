@@ -36,30 +36,30 @@ const ModuleCard: React.FC<{
         <div 
             onClick={onClick}
             className={`relative group cursor-pointer transition-all duration-200 active:scale-[0.98] 
-            bg-white dark:bg-slate-900 shadow-xs hover:shadow-sm border border-slate-200/50 dark:border-slate-800/80
-            rounded-2xl p-2.5 sm:p-3
-            flex ${wide ? 'flex-row items-center gap-3' : 'flex-col justify-between'} h-full min-h-0
+            bg-white dark:bg-slate-900 shadow-sm hover:shadow-md border border-slate-205/60 dark:border-slate-800/85
+            rounded-2xl p-3.5 sm:p-4
+            flex ${wide ? 'flex-row items-center gap-4' : 'flex-col justify-center items-start'} h-full min-h-0
             ${className}`}
         >
             {/* Pastille de nouveauté déplacée au coin supérieur droit de la carte */}
-            <NewContentBadge show={badge} className="absolute top-2 right-2 border-2 border-white dark:border-slate-900 shadow-xs z-10" />
+            <NewContentBadge show={badge} className="absolute top-2.5 right-2.5 border-2 border-white dark:border-slate-900 shadow-xs z-10" />
 
             {/* LOGO / IMAGE */}
             <div className={`
-                ${wide ? 'w-10 sm:w-11 h-10 sm:h-11 shrink-0' : 'w-8 sm:w-9 h-8 sm:h-9 mb-1 sm:mb-2 shrink-0'} 
+                ${wide ? 'w-11 sm:w-12 h-11 sm:h-12 shrink-0' : 'w-11 h-11 mb-2.5 sm:mb-3 shrink-0'} 
                 rounded-xl ${themes.bg} ${themes.shadow} shadow-xs 
                 flex items-center justify-center text-white relative group-hover:scale-105 transition-transform
             `}>
-                {React.cloneElement(icon as React.ReactElement, { className: wide ? "w-5 sm:w-5.5 h-5 sm:h-5.5" : "w-4 sm:w-4.5 h-4 sm:h-4.5" })}
+                {React.cloneElement(icon as React.ReactElement, { className: "w-5.5 h-5.5" })}
             </div>
             
             {/* TEXT CONTENT */}
-            <div className={`flex-1 min-w-0 ${wide ? '' : 'flex flex-col justify-end'}`}>
+            <div className={`flex-1 min-w-0 w-full flex flex-col justify-center`}>
                 <div className="flex items-center justify-between">
-                    <h3 className="font-extrabold text-slate-800 dark:text-white text-xs sm:text-sm md:text-base leading-none tracking-tight truncate">{title}</h3>
-                    {wide && <ArrowRight className="w-3.5 h-3.5 text-slate-400 dark:text-slate-600 shrink-0" />}
+                    <h3 className="font-extrabold text-slate-805 dark:text-white text-sm sm:text-base leading-snug tracking-tight truncate">{title}</h3>
+                    {wide && <ArrowRight className="w-4 h-4 text-slate-400 dark:text-slate-600 shrink-0 ml-1" />}
                 </div>
-                <p className="text-[11px] sm:text-xs md:text-sm text-slate-400 dark:text-slate-500 font-medium line-clamp-1 sm:line-clamp-2 leading-none sm:leading-normal mt-1 opacity-90">
+                <p className="text-xs sm:text-[13px] text-slate-400 dark:text-slate-500 font-semibold line-clamp-2 leading-relaxed mt-1 sm:mt-1.5 opacity-90">
                     {desc}
                 </p>
             </div>
