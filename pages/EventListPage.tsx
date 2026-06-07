@@ -38,6 +38,18 @@ export const EventListPage: React.FC = () => {
 
   useEffect(() => {
     loadEvents();
+    
+    // Écoute des mises à jour en temps réel des événements
+    const bc = new BroadcastChannel('dps65_events_channel');
+    bc.onmessage = (e) => {
+      if (e.data.type === 'UPDATE_EVENTS' || e.data.type === 'UPDATE_MISSIONS') {
+        loadEvents();
+      }
+    };
+    
+    return () => {
+      bc.close();
+    };
   }, [showArchived]);
 
   const loadEvents = async () => {
