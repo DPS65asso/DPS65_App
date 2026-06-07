@@ -315,17 +315,19 @@ export const HomePage: React.FC = () => {
           </div>
       )}
 
-      <div className="flex flex-col lg:grid lg:grid-cols-2 items-center justify-center w-full max-w-4xl mx-auto gap-4 lg:gap-8 py-4 px-4 h-auto lg:h-[calc(100vh-140px)] my-auto">
-        {/* COLONNE GAUCHE: BRANDING & ENTRÉE DE SERVICE */}
-        <div className="w-full max-w-sm flex flex-col gap-3.5">
-            {/* BRANDING ZONE */}
-            <div className="flex-shrink-0 flex flex-col items-center justify-center w-full mb-1">
-                <div className="w-20 h-20 relative animate-in fade-in duration-300">
-                    <div className="absolute inset-0 bg-blue-500/10 dark:bg-blue-500/20 rounded-full blur-xl animate-pulse"></div>
-                    <Logo variant="simple" className="w-full h-full object-contain relative z-10" />
-                </div>
-            </div>
+      {/* BRANDING ZONE (En haut au centre, taille doublée) */}
+      {!isCriticalMode && (
+          <div className="flex-shrink-0 flex flex-col items-center justify-center w-full mt-6 mb-2">
+              <div className="w-40 h-40 relative animate-in fade-in duration-300">
+                  <div className="absolute inset-0 bg-blue-500/10 dark:bg-blue-500/20 rounded-full blur-2xl animate-pulse"></div>
+                  <Logo variant="simple" className="w-full h-full object-contain relative z-10" />
+              </div>
+          </div>
+      )}
 
+      <div className="flex flex-col lg:grid lg:grid-cols-2 items-center justify-center w-full max-w-4xl mx-auto gap-4 lg:gap-8 py-4 px-4 h-auto my-auto animate-in fade-in duration-500 delay-100">
+        {/* COLONNE GAUCHE: ENTRÉE DE SERVICE */}
+        <div className="w-full max-w-sm flex flex-col gap-3.5">
             {/* PRISE / FIN DE SERVICE */}
             <div className="flex gap-3 w-full">
                 <button 
