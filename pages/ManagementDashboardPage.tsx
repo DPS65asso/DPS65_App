@@ -41,6 +41,9 @@ const ModuleCard: React.FC<{
             flex ${wide ? 'flex-row items-center gap-3' : 'flex-col justify-between'} h-full min-h-0
             ${className}`}
         >
+            {/* Pastille de nouveauté déplacée au coin supérieur droit de la carte */}
+            <NewContentBadge show={badge} className="absolute top-2 right-2 border-2 border-white dark:border-slate-900 shadow-xs z-10" />
+
             {/* LOGO / IMAGE */}
             <div className={`
                 ${wide ? 'w-10 sm:w-11 h-10 sm:h-11 shrink-0' : 'w-8 sm:w-9 h-8 sm:h-9 mb-1 sm:mb-2 shrink-0'} 
@@ -48,7 +51,6 @@ const ModuleCard: React.FC<{
                 flex items-center justify-center text-white relative group-hover:scale-105 transition-transform
             `}>
                 {React.cloneElement(icon as React.ReactElement, { className: wide ? "w-5 sm:w-5.5 h-5 sm:h-5.5" : "w-4 sm:w-4.5 h-4 sm:h-4.5" })}
-                <NewContentBadge show={badge} className="absolute -top-1 -right-1 border-2 border-white dark:border-slate-9 tracking-tight" />
             </div>
             
             {/* TEXT CONTENT */}

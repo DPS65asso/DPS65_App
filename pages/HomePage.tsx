@@ -107,6 +107,19 @@ export const HomePage: React.FC = () => {
       };
   }, []);
 
+  // Écouter les changements de statut GPS initiés globalement (ex: depuis le bandeau Layout)
+  useEffect(() => {
+      const gpsBc = new BroadcastChannel('gps_status_change');
+      gpsBc.onmessage = (e) => {
+          if (e.data.type === 'GPS_STOPPED') {
+              setIsTracking(false);
+          }
+      };
+      return () => {
+          gpsBc.close();
+      };
+  }, []);
+
   // Surveiller l'équipe actuelle pour charger le sac correspondant
   useEffect(() => {
       const loadCurrentBag = async () => {
@@ -378,10 +391,9 @@ export const HomePage: React.FC = () => {
                             )}
                         </div>
                     </div>
-                    
-                    <button
+                     <button
                         id="gps-toggle-button"
-                        disabled={!currentTeam}
+                        disabled={!currentTeam && !isTracking}
                         onClick={async () => {
                             if (isTracking) {
                                 geoService.stopTracking();
@@ -403,7 +415,7 @@ export const HomePage: React.FC = () => {
                             }
                         }}
                         className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                            !currentTeam ? 'opacity-30 cursor-not-allowed' : ''
+                            !currentTeam && !isTracking ? 'opacity-30 cursor-not-allowed' : ''
                         } ${isTracking ? 'bg-green-500' : 'bg-slate-200 dark:bg-slate-700'}`}
                     >
                         <span

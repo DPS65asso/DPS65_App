@@ -1,12 +1,13 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Logo } from './Logo';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { ChevronLeft, HardDrive } from 'lucide-react';
+import { ChevronLeft, HardDrive, MapPin } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { BottomNav } from './BottomNav';
 import { Sidebar } from './Sidebar';
 import { SyncIndicator } from './SyncIndicator'; 
+import { geoService } from '../services/geoService';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -23,6 +24,44 @@ export const Layout: React.FC<LayoutProps> = ({ children, title, showBack = fals
   const navigate = useNavigate();
   const location = useLocation();
 
+  const [isGpsActive, setIsGpsActive] = useState(() => {
+    return localStorage.getItem('dps65_tracking_state') !== null || geoService.isTracking;
+  });
+
+  useEffect(() => {
+    const handleCheck = () => {
+      const active = localStorage.getItem('dps65_tracking_state') !== null || geoService.isTracking;
+      if (active !== isGpsActive) {
+        setIsGpsActive(active);
+      }
+    };
+    const int = setInterval(handleCheck, 1000);
+    
+    // Ecouter aussi le canal status change des autres onglets
+    const bc = new BroadcastChannel('gps_status_change');
+    bc.onmessage = (e) => {
+      if (e.data.type === 'GPS_STOPPED') {
+        setIsGpsActive(false);
+      }
+    };
+
+    return () => {
+      clearInterval(int);
+      bc.close();
+    };
+  }, [isGpsActive]);
+
+  const handleDeactivateGps = () => {
+    if (window.confirm("Voulez-vous désactiver la géolocalisation GPS en cours ? Cela arrêtera votre suivi en temps réel.")) {
+      geoService.stopTracking();
+      localStorage.removeItem('dps65_tracking_state');
+      setIsGpsActive(false);
+      const bc = new BroadcastChannel('gps_status_change');
+      bc.postMessage({ type: 'GPS_STOPPED' });
+      bc.close();
+    }
+  };
+
   const isCustomHeaderPage = (title === undefined || title === null) && !showBack;
   const isMobile = window.innerWidth < 1024;
   const isNoviMode = location.pathname.includes('/novi'); // Assuming Novi mode is a path or state
@@ -38,6 +77,15 @@ export const Layout: React.FC<LayoutProps> = ({ children, title, showBack = fals
           {isCustomHeaderPage && !hideHeaderTools && !hideSync && (
             <div className="absolute left-0 w-full pointer-events-none z-[60] top-0">
               <div className="absolute top-4 right-4 lg:right-8 pointer-events-auto flex items-center gap-2">
+                  {isGpsActive && (
+                    <button 
+                      onClick={handleDeactivateGps}
+                      title="GPS Actif - Cliquer pour désactiver"
+                      className="pointer-events-auto flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold border uppercase tracking-wider bg-green-500 text-white border-green-600 dark:bg-green-600 hover:bg-red-600 hover:border-red-700 hover:text-white transition-all cursor-pointer shadow-sm animate-pulse hover:animate-none"
+                    >
+                      <MapPin className="w-3.5 h-3.5 fill-current" /> GPS ON
+                    </button>
+                  )}
                   <SyncIndicator />
                   {showStatus && (
                     <div className="flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] font-bold border uppercase tracking-wider transition-colors bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800">
@@ -75,6 +123,15 @@ export const Layout: React.FC<LayoutProps> = ({ children, title, showBack = fals
                     
                     {!hideHeaderTools && !hideSync && (
                         <div className="flex items-center gap-2 flex-shrink-0">
+                              {isGpsActive && (
+                                <button 
+                                  onClick={handleDeactivateGps}
+                                  title="GPS Actif - Cliquer pour désactiver"
+                                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold border uppercase tracking-wider bg-green-500 text-white border-green-600 dark:bg-green-600 hover:bg-red-600 hover:border-red-700 hover:text-white transition-all cursor-pointer shadow-sm animate-pulse hover:animate-none"
+                                >
+                                  <MapPin className="w-3 h-3 fill-current" /> GPS ON
+                                </button>
+                              )}
                               {/* Sync Indicator dans la navbar classique */}
                               <SyncIndicator />
                         </div>

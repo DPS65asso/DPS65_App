@@ -350,10 +350,24 @@ class SyncService {
                 }
             }
             else if (eventType === 'DELETE' && oldRecord?.id) {
+                // Tenter de récupérer l'élément local pour conserver eventId afin que l'UI puisse se rafraîchir correctement
+                let localRecord: any = null;
+                try {
+                    localRecord = await db.get(table as any, oldRecord.id);
+                } catch (e) {
+                    console.warn(`[Sync DELETE] Impossible de lire l'élément local ${table}:${oldRecord.id} avant suppression`, e);
+                }
+
                 if (table === 'config') {
                     await db.delete(table as any, 'main');
                 } else {
                     await db.delete(table as any, oldRecord.id);
+                }
+
+                if (localRecord) {
+                    // Fusionner les données de l'élément existant dans oldRecord pour la propagation de l'événement (comme eventId/event_id)
+                    oldRecord.event_id = oldRecord.event_id || localRecord.event_id || localRecord.eventId;
+                    oldRecord.eventId = oldRecord.eventId || localRecord.eventId || localRecord.event_id;
                 }
             }
 

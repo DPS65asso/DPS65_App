@@ -56,7 +56,15 @@ export const Metronome: React.FC<MetronomeProps> = ({ autoStart = false, eventId
         // Cleanup global
         if (timerRef.current) clearInterval(timerRef.current);
         if (clockRef.current) clearInterval(clockRef.current);
-        if (audioContextRef.current) audioContextRef.current.close();
+        if (audioContextRef.current) {
+            try {
+                if (audioContextRef.current.state !== 'closed') {
+                    audioContextRef.current.close().catch(() => {});
+                }
+            } catch (e) {
+                console.warn("[Metronome] Error closing AudioContext:", e);
+            }
+        }
     };
   }, []);
 

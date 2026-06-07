@@ -21,10 +21,12 @@ export const Sidebar: React.FC = () => {
   return (
     <div className="fixed left-0 top-0 h-full w-64 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 z-50 flex flex-col hidden lg:flex shadow-2xl">
       {/* HEADER LOGO */}
-      <div className="p-6 flex flex-col items-center border-b border-slate-100 dark:border-slate-800">
-        <Logo className="w-16 h-16 mb-2" />
-        <h1 className="text-xl font-black text-slate-800 dark:text-white uppercase tracking-tighter">DPS 65</h1>
-        <p className="text-xs text-slate-400 font-mono">PC OPÉRATIONNEL</p>
+      <div className="py-3 px-5 flex items-center gap-4 border-b border-slate-100 dark:border-slate-800 shrink-0">
+        <Logo className="w-20 h-20 relative shrink-0" />
+        <div className="flex flex-col text-left">
+          <h1 className="text-2xl font-black text-slate-800 dark:text-white uppercase tracking-tighter leading-none mb-1">DPS 65</h1>
+          <p className="text-[10px] text-slate-400 font-mono tracking-wider font-bold">PC OPÉRATIONNEL</p>
+        </div>
       </div>
 
       {/* NAVIGATION */}
