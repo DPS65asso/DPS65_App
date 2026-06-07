@@ -30,12 +30,11 @@ export const NewContentBadge: React.FC<NewContentBadgeProps> = ({
     const sizeClasses = hasSize ? '' : 'h-3 w-3';
 
     return (
-        <span className={`${isAbsolute ? '' : 'relative'} flex ${sizeClasses} shrink-0 ${className}`} id="new-content-badge">
-            <span className={`relative flex ${sizeClasses} rounded-full bg-red-500 dark:bg-rose-500 shadow-xs shadow-red-500/30`}>
-                {animate && (
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 dark:bg-rose-400 opacity-75"></span>
-                )}
-            </span>
+        <span className={`${isAbsolute ? '' : 'relative'} flex ${sizeClasses} shrink-0 rounded-full ${className}`} id="new-content-badge">
+            {animate && (
+                <span className="animate-ping absolute inset-0 rounded-full bg-red-400 dark:bg-rose-400 opacity-75"></span>
+            )}
+            <span className="relative flex h-full w-full rounded-full bg-red-500 dark:bg-rose-500 shadow-xs shadow-red-500/30"></span>
         </span>
     );
 };

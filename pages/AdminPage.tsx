@@ -290,8 +290,9 @@ export const AdminPage: React.FC = () => {
 
   const handleAddMission = async () => {
       if(!missionForm.title || !missionForm.date) return;
+      const missionId = generateUUID();
       await storageService.saveMission({
-          id: generateUUID(),
+          id: missionId,
           title: missionForm.title,
           date: missionForm.date,
           timeStart: missionForm.timeStart,
@@ -304,6 +305,16 @@ export const AdminPage: React.FC = () => {
           requiredMed: missionForm.reqMed,
           registeredUserIds: []
       });
+      
+      // On crée automatiquement un événement correspondant avec les mêmes données
+      await storageService.saveEvent({
+          id: generateUUID(),
+          name: missionForm.title,
+          date: missionForm.date,
+          location: missionForm.location || 'Non spécifié',
+          createdAt: Date.now()
+      });
+
       setMissionForm({ title: '', date: '', timeStart: '', timeEnd: '', location: '', type: 'DPS', req1: 2, req2: 1, reqIde: 0, reqMed: 0 });
       loadData(true); // Silent reload
   };
