@@ -91,6 +91,26 @@ class GeoService {
         }
     }
 
+    private getDynamicSleepTimeout(): number {
+        if (this.isCharging) {
+            return 2 * 60 * 60 * 1000; // 2 heures si l'appareil est branché
+        }
+        // Si batterie critique (<= 20%) : veille après 15 minutes d'immobilité
+        if (this.batteryLevel <= 20) {
+            return 15 * 60 * 1000; 
+        }
+        // Si batterie moyenne (<= 50%) : veille après 30 minutes
+        if (this.batteryLevel <= 50) {
+            return 30 * 60 * 1000; 
+        }
+        // Si batterie correcte (<= 80%) : veille après 45 minutes
+        if (this.batteryLevel <= 80) {
+            return 45 * 60 * 1000;
+        }
+        // Par défaut / batterie pleine (> 80%) : veille après 60 minutes (au lieu de 4h fixes)
+        return 60 * 60 * 1000;
+    }
+
     public async requestPermissions(): Promise<boolean> {
         if (!navigator.geolocation) return false;
 
@@ -327,22 +347,26 @@ class GeoService {
 
         const now = Date.now();
         
-        // --- LOGIQUE DE VEILLE COUPLÉE (Point 3 : Aucune position ne change de >5m sur 4h) ---
+        // --- LOGIQUE DE VEILLE COUPLÉE OPTIMISÉE (Point 3 : Veille dynamique intelligente et progressive de 15 min à 1h selon batterie) ---
         if (this.lastSentPosition) {
             const distance = calculateDistance(this.lastSentPosition, currentPos);
-            if (distance > 5) {
+            // On tolère une dérive GPS légère (bruit de fix static) de 8m à 15m selon la précision du GPS
+            const movementThreshold = Math.max(8, Math.min(15, currentPos.accuracy));
+            
+            if (distance > movementThreshold) {
                 // On réinitialise l'heure du dernier mouvement
                 this.lastMoveTime = now;
                 if (this.isSleeping) {
-                    console.log("🏃 Sortie de veille automatique du GPS (mouvement détecté >5m).");
+                    console.log(`🏃 Sortie de veille automatique du GPS (mouvement détecté de ${Math.round(distance)}m > seuil ${Math.round(movementThreshold)}m).`);
                     this.isSleeping = false;
                     this.stopSleepPolling();
                     this.startWatch();
                 }
             } else {
-                // Aucun déplacement significatif. Sommes-nous immobiles depuis > 4h ?
-                if (!this.isSleeping && (now - this.lastMoveTime > 4 * 60 * 60 * 1000)) {
-                    console.log("💤 Stationnaire depuis > 4h. Mode veille GPS activé.");
+                // Aucun déplacement significatif. Sommes-nous immobiles depuis un dely adapté à l'état de la batterie ?
+                const sleepTimeout = this.getDynamicSleepTimeout();
+                if (!this.isSleeping && (now - this.lastMoveTime > sleepTimeout)) {
+                    console.log(`💤 Stationnaire sans mouvement significatif. Batterie à ${this.batteryLevel}%, passage en veille après ${Math.round(sleepTimeout / 60000)} minutes d'inactivité.`);
                     this.isSleeping = true;
                     this.startSleepPolling();
                     return; // On arrête là pour économiser de la batterie

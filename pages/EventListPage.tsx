@@ -1,5 +1,5 @@
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Layout } from '../components/Layout';
 import { Button } from '../components/Button';
@@ -9,7 +9,7 @@ import { isLive } from '../services/supabaseClient';
 import { useAuth } from '../context/AuthContext';
 import { Event } from '../types';
 import { safeDateFormat, getLocalDateString } from '../utils/security';
-import { Calendar, ChevronRight, MapPin, Loader2, Trash2, Search, X, Filter, PlusCircle, Archive, ArchiveRestore } from 'lucide-react';
+import { Calendar, ChevronRight, MapPin, Loader2, Trash2, Search, X, Filter, PlusCircle, Archive, ArchiveRestore, Download, Check, AlertTriangle } from 'lucide-react';
 
 export const EventListPage: React.FC = () => {
   const navigate = useNavigate();
@@ -35,6 +35,64 @@ export const EventListPage: React.FC = () => {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [archiveId, setArchiveId] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+
+  // States pour téléchargement hors-ligne local (~10km)
+  const [downloadingEventId, setDownloadingEventId] = useState<string | null>(null);
+  const [downloadProgress, setDownloadProgress] = useState({ downloaded: 0, total: 0, percent: 0, currentUrl: '' });
+  const [downloadSuccess, setDownloadSuccess] = useState(false);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
+  const listAbortControllerRef = useRef<AbortController | null>(null);
+
+  const handleDownloadOfflineClick = async (e: React.MouseEvent, event: Event) => {
+    e.stopPropagation();
+    setDownloadingEventId(event.id);
+    setDownloadProgress({ downloaded: 0, total: 0, percent: 0, currentUrl: '' });
+    setDownloadSuccess(false);
+    setDownloadError(null);
+    const controller = new AbortController();
+    listAbortControllerRef.current = controller;
+    
+    try {
+      const { getEventCoordinates, generateLocalEventTileUrls, downloadTileUrls } = await import('../services/offlineMapService');
+      const coords = getEventCoordinates(event);
+      const urls = generateLocalEventTileUrls(coords.lat, coords.lng);
+      
+      if (urls.length === 0) {
+        throw new Error("Aucune tuile de carte disponible pour cette localisation.");
+      }
+      
+      await downloadTileUrls(urls, (prog) => {
+        setDownloadProgress({
+          downloaded: prog.downloaded,
+          total: prog.total,
+          percent: prog.percent,
+          currentUrl: prog.currentUrl || ''
+        });
+      }, controller.signal);
+      
+      setDownloadSuccess(true);
+      setTimeout(() => {
+        setDownloadingEventId(null);
+        setDownloadSuccess(false);
+      }, 4000);
+    } catch (err: any) {
+      if (err?.name === 'AbortError' || controller.signal.aborted) {
+        console.log("Téléchargement de carte d'événement annulé.");
+        setDownloadError("Téléchargement de la carte annulé.");
+      } else {
+        console.error("Local map download failed from list:", err);
+        setDownloadError(err?.message || "Le téléchargement d'urgence a échoué.");
+      }
+    } finally {
+      listAbortControllerRef.current = null;
+    }
+  };
+
+  const handleCancelListDownload = () => {
+    if (listAbortControllerRef.current) {
+        listAbortControllerRef.current.abort();
+    }
+  };
 
   useEffect(() => {
     loadEvents();
@@ -369,6 +427,16 @@ export const EventListPage: React.FC = () => {
               </div>
               
               <div className="flex items-center gap-2">
+                {/* DOWNLOAD LOCAL MAP BUTTON */}
+                <button
+                    onClick={(e) => handleDownloadOfflineClick(e, event)}
+                    className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-full transition-colors z-10"
+                    title="Télécharger la carte locale (~10km)"
+                    id={`btn-download-list-${event.id}`}
+                >
+                    <Download className="w-5 h-5" />
+                </button>
+
                 {/* ARCHIVE BUTTON - ADMIN ONLY, ACTIVE EVENTS ONLY */}
                 {isAdmin && !showArchived && (
                     <button
@@ -398,6 +466,97 @@ export const EventListPage: React.FC = () => {
           })
         )}
       </div>
+
+      {/* Overlay/Modal de téléchargement hors-ligne local */}
+      {downloadingEventId && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-xs animate-in fade-in duration-300">
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl w-full max-w-md p-6 relative max-h-[95vh] overflow-y-auto transform scale-100 transition-all duration-300">
+                {!downloadSuccess && !downloadError && (
+                    <div className="py-2 flex flex-col items-center text-center">
+                        <div className="relative mb-6">
+                            <div className="w-20 h-20 rounded-full border-4 border-slate-100 dark:border-slate-800 flex items-center justify-center text-blue-600 dark:text-blue-400 shadow-inner animate-pulse">
+                                <Loader2 className="w-8 h-8 animate-spin" />
+                            </div>
+                            <span className="absolute -bottom-1 -right-1 bg-blue-600 text-white rounded-full p-1.5 shadow-md">
+                                <Download className="w-4 h-4" />
+                            </span>
+                        </div>
+
+                        <h4 className="font-extrabold text-lg text-slate-900 dark:text-white mb-2 leading-tight">
+                            Téléchargement de la carte...
+                        </h4>
+                        
+                        <p className="text-xs text-slate-500 mb-6 font-bold uppercase tracking-widest">
+                            Ne fermez pas l'application
+                        </p>
+
+                        <div className="w-full bg-slate-100 dark:bg-slate-800 h-3 rounded-full overflow-hidden mb-4 border border-slate-200/50 dark:border-slate-700">
+                            <div 
+                                className="h-full bg-blue-600 rounded-full transition-all duration-300 shadow-md"
+                                style={{ width: `${downloadProgress.percent}%` }}
+                            ></div>
+                        </div>
+
+                        <div className="flex justify-between w-full text-xs font-black text-slate-500 mb-1">
+                            <span>{downloadProgress.percent}%</span>
+                            <span className="font-mono">{downloadProgress.downloaded} / {downloadProgress.total} tuiles</span>
+                        </div>
+
+                        <p className="text-[10px] text-slate-400 dark:text-slate-500 font-mono italic max-w-full truncate bg-slate-50 dark:bg-slate-950 px-3 py-1.5 rounded-lg border border-slate-100 dark:border-slate-900/60 w-full text-center">
+                            {downloadProgress.currentUrl || 'Préparation...'}
+                        </p>
+
+                        <button
+                            onClick={handleCancelListDownload}
+                            className="mt-5 px-5 py-2.5 bg-red-50 hover:bg-red-100 dark:bg-red-950/20 dark:hover:bg-red-950/40 text-red-600 dark:text-red-400 font-bold rounded-2xl text-xs transition-colors shadow-sm outline-none w-full"
+                        >
+                            Annuler le téléchargement
+                        </button>
+                    </div>
+                )}
+
+                {downloadSuccess && (
+                    <div className="py-6 flex flex-col items-center text-center animate-in zoom-in-95 duration-300">
+                        <div className="w-20 h-20 rounded-full bg-emerald-50 dark:bg-emerald-950/40 flex items-center justify-center text-emerald-600 dark:text-emerald-400 mb-6 ring-8 ring-emerald-500/10">
+                            <Check className="w-12 h-12" />
+                        </div>
+
+                        <h4 className="font-black text-xl text-slate-800 dark:text-white mb-2 leading-tight">
+                            Carte enregistrée !
+                        </h4>
+
+                        <p className="text-sm text-slate-500 dark:text-slate-400 max-w-xs mb-4 leading-relaxed font-semibold">
+                            Le secteur de 10km autour de l'événement est désormais présent localement sur votre téléphone.
+                        </p>
+
+                        <span className="inline-block bg-slate-100 dark:bg-slate-800 px-4 py-2 rounded-2xl text-xs font-bold text-slate-700 dark:text-slate-300">
+                            Prête pour l'intervention en Zone Blanche (Zooms 11 à 16).
+                        </span>
+                    </div>
+                )}
+
+                {downloadError && (
+                    <div className="py-4 flex flex-col items-center text-center">
+                        <div className="w-16 h-16 bg-red-100 dark:bg-red-950/40 rounded-full flex items-center justify-center text-red-600 dark:text-red-400 mb-4">
+                            <AlertTriangle className="w-8 h-8" />
+                        </div>
+                        <h4 className="font-bold text-lg text-slate-900 dark:text-white mb-1">
+                            Échec du téléchargement
+                        </h4>
+                        <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
+                            {downloadError}
+                        </p>
+                        <button
+                            onClick={() => setDownloadingEventId(null)}
+                            className="px-6 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold rounded-2xl text-xs transition-colors shadow-sm outline-none w-full"
+                        >
+                            Fermer
+                        </button>
+                    </div>
+                )}
+            </div>
+        </div>
+      )}
 
       <ConfirmDialog 
         isOpen={!!deleteId}

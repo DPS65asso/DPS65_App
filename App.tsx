@@ -12,6 +12,7 @@ import { FleetNotificationSystem } from './components/FleetNotificationSystem';
 import { MissionReminder } from './components/MissionReminder';
 import { UpdatePrompt } from './components/UpdatePrompt';
 import { TrackingGuard } from './components/TrackingGuard'; // NOUVEAU
+import { OfflineMapPrompt } from './components/OfflineMapPrompt'; // NOUVEAU
 import { storageService } from './services/storageService';
 import { Loader2 } from 'lucide-react';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -122,6 +123,7 @@ const App: React.FC = () => {
                   <FleetNotificationSystem />
                   <MissionReminder />
                   <UpdatePrompt />
+                  <OfflineMapPrompt /> {/* Proposer téléchargement carte hors-ligne des Hautes-Pyrénées */}
                   <NewContentProvider>
                       <AppRoutes />
                   </NewContentProvider>

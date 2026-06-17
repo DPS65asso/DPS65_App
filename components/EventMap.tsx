@@ -4,9 +4,10 @@ import { MapContainer, TileLayer, Marker, Popup, useMap, LayersControl, useMapEv
 import { TeamLocation, CustomMarker, MarkerType, Track, Event } from '../types';
 import { initDB } from '../services/db';
 import { storageService } from '../services/storageService';
+import { normalizeTileUrl } from '../services/offlineMapService';
 import { generateUUID } from '../utils/security';
 import L from 'leaflet';
-import { Battery, BatteryCharging, Mountain, Radio, Map as MapIcon, Target, Phone, Trash2, Tent, Truck, AlertTriangle, MapPin, User, Save, X, Move, Car, Zap, Layers, Check, ChevronDown, ChevronUp } from 'lucide-react';
+import { Battery, BatteryCharging, Mountain, Radio, Map as MapIcon, Target, Phone, Trash2, Tent, Truck, AlertTriangle, MapPin, User, Save, X, Move, Car, Zap, Layers, Check, ChevronDown, ChevronUp, Download } from 'lucide-react';
 import { Button } from './Button';
 import { OPS_DATA } from '../data/opsData';
 
@@ -62,6 +63,52 @@ let DefaultIcon = L.icon({
     iconAnchor: [12, 41]
 });
 L.Marker.prototype.options.icon = DefaultIcon;
+
+// Intercepteur global Leaflet pour le support de la carte hors-ligne (Voyager, Topo, Esri)
+const originalCreateTile = (L.TileLayer.prototype as any).createTile;
+(L.TileLayer.prototype as any).createTile = function (this: any, coords: any, done: any) {
+    const tile = originalCreateTile.call(this, coords, done) as HTMLImageElement;
+    const url = this.getTileUrl(coords);
+    if (!url) return tile;
+
+    // Normaliser l'url pour la recherche dans le Cache Storage
+    const cacheUrl = normalizeTileUrl(url);
+
+    caches.open('map-tiles-offline').then(cache => {
+        cache.match(cacheUrl).then(response => {
+            if (response) {
+                response.blob().then(blob => {
+                    const objectUrl = URL.createObjectURL(blob);
+                    tile.src = objectUrl;
+                    
+                    // Nettoyer l'Object URL pour éviter les fuites mémoire
+                    const cleanup = () => {
+                        URL.revokeObjectURL(objectUrl);
+                        tile.removeEventListener('load', cleanup);
+                        tile.removeEventListener('error', cleanup);
+                    };
+                    tile.addEventListener('load', cleanup);
+                    tile.addEventListener('error', cleanup);
+                }).catch(() => {});
+            } else if (url.includes('basemaps.cartocdn.com/rastertiles/voyager')) {
+                // Mettre en cache automatiquement au fil de l'eau si l'utilisateur navigue en ligne
+                const handleOnlineTileLoaded = () => {
+                    tile.removeEventListener('load', handleOnlineTileLoaded);
+                    fetch(cacheUrl, { mode: 'cors', credentials: 'omit' })
+                        .then(res => {
+                            if (res.ok) {
+                                cache.put(cacheUrl, res);
+                            }
+                        })
+                        .catch(() => {});
+                };
+                tile.addEventListener('load', handleOnlineTileLoaded);
+            }
+        }).catch(() => {});
+    }).catch(() => {});
+
+    return tile;
+};
 
 // Helper function to create POI icons (same style as ProfilePage)
 const createPoiIcon = (type: 'HOSP' | 'FIRE' | 'DZ' | 'DAE' | 'MMG', color: string) => {
@@ -406,6 +453,113 @@ export const EventMap: React.FC<Props> = ({
   }, []);
 
   // Custom Marker States
+  // --- CARTE LOCALE INTERNATIONNALE HORS-LIGNE (~10km) ---
+  const [isDownloadingLocal, setIsDownloadingLocal] = useState(false);
+  const [localDownloadProgress, setLocalDownloadProgress] = useState({ downloaded: 0, total: 0, percent: 0, currentUrl: '' });
+  const [localSuccess, setLocalSuccess] = useState(false);
+  const [localError, setLocalError] = useState<string | null>(null);
+  const localAbortControllerRef = useRef<AbortController | null>(null);
+
+  const getEventCenter = (): { lat: number, lng: number } | null => {
+      // 1. Essayer avec le tracé principal de l'événement
+      if (eventTrack && eventTrack.length > 0) {
+          const lats = eventTrack.map(p => p[0]);
+          const lngs = eventTrack.map(p => p[1]);
+          const avgLat = lats.reduce((sum, val) => sum + val, 0) / eventTrack.length;
+          const avgLng = lngs.reduce((sum, val) => sum + val, 0) / eventTrack.length;
+          return { lat: avgLat, lng: avgLng };
+      }
+      // 2. Essayer avec les autres tracés
+      if (eventTracks && eventTracks.length > 0) {
+          let sumLat = 0, sumLng = 0, count = 0;
+          eventTracks.forEach(t => {
+              t.data.forEach(p => {
+                  sumLat += p[0];
+                  sumLng += p[1];
+                  count++;
+              });
+          });
+          if (count > 0) {
+              return { lat: sumLat / count, lng: sumLng / count };
+          }
+      }
+      // 3. Essayer avec les marqueurs personnalisés
+      if (customMarkers && customMarkers.length > 0) {
+          const avgLat = customMarkers.reduce((sum, m) => sum + m.lat, 0) / customMarkers.length;
+          const avgLng = customMarkers.reduce((sum, m) => sum + m.lng, 0) / customMarkers.length;
+          return { lat: avgLat, lng: avgLng };
+      }
+      // 4. Essayer avec les équipes actives
+      if (locs && locs.length > 0) {
+          const avgLat = locs.reduce((sum, l) => sum + l.lat, 0) / locs.length;
+          const avgLng = locs.reduce((sum, l) => sum + l.lng, 0) / locs.length;
+          return { lat: avgLat, lng: avgLng };
+      }
+      // 5. En dernier recours, utiliser le centre actuel de la carte Leaflet
+      try {
+          const map = (window as any).leafletMap;
+          if (map) {
+              const center = map.getCenter();
+              return { lat: center.lat, lng: center.lng };
+          }
+      } catch (e) {
+          // ignore
+      }
+      return null;
+  };
+
+  const handleDownloadLocalMap = async () => {
+      const center = getEventCenter();
+      if (!center) {
+          setLocalError("Impossible de trouver le centre géographique de l'événement. Veuillez centrer/manipuler la carte et réessayer.");
+          return;
+      }
+      setIsDownloadingLocal(true);
+      setLocalError(null);
+      setLocalSuccess(false);
+      const controller = new AbortController();
+      localAbortControllerRef.current = controller;
+      try {
+          const { generateLocalEventTileUrls, downloadTileUrls } = await import('../services/offlineMapService');
+          const urls = generateLocalEventTileUrls(center.lat, center.lng);
+          
+          if (urls.length === 0) {
+              throw new Error("Aucune tuile générée pour ces coordonnées.");
+          }
+          
+          await downloadTileUrls(urls, (prog) => {
+              setLocalDownloadProgress({
+                  downloaded: prog.downloaded,
+                  total: prog.total,
+                  percent: prog.percent,
+                  currentUrl: prog.currentUrl || ''
+              });
+          }, controller.signal);
+          setLocalSuccess(true);
+          setTimeout(() => {
+              setLocalSuccess(false);
+              setIsDownloadingLocal(false);
+          }, 3000);
+      } catch (err: any) {
+          if (err?.name === 'AbortError' || controller.signal.aborted) {
+              console.log("Téléchargement local annulé.");
+              setLocalError("Téléchargement de la carte locale annulé.");
+          } else {
+              console.error("Local map download failed:", err);
+              setLocalError(err?.message || "Le téléchargement d'urgence a échoué.");
+          }
+      } finally {
+          localAbortControllerRef.current = null;
+      }
+  };
+
+  const handleCancelLocalDownload = () => {
+      if (localAbortControllerRef.current) {
+          localAbortControllerRef.current.abort();
+          setIsDownloadingLocal(false);
+      }
+  };
+
   const [isEditMode, setIsEditMode] = useState(false);
   const [showMarkerModal, setShowMarkerModal] = useState(false);
   const [newMarkerPos, setNewMarkerPos] = useState<{lat: number, lng: number} | null>(null);
@@ -528,28 +682,40 @@ export const EventMap: React.FC<Props> = ({
 
   return (
     <div className={`${isFullscreen ? 'h-full' : 'h-[60vh]'} w-full rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 shadow-sm relative z-0`}>
-        {/* BOUTON MODE ÉDITION & BLITZORTUNG - Aligné avec 3D */}
-        {!readOnly && (
-            <div className="absolute top-48 left-3 z-[1000] flex flex-col gap-2">
-                <button 
-                    onClick={() => setIsEditMode(!isEditMode)} 
-                    className={`p-3 rounded-full shadow-lg border-2 transition-all active:scale-95 ${isEditMode ? 'bg-orange-500 border-orange-600 text-white animate-pulse' : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-200'}`}
-                    title={isEditMode ? "Quitter mode ajout" : "Ajouter un point"}
-                >
-                    {isEditMode ? <X className="w-6 h-6" /> : <MapPin className="w-6 h-6" />}
-                </button>
+        {/* BOUTONS FLOTTANTS (TÉLÉCHARGEMENT LOCAL, ÉDITION & BLITZORTUNG) - ALIGNÉS À GAUCHE */}
+        <div className="absolute top-48 left-3 z-[1000] flex flex-col gap-2">
+            <button 
+                onClick={handleDownloadLocalMap} 
+                className={`p-3 rounded-full shadow-lg border-2 transition-all active:scale-95 ${isDownloadingLocal ? 'bg-blue-600 border-blue-700 text-white' : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:text-blue-600 dark:hover:text-blue-400'}`}
+                title="Télécharger la carte locale de l'événement (~10km)"
+                disabled={isDownloadingLocal}
+                id="btn-download-local-map"
+            >
+                <Download className="w-6 h-6" />
+            </button>
 
-                <a 
-                    href="https://www.lightningmaps.org" 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="p-3 rounded-full shadow-lg border-2 bg-yellow-500 border-yellow-600 text-white transition-all active:scale-95 flex items-center justify-center"
-                    title="Ouvrir Carte Foudre (Blitzortung)"
-                >
-                    <Zap className="w-6 h-6" />
-                </a>
-            </div>
-        )}
+            {!readOnly && (
+                <>
+                    <button 
+                        onClick={() => setIsEditMode(!isEditMode)} 
+                        className={`p-3 rounded-full shadow-lg border-2 transition-all active:scale-95 ${isEditMode ? 'bg-orange-500 border-orange-600 text-white animate-pulse' : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-200'}`}
+                        title={isEditMode ? "Quitter mode ajout" : "Ajouter un point"}
+                    >
+                        {isEditMode ? <X className="w-6 h-6" /> : <MapPin className="w-6 h-6" />}
+                    </button>
+
+                    <a 
+                        href="https://www.lightningmaps.org" 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="p-3 rounded-full shadow-lg border-2 bg-yellow-500 border-yellow-600 text-white transition-all active:scale-95 flex items-center justify-center animate-in fade-in"
+                        title="Ouvrir Carte Foudre (Blitzortung)"
+                    >
+                        <Zap className="w-6 h-6" />
+                    </a>
+                </>
+            )}
+        </div>
 
         {/* LAYERS CONTROL - TOP RIGHT (UNDER RECENTER) */}
         <div className="absolute top-36 right-4 z-[1000] flex flex-col items-end gap-2">
@@ -805,6 +971,81 @@ export const EventMap: React.FC<Props> = ({
         {locs.length === 0 && (
             <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-black/50 text-white px-3 py-1 rounded-full text-xs pointer-events-none z-[1000]">
                 Aucune équipe géolocalisée pour cet événement.
+            </div>
+        )}
+
+        {/* Overlay d'état et progression pour le téléchargement local */}
+        {(isDownloadingLocal || localSuccess || localError) && (
+            <div className="absolute inset-0 z-[1001] bg-slate-900/80 backdrop-blur-xs flex items-center justify-center p-6 text-center select-none">
+                <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-2xl max-w-sm w-full animate-in zoom-in-95 duration-200">
+                    {isDownloadingLocal && !localSuccess && (
+                        <div className="flex flex-col items-center">
+                            <div className="w-14 h-14 bg-blue-50 dark:bg-blue-950/40 rounded-full flex items-center justify-center text-blue-600 dark:text-blue-400 mb-4 animate-bounce">
+                                <Download className="w-7 h-7" />
+                            </div>
+                            <h3 className="font-extrabold text-lg text-slate-900 dark:text-white mb-1">
+                                Téléchargement Local (~10km)
+                            </h3>
+                            <p className="text-xs text-slate-500 mb-4 leading-relaxed">
+                                Récupération des tuiles de zoom 11 à 16 autour de l'événement...
+                            </p>
+                            
+                            {/* progress bar */}
+                            <div className="w-full bg-slate-100 dark:bg-slate-800 h-2.5 rounded-full overflow-hidden mb-2 border border-slate-200/40 dark:border-slate-700">
+                                <div 
+                                    className="h-full bg-blue-600 rounded-full transition-all duration-300"
+                                    style={{ width: `${localDownloadProgress.percent}%` }}
+                                ></div>
+                            </div>
+                            
+                            <div className="flex justify-between w-full text-xs font-black text-slate-500 font-mono mb-4">
+                                <span>{localDownloadProgress.percent}%</span>
+                                <span>{localDownloadProgress.downloaded} / {localDownloadProgress.total}</span>
+                            </div>
+
+                            <button
+                                onClick={handleCancelLocalDownload}
+                                className="px-5 py-2.5 bg-red-50 hover:bg-red-100 dark:bg-red-950/20 dark:hover:bg-red-950/40 text-red-600 dark:text-red-400 font-bold rounded-2xl text-xs transition-colors shadow-sm outline-none w-full"
+                            >
+                                Annuler le téléchargement
+                            </button>
+                        </div>
+                    )}
+                    
+                    {localSuccess && (
+                        <div className="flex flex-col items-center">
+                            <div className="w-14 h-14 bg-emerald-50 dark:bg-emerald-950/40 rounded-full flex items-center justify-center text-emerald-600 dark:text-emerald-400 mb-4">
+                                <Check className="w-8 h-8" />
+                            </div>
+                            <h3 className="font-extrabold text-lg text-slate-900 dark:text-white mb-1">
+                                Carte enregistrée !
+                            </h3>
+                            <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
+                                Le secteur de 10km autour de l'événement est enregistré localement (jusqu'au zoom 16 terrain).
+                            </p>
+                        </div>
+                    )}
+
+                    {localError && (
+                        <div className="flex flex-col items-center">
+                            <div className="w-14 h-14 bg-red-50 dark:bg-red-950/40 rounded-full flex items-center justify-center text-red-600 dark:text-red-400 mb-4">
+                                <AlertTriangle className="w-8 h-8" strokeWidth={2.5} />
+                            </div>
+                            <h3 className="font-extrabold text-lg text-slate-900 dark:text-white mb-1">
+                                Une erreur est survenue
+                            </h3>
+                            <p className="text-sm text-slate-500 dark:text-slate-400 mb-4 leading-relaxed">
+                                {localError}
+                            </p>
+                            <button
+                                onClick={() => setLocalError(null)}
+                                className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold rounded-2xl text-xs transition-colors shadow-sm outline-none w-full"
+                            >
+                                Revenir à la carte
+                            </button>
+                        </div>
+                    )}
+                </div>
             </div>
         )}
     </div>

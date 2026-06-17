@@ -144,59 +144,474 @@ const getVictimRows = (victims: Victim[]) => {
 };
 
 export const generateSingleVictimReport = async (event: Event, victim: Victim) => {
-    const doc = new jsPDF('landscape');
+    // 1. Initialiser le document PDF en Portrait (p), millimètres (mm), format A4 (210x297)
+    const doc = new jsPDF('p', 'mm', 'a4');
+    
+    // 2. Charger le logo en haut à gauche
     await addHeaderLogo(doc);
-    doc.setFontSize(22);
+    
+    // 3. Dessiner l'en-tête de la fiche
+    doc.setFont('Helvetica', 'bold');
+    doc.setFontSize(16);
+    doc.setTextColor(194, 24, 7); // Crimson SSU/SAMU red
+    doc.text("FICHE-BILAN DE SECOURS", 42, 18);
+    
+    doc.setFont('Helvetica', 'normal');
+    doc.setFontSize(8.5);
+    doc.setTextColor(71, 85, 105); // Slate slate-500
+    doc.text("Dispositif Prévisionnel de Secours pour événements sportifs", 42, 23);
+    doc.text("Document confidentiel — Secret Médical — Conforme SSU & Régulation SAMU", 42, 27);
+    
+    // Cadre rouge discret CONFIDENTIEL en haut à droite
+    doc.setDrawColor(220, 38, 38);
+    doc.rect(148, 12, 50, 15);
+    doc.setFont('Helvetica', 'bold');
+    doc.setFontSize(7.5);
     doc.setTextColor(220, 38, 38);
-    doc.text('DPS65 - Fiche Bilan Secours', 40, 20);
-    doc.setFontSize(12);
-    doc.setTextColor(0, 0, 0);
-    doc.text(`Événement : ${event.name}`, 40, 30);
-    doc.text(`Date : ${safeDateFormat(event.date)} | Lieu : ${event.location}`, 14, 40);
+    doc.text("DOSSIER CONFIDENTIEL", 151, 17);
+    doc.setFont('Helvetica', 'normal');
+    doc.setTextColor(100);
+    doc.text(`Prise en charge # ${victim.bibNumber || 'Sans Num'}`, 151, 23);
+
+    // Ligne décorative rouge
+    doc.setDrawColor(194, 24, 7);
+    doc.setLineWidth(0.8);
+    doc.line(12, 31, 198, 31);
+    doc.setLineWidth(0.2); // Remettre à niveau fin par défaut
+
+    // --- COORDONNÉES DE L'INTERVENTION ---
+    const drawSectionHeader = (title: string, yPos: number) => {
+        doc.setFillColor(194, 24, 7);
+        doc.rect(12, yPos, 186, 5.5, 'F');
+        doc.setFont('Helvetica', 'bold');
+        doc.setFontSize(9);
+        doc.setTextColor(255, 255, 255);
+        doc.text(title.toUpperCase(), 15, yPos + 4);
+    };
+
+    // Y initial
+    let y = 34;
+
+    // SECTION 1. CONTEXTE POUR L'INTERVENTION
+    drawSectionHeader("1. CONTEXTE ET EFFECTIFS DE L'INTERVENTION", y);
+    doc.setDrawColor(203, 213, 225); // Slate 300
+    doc.setFillColor(248, 250, 252); // Slate 50
+    doc.rect(12, y + 5.5, 186, 16, 'FD');
+
+    doc.setFont('Helvetica', 'bold');
+    doc.setFontSize(7);
+    doc.setTextColor(30, 41, 59); // Slate 800
+    
+    // Placer les infos sur 2 lignes dans l'encadré
+    doc.text("ÉVÉNEMENT :", 15, y + 10);
+    doc.text("DATE :", 15, y + 14);
+    doc.text("LIEU DE CHOC / POSTE :", 15, y + 18);
+
+    doc.setFont('Helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(51, 65, 85); // Slate 700
+    doc.text(event.name.toUpperCase(), 35, y + 10);
+    doc.text(safeDateFormat(event.date), 25, y + 14);
+    doc.text(event.location, 50, y + 18);
+
+    // Colonne de droite dans l'encadré
+    doc.setFont('Helvetica', 'bold');
+    doc.setFontSize(7);
+    doc.text("INTERVENANT EN CHARGE :", 110, y + 10);
+    doc.text("ÉQUIPE SECCOURISTE :", 110, y + 14);
+    doc.text("HEURE DE PREMIÈRE CONSTANTE :", 110, y + 18);
+
+    doc.setFont('Helvetica', 'normal');
+    doc.setFontSize(8);
+    const respName = `${victim.responderFirstName || ''} ${victim.responderName || ''}`.trim() || 'Non spécifié';
+    doc.text(respName, 148, y + 10);
+    doc.text(victim.responderTeam || 'Equipe DPS', 142, y + 14);
+    
+    let firstCareTime = safeTimeFormat(victim.arrivalTime);
+    if (victim.vitals && victim.vitals.length > 0) {
+        firstCareTime = victim.vitals[0].time;
+    }
+    doc.text(firstCareTime, 158, y + 18);
+
+    // Ajuster y
+    y += 25;
+
+    // SECTION 2. IDENTIFICATION DE LA VICTIME
+    drawSectionHeader("2. ÉTAT CIVIL & IDENTITÉ DE LA VICTIME", y);
+    doc.rect(12, y + 5.5, 186, 16.5, 'FD');
+
+    doc.setFont('Helvetica', 'bold');
+    doc.setFontSize(7);
+    doc.setTextColor(30, 41, 59);
+
+    doc.text("NOM COMPLET :", 15, y + 10);
+    doc.text("DATE DE NAISSANCE :", 15, y + 14);
+    doc.text("NUMÉRO DE DOSSARD :", 15, y + 18);
+
+    doc.setFont('Helvetica', 'normal');
+    doc.setFontSize(8.5);
+    doc.setTextColor(0, 0, 0); // Plus noir pour signature/identité
+    doc.text(victim.fullName || 'Inconnu(e) (ou UA non identifiée)', 38, y + 10);
+    doc.text(victim.birthDate ? safeDateFormat(victim.birthDate) : 'Non renseignée', 46, y + 14);
+    doc.text(victim.bibNumber || 'N/A', 48, y + 18);
+
+    // Droite
+    doc.setFont('Helvetica', 'bold');
+    doc.setFontSize(7);
+    doc.setTextColor(30, 41, 59);
+    doc.text("TÉLÉPHONE :", 110, y + 10);
+    doc.text("URGENCE (ICE) :", 110, y + 14);
+    doc.text("CODE TRIAGE VITAL :", 110, y + 18);
+
+    doc.setFont('Helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(51, 65, 85);
+    doc.text(victim.phoneNumber || 'N/R', 130, y + 10);
+    doc.text(victim.emergencyContact || 'N/R', 135, y + 14);
+
+    // Code Triage avec badge couleur
+    const triageStr = victim.triageColor || 'Non spécifié';
+    let triageColorRGB = [51, 65, 85]; // slate par défaut
+    if (victim.triageColor) {
+        if (victim.triageColor.includes('UA') || victim.triageColor.includes('Rouge')) triageColorRGB = [194, 24, 7];
+        else if (victim.triageColor.includes('UR') || victim.triageColor.includes('Jaune')) triageColorRGB = [217, 119, 6];
+        else if (victim.triageColor.includes('UIP') || victim.triageColor.includes('Vert')) triageColorRGB = [5, 150, 105];
+        else if (victim.triageColor.includes('DCD') || victim.triageColor.includes('Noir')) triageColorRGB = [0, 0, 0];
+    }
+    doc.setFont('Helvetica', 'bold');
+    doc.setFontSize(8.5);
+    doc.setTextColor(triageColorRGB[0], triageColorRGB[1], triageColorRGB[2]);
+    doc.text(triageStr, 142, y + 18);
+
+    // Ajuster y
+    y += 26;
+
+    // SECTION 3. ANAMNÈSE, MOTIF DE PRISE EN CHARGE ET CLINIQUE (MADO / SAMPLE)
+    drawSectionHeader("3. ANAMNÈSE & MOTIF D'ACCUEIL (M.A.D.O. / S.A.M.P.L.E.)", y);
+    doc.rect(12, y + 5.5, 186, 20.5, 'FD');
+
+    doc.setFont('Helvetica', 'bold');
+    doc.setFontSize(7);
+    doc.setTextColor(30, 41, 59);
+
+    doc.text("PLAINTES ET HISTOIRE DE L'ÉVÉNEMENT (SITUATION ET MÉCANISME) :", 15, y + 10);
+    doc.setFont('Helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(51, 65, 85);
+    
+    // Diviser le texte s'il est long
+    const reasonLines = doc.splitTextToSize(victim.reason || 'Aucun motif renseigné.', 178);
+    doc.text(reasonLines.slice(0, 2), 15, y + 14); // Afficher max 2 lignes compactes ici
+
+    doc.setFont('Helvetica', 'bold');
+    doc.setFontSize(7);
+    doc.setTextColor(30, 41, 59);
+    doc.text("TRAITEMENTS EN COURS / ANTÉCÉDENTS :", 15, y + 21);
+    doc.setFont('Helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.text(victim.treatments || 'Aucun d\'après la victime / entourage', 72, y + 21);
+
+    doc.setFont('Helvetica', 'bold');
+    doc.setFontSize(7);
+    doc.text("ALLERGIES DÉCLARÉES :", 15, y + 24);
+    doc.setFont('Helvetica', 'normal');
+    doc.setFontSize(8);
+    
+    const isAllergic = victim.allergies && victim.allergies !== 'Aucune';
+    if (isAllergic) {
+        doc.setFont('Helvetica', 'bold');
+        doc.setTextColor(194, 24, 7); // Rouge si allergies
+    }
+    doc.text(victim.allergies || 'Aucune connue d\'après interrogatoire', 48, y + 24);
+    doc.setTextColor(51, 65, 85);
+    doc.setFont('Helvetica', 'normal');
+
+    // Ajuster y
+    y += 30;
+
+    // SECTION 4. FICHE DE SURVEILLANCE CLINIQUE (CONSTANTES)
+    drawSectionHeader("4. PARAMÈTRES VITAUX ET CONSTANTES CHRONOLOGIQUES", y);
+    
+    // Préparer les données pour autoTable
+    const vitalsColumns = ["Heure", "Fréq. Cardiaque (FC)", "Fréq. Réspi (FR)", "Sat. Oxygène (SpO2)", "Pression Art. (TA)", "Température", "Dextro / Gly.", "Doul. (EVA)"];
+    
+    let tableRows = [];
+    if (victim.vitals && victim.vitals.length > 0) {
+        const sorted = [...victim.vitals].sort((a,b) => a.time.localeCompare(b.time));
+        tableRows = sorted.map(v => [
+            v.time || '-',
+            v.pulse ? `${v.pulse} bpm` : '-',
+            '-', // SSU/SAMU FR est souvent estimé, on peut mettre une colonne vide ou vide si non renseigné
+            v.sao2 ? `${v.sao2} %` : '-',
+            v.bp ? `${v.bp} mmHg` : '-',
+            v.temp ? `${v.temp} °C` : '-',
+            v.glycemia ? `${v.glycemia} g/L` : '-',
+            v.eva ? `${v.eva} / 10` : '-'
+        ]);
+    } else {
+        // Fallback s'il y a des constantes directes sur l'objet mais pas listées dans vitals
+        if (victim.pulse || victim.bp || victim.sao2 || victim.glycemia || victim.temp || victim.eva) {
+            tableRows.push([
+                safeTimeFormat(victim.arrivalTime) || 'Début',
+                victim.pulse ? `${victim.pulse} bpm` : '-',
+                '-',
+                victim.sao2 ? `${victim.sao2} %` : '-',
+                victim.bp ? `${victim.bp} mmHg` : '-',
+                victim.temp ? `${victim.temp} °C` : '-',
+                victim.glycemia ? `${victim.glycemia} g/L` : '-',
+                victim.eva ? `${victim.eva} / 10` : '-'
+            ]);
+        } else {
+            tableRows.push([
+                'N/A', 'aucune constante vitale mesurée', '-', '-', '-', '-', '-', '-'
+            ]);
+        }
+    }
+
     autoTable(doc, {
-        head: [TABLE_COLUMNS],
-        body: getVictimRows([victim]),
-        startY: 48,
+        head: [vitalsColumns],
+        body: tableRows,
+        startY: y + 5.5,
         theme: 'grid',
-        headStyles: { fillColor: [220, 38, 38] },
-        styles: { fontSize: 8, cellPadding: 3, overflow: 'linebreak' },
-        columnStyles: { 5: { cellWidth: 35 }, 6: { cellWidth: 90 } },
-        didDrawCell: (data) => {
-            if (data.column.index === 7 && data.cell.section === 'body') {
-                let signatureToDraw = null;
-                let signatureLabel = "";
-                if (victim.outcome === Outcome.REFUSED_CARE && victim.signatureData) {
-                    signatureToDraw = victim.signatureData;
-                    signatureLabel = "(Victime)";
-                } else if (victim.outcome === Outcome.DECEASED && victim.doctorSignatureData) {
-                    signatureToDraw = victim.doctorSignatureData;
-                    signatureLabel = "(Médecin)";
-                }
-                if (signatureToDraw) {
-                    try {
-                        const imgHeight = 12;
-                        const imgWidth = 30;
-                        const x = data.cell.x + 2;
-                        const y = data.cell.y + data.cell.height - imgHeight - 2;
-                        doc.addImage(signatureToDraw, 'PNG', x, y, imgWidth, imgHeight);
-                        doc.setFontSize(6);
-                        doc.text(signatureLabel, x, y - 1);
-                    } catch(e) {}
-                }
-            }
+        headStyles: { 
+            fillColor: [30, 41, 59], // Slate 800 pour constantes
+            textColor: [255, 255, 255],
+            fontSize: 7.5,
+            halign: 'center',
+            cellPadding: 1
+        },
+        styles: { 
+            fontSize: 7.5, 
+            cellPadding: 1.5, 
+            halign: 'center',
+            textColor: [51, 65, 85]
+        },
+        columnStyles: { 
+            0: { fontStyle: 'bold' },
+            1: { cellWidth: 32 }
         }
     });
+
+    let autoTableY = (doc as any).lastAutoTable.finalY;
+    y = autoTableY + 4;
+
+    // SECTION 5. GESTES EFFECTUÉS & DISPOSITIFS PRATIQUÉS
+    drawSectionHeader("5. GESTES EFFECTUÉS, AMÉLIORATION & DISPOSITIFS", y);
+    doc.setDrawColor(203, 213, 225);
+    doc.setFillColor(248, 250, 252);
+    
+    // Déterminer la hauteur nécessaire selon contenu
+    let extraHeight = 0;
+    if (victim.isAdvancedMode) extraHeight += 12; // place pour KT et solutés
+    
+    doc.rect(12, y + 5.5, 186, 22.5 + extraHeight, 'FD');
+
+    doc.setFont('Helvetica', 'bold');
+    doc.setFontSize(7);
+    doc.setTextColor(30, 41, 59);
+
+    doc.text("GESTES ET SOINS GÉNÉRAUX PRODIGUÉS :", 15, y + 10);
+    doc.setFont('Helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(51, 65, 85);
+    
+    const careLines = doc.splitTextToSize(victim.careProvided || 'Pose de poche de froid, repos, surveillance.', 178);
+    doc.text(careLines.slice(0, 2), 15, y + 14);
+
+    // Alerte Garrot ou réa (Important ++)
+    doc.setFont('Helvetica', 'bold');
+    doc.setFontSize(7);
+    doc.setTextColor(30, 41, 59);
+    doc.text("DISPOSITIF DE TRANSPORT :", 15, y + 21);
+    doc.setFont('Helvetica', 'normal');
+    doc.setFontSize(8);
+    
+    let installText = 'Position d\'attente standard';
+    if (victim.resourceUsed === 'stretcher') installText = 'Matériel Immobilisation / Brancard';
+    else if (victim.resourceUsed === 'chair') installText = 'Assise sur Chaise de transport';
+    doc.text(installText, 55, y + 21);
+
+    // Garrot
+    doc.setFont('Helvetica', 'bold');
+    doc.setFontSize(7);
+    doc.text("POSE DE GARROT DE SECOURS :", 110, y + 21);
+    
+    if (victim.hasTourniquet) {
+        doc.setFont('Helvetica', 'bold');
+        doc.setFontSize(8.5);
+        doc.setTextColor(194, 24, 7); // Rouge alerte garrot
+        doc.text(`OUI à ${victim.tourniquetTime ? safeTimeFormat(victim.tourniquetTime) : 'Heure inconnue'}`, 152, y + 21);
+    } else {
+        doc.setFont('Helvetica', 'normal');
+        doc.setFontSize(8);
+        doc.setTextColor(51, 65, 85);
+        doc.text("NON", 152, y + 21);
+    }
+
+    doc.setFont('Helvetica', 'bold');
+    doc.setFontSize(7);
+    doc.setTextColor(30, 41, 59);
+    doc.text("RÉANIMATION (RCP) :", 15, y + 25);
+    doc.setFont('Helvetica', 'normal');
+    doc.setFontSize(8);
+    let rcpText = "Non concerné";
+    if (victim.cprDurationSeconds) {
+        rcpText = `Oui (Durée RCP: ${Math.floor(victim.cprDurationSeconds / 60)}m ${victim.cprDurationSeconds % 60}s)`;
+    }
+    doc.text(rcpText, 45, y + 25);
+
+    // Solutés et VVP si mode paramédic
+    if (victim.isAdvancedMode) {
+        doc.setFont('Helvetica', 'bold');
+        doc.setFontSize(7);
+        doc.setTextColor(115, 30, 160); // Violet pour soins avancés
+        doc.text("VOLET SOINS AVANCÉS (IDE / MÉDECIN) :", 15, y + 30);
+        
+        doc.setFont('Helvetica', 'normal');
+        doc.setFontSize(8);
+        doc.setTextColor(51, 65, 85);
+        
+        let advancedDetails = `Pose de KT: ${victim.hasKt ? `Oui (${victim.ktTime ? safeTimeFormat(victim.ktTime) : 'N/C'})` : 'Non'}`;
+        if (victim.solutes && victim.solutes.length > 0) {
+            advancedDetails += ` | Soluté(s): ${victim.solutes.map(s => `${s.name || 'Soluté'} (${s.time})`).join(', ')}`;
+        }
+        if (victim.medicationsList && victim.medicationsList.length > 0) {
+            advancedDetails += ` | Médicament(s): ${victim.medicationsList.map(m => `${m.name} (${m.dose || 'dose'}) à ${m.time}`).join(', ')}`;
+        }
+        doc.text(doc.splitTextToSize(advancedDetails, 178), 15, y + 33);
+    }
+
+    y += 28 + extraHeight;
+
+    // SECTION 6. DEVENIR DE LA VICTIME, SIGNATURES & DÉCHARGE (SITUÉ AU DESIGN COLLÉ BAS)
+    const pageHeight = doc.internal.pageSize.height;
+    
+    // Forcer le bloc signatures en bas de page pour avoir un rendu parfait
+    y = Math.max(y + 2, pageHeight - 88); 
+    
+    drawSectionHeader("6. ADMISSION, DEVENIR DE LA VICTIME & SIGNATURES", y);
+    doc.rect(12, y + 5.5, 186, 32.5, 'FD');
+
+    doc.setFont('Helvetica', 'bold');
+    doc.setFontSize(7);
+    doc.setTextColor(30, 41, 59);
+
+    doc.text("DEVENIR APRÈS PREMIER ACCUEIL / SOINS (DÉCISION) :", 15, y + 10);
+    doc.setFont('Helvetica', 'bold');
+    doc.setFontSize(9);
+    doc.setTextColor(194, 24, 7);
+    doc.text(victim.outcome || 'Traitement en cours', 15, y + 14);
+
+    doc.setFont('Helvetica', 'bold');
+    doc.setFontSize(7);
+    doc.setTextColor(30, 41, 59);
+    doc.text("ORIENTATION / VÉHICULE / HÔPITAL :", 110, y + 10);
+    doc.setFont('Helvetica', 'normal');
+    doc.setFontSize(8.5);
+    doc.setTextColor(51, 65, 85);
+    doc.text(victim.hospitalName || 'Laissée sur place / Non évacuée', 110, y + 14);
+
+    doc.setFont('Helvetica', 'bold');
+    doc.setFontSize(7);
+    doc.setTextColor(30, 41, 59);
+    doc.text("LIAISON RÉGULATION SAMU (CENTRE 15) :", 15, y + 19);
+    doc.setFont('Helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.text(victim.samuValidated ? "VALIDÉ PAR LE SAMU ET LE MÉDECIN RÉGULATEUR DE GARDE" : "Non régulé (Bilan standard sans complication ou soins simples)", 15, y + 23);
+
+    doc.setFont('Helvetica', 'bold');
+    doc.setFontSize(7);
+    doc.text("HORAIRES :", 110, y + 19);
+    doc.setFont('Helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.text(`Arrivée: ${safeTimeFormat(victim.arrivalTime)} | Départ: ${victim.departureTime ? safeTimeFormat(victim.departureTime) : 'N/C'}`, 110, y + 23);
+
+    // Dessiner 2 zones d'émargement / de signature côte à côte (y: y + 42)
+    const sigY = y + 41;
+    
+    // Cadre signature 1: Secouriste / Team Leader
+    doc.rect(12, sigY, 90, 26);
+    doc.setFillColor(241, 245, 249);
+    doc.rect(12, sigY, 90, 4.5, 'F');
+    doc.setFont('Helvetica', 'bold');
+    doc.setFontSize(6.5);
+    doc.setTextColor(30, 41, 59);
+    doc.text("SIGNATURE CHEF D'ÉQUIPE / RESPONSABLE", 14, sigY + 3);
+    
+    doc.setFont('Helvetica', 'normal');
+    doc.setFontSize(7.5);
+    doc.text(`Nom: ${respName}`, 14, sigY + 9);
+    doc.text(`Heure: ${victim.departureTime ? safeTimeFormat(victim.departureTime) : new Date().toLocaleTimeString('fr-FR', {hour: '2-digit', minute: '2-digit'})}`, 14, sigY + 13);
+    doc.text("Signature Électronique Certifiée", 14, sigY + 22);
+
+    // Cadre signature 2: Decharge Victime, Medecin, Temoin
+    doc.rect(108, sigY, 90, 26);
+    doc.setFillColor(241, 245, 249);
+    doc.rect(108, sigY, 90, 4.5, 'F');
+    doc.setFont('Helvetica', 'bold');
+    doc.setTextColor(30, 41, 59);
+    doc.text("SIGNATURE POUR DÉCHARGE / MÉDECIN", 110, sigY + 3);
+
+    // Rendre l'image de la signature si présente
+    let signatureToDraw = null;
+    let signatureLabel = "";
+    if (victim.outcome === Outcome.REFUSED_CARE && victim.signatureData) {
+        signatureToDraw = victim.signatureData;
+        signatureLabel = "[Refus de soins / Témoin]";
+    } else if (victim.outcome === Outcome.DECEASED && victim.doctorSignatureData) {
+        signatureToDraw = victim.doctorSignatureData;
+        signatureLabel = "[Constat de Décès - Médecin]";
+    } else {
+        doc.setFont('Helvetica', 'normal');
+        doc.setFontSize(7);
+        doc.setTextColor(100);
+        doc.text("Émargement en cas de refus de soins :", 110, sigY + 11);
+    }
+
+    if (signatureToDraw) {
+        try {
+            // Dessiner la signature vectorielle dans la boîte
+            doc.addImage(signatureToDraw, 'PNG', 110, sigY + 6, 85, 14);
+            doc.setFontSize(6.5);
+            doc.setFont('Helvetica', 'bold');
+            doc.setTextColor(194, 24, 7);
+            doc.text(signatureLabel, 110, sigY + 23);
+        } catch(e) {
+            console.error("Erreur d'insertion signature PDF :", e);
+        }
+    }
+
+    // Bas de page (Mention légale de confidentialité)
+    doc.setFontSize(7);
+    doc.setTextColor(148, 163, 184); // Cool Slate-400
+    doc.setFont('Helvetica', 'normal');
+    doc.text("Ce document est conforme au règlement RGPD sur la protection des données de santé personnelles. Doit être conservé 5 ans sous clé par l'association.", 105, pageHeight - 8, { align: 'center' });
+
+    // --- ANNEXE : PHOTOS ---
     if (victim.photos && victim.photos.length > 0) {
         doc.addPage();
         await addHeaderLogo(doc);
+        
+        doc.setFont('Helvetica', 'bold');
         doc.setFontSize(16);
-        doc.setTextColor(0, 0, 0);
-        doc.text('ANNEXE : PHOTOS (Blessures / Mécanismes)', 40, 20);
-        const photoSize = 100;
-        let yOffset = 30;
+        doc.setTextColor(194, 24, 7);
+        doc.text('ANNEXE PHOTOGRAPHIQUE (PLAIES & MÉCANISMES)', 42, 18);
+        doc.setFont('Helvetica', 'normal');
+        doc.setFontSize(9);
+        doc.setTextColor(100);
+        doc.text(`Victime : ${victim.fullName || 'Non spécifiée'} | Dossard : ${victim.bibNumber || 'N/A'}`, 42, 24);
+        
+        doc.line(12, 28, 198, 28);
+        
+        const photoSize = 75;
+        let yOffset = 34;
         let xOffset = 14;
+        
         for (let i = 0; i < victim.photos.length; i++) {
-            if (yOffset + photoSize > 190) { doc.addPage(); yOffset = 20; }
+            if (yOffset + photoSize + 15 > pageHeight - 15) { 
+                doc.addPage(); 
+                yOffset = 25; 
+            }
             try {
                 const p = victim.photos[i];
                 const source = p.blob || p.dataUrl;
@@ -204,18 +619,28 @@ export const generateSingleVictimReport = async (event: Event, victim: Victim) =
                     const imgElement = await loadImage(source);
                     if (imgElement.width > 0) {
                         doc.addImage(imgElement, 'JPEG', xOffset, yOffset, photoSize, photoSize);
-                        doc.setFontSize(10);
-                        doc.text(new Date(p.timestamp).toLocaleString(), xOffset, yOffset + photoSize + 5);
+                        doc.setFontSize(8);
+                        doc.setTextColor(50);
+                        doc.setFont('Helvetica', 'bold');
+                        doc.text(`Photo ${i + 1}`, xOffset, yOffset + photoSize + 4);
+                        doc.setFont('Helvetica', 'normal');
+                        doc.text(new Date(p.timestamp).toLocaleString('fr-FR'), xOffset, yOffset + photoSize + 8);
                     }
                 }
             } catch (e) {
                 console.error("Image error", e);
-                doc.text("[Image indisponible]", xOffset, yOffset + 10);
+                doc.text("[Image non chargeable ou expirée]", xOffset, yOffset + 10);
             }
-            if (xOffset === 14) { xOffset += photoSize + 10; } else { xOffset = 14; yOffset += photoSize + 15; }
+            if (xOffset === 14) { 
+                xOffset += photoSize + 15; 
+            } else { 
+                xOffset = 14; 
+                yOffset += photoSize + 15; 
+            }
         }
     }
-    const fileName = `DPS65_Fiche_${victim.bibNumber || 'Inconnu'}_${victim.fullName.replace(/\s+/g, '_')}.pdf`;
+
+    const fileName = `DPS65_SSU_SAMU_${victim.bibNumber || 'Inconnu'}_${victim.fullName.replace(/\s+/g, '_')}.pdf`;
     return { fileName, blob: doc.output('blob') };
 };
 

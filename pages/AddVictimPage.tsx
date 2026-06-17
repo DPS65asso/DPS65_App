@@ -422,6 +422,7 @@ export const AddVictimPage: React.FC = () => {
                 type="button" 
                 onClick={(e) => { e.preventDefault(); handleExportPdf(); }}
                 disabled={isExporting}
+                title="Exporter la Fiche-Bilan de Secours SSU/SAMU"
                 className="flex items-center justify-center gap-2 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 py-1.5 rounded-lg text-xs font-extrabold hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors shadow-sm disabled:opacity-50"
             >
                 {isExporting ? <Loader2 className="w-4 h-4 animate-spin shrink-0" /> : <FileText className="w-4 h-4 shrink-0" />} <span>PDF</span>
