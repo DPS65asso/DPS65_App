@@ -113,6 +113,16 @@ export const HrPage: React.FC = () => {
 
     useEffect(() => {
         loadData();
+
+        // Écoute de l'ajout/suppression de cours (formations) en temps réel
+        const bc = new BroadcastChannel('dps65_asso_channel');
+        bc.onmessage = () => {
+            loadData();
+        };
+
+        return () => {
+            bc.close();
+        };
     }, [profile?.role]);
 
     const loadData = async () => {
