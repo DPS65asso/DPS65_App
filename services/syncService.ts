@@ -42,15 +42,6 @@ class SyncService {
 
         this.initializeRealtime();
 
-        // On écoute les changements d'état d'authentification pour ré-initialiser le Realtime et récupérer les données
-        if (isLive) {
-            supabase.auth.onAuthStateChange((event, session) => {
-                console.log(`[Sync Realtime] Changement d'état auth : ${event}`);
-                this.initializeRealtime();
-                this.pullLatestData();
-            });
-        }
-
         // Polling de secours toutes les 2 minutes
         setInterval(() => {
             if (this.isOnline) {
@@ -424,7 +415,6 @@ class SyncService {
                 'config': 'dps65_config_channel',
                 'news': 'dps65_asso_channel',
                 'documents': 'dps65_asso_channel',
-                'courses': 'dps65_asso_channel',
                 'custom_markers': 'dps65_gps_channel',
                 'team_locations': 'dps65_gps_channel'
             };

@@ -88,12 +88,6 @@ export const adminService = {
             retries: 0
         });
         await tx.done;
-
-        // Broadcast local pour mise à jour immédiate
-        const bc = new BroadcastChannel('dps65_asso_channel');
-        bc.postMessage({ type: 'UPDATE_NEWS', entry: news });
-        bc.close();
-
         syncService.processQueue();
     },
 
@@ -111,12 +105,6 @@ export const adminService = {
             retries: 0
         });
         await tx.done;
-
-        // Broadcast local pour mise à jour immédiate
-        const bc = new BroadcastChannel('dps65_asso_channel');
-        bc.postMessage({ type: 'DELETE_NEWS', id });
-        bc.close();
-
         syncService.processQueue();
     },
 
@@ -150,12 +138,6 @@ export const adminService = {
             retries: 0
         });
         await tx.done;
-
-        // Broadcast local pour mise à jour immédiate
-        const bc = new BroadcastChannel('dps65_asso_channel');
-        bc.postMessage({ type: 'UPDATE_DOCUMENTS', entry: cleanDoc });
-        bc.close();
-
         syncService.processQueue();
     },
 
@@ -173,12 +155,6 @@ export const adminService = {
             retries: 0
         });
         await tx.done;
-
-        // Broadcast local pour mise à jour immédiate
-        const bc = new BroadcastChannel('dps65_asso_channel');
-        bc.postMessage({ type: 'DELETE_DOCUMENTS', id });
-        bc.close();
-
         syncService.processQueue();
     },
 
@@ -201,12 +177,6 @@ export const adminService = {
             retries: 0
         });
         await tx.done;
-
-        // Broadcast local pour mise à jour immédiate
-        const bc = new BroadcastChannel('dps65_asso_channel');
-        bc.postMessage({ type: 'UPDATE_COURSES', entry: course });
-        bc.close();
-
         syncService.processQueue();
     },
 
@@ -224,12 +194,6 @@ export const adminService = {
             retries: 0
         });
         await tx.done;
-
-        // Broadcast local pour mise à jour immédiate
-        const bc = new BroadcastChannel('dps65_asso_channel');
-        bc.postMessage({ type: 'DELETE_COURSES', id });
-        bc.close();
-
         syncService.processQueue();
     },
 
