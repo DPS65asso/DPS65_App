@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Logo } from './Logo';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { ChevronLeft, HardDrive, MapPin } from 'lucide-react';
+import { ChevronLeft, HardDrive, MapPin, LogOut } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { BottomNav } from './BottomNav';
 import { Sidebar } from './Sidebar';
@@ -19,7 +19,7 @@ interface LayoutProps {
 }
 
 export const Layout: React.FC<LayoutProps> = ({ children, title, showBack = false, showStatus = false, hideHeaderTools = false, hideSync = false }) => {
-  const { user } = useAuth();
+  const { user, signOut } = useAuth();
   const isOrganizer = user?.role === 'organisateur';
   const navigate = useNavigate();
   const location = useLocation();
@@ -102,7 +102,20 @@ export const Layout: React.FC<LayoutProps> = ({ children, title, showBack = fals
                   <div className="flex items-center justify-between mb-6 pt-2">
                     <div className="flex items-center gap-2 overflow-hidden flex-1">
                       {showBack ? (
-                        typeof showBack === 'string' ? (
+                        isOrganizer ? (
+                          <button 
+                            onClick={async () => {
+                              if (window.confirm("Voulez-vous vous déconnecter du suivi organisateur ?")) {
+                                await signOut();
+                                navigate('/login');
+                              }
+                            }}
+                            className="p-2 -ml-2 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-full transition-colors flex-shrink-0"
+                            title="Se déconnecter"
+                          >
+                            <ChevronLeft className="w-6 h-6" />
+                          </button>
+                        ) : typeof showBack === 'string' ? (
                             <Link to={showBack} className="p-2 -ml-2 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-full transition-colors flex-shrink-0">
                               <ChevronLeft className="w-6 h-6" />
                             </Link>
@@ -130,6 +143,21 @@ export const Layout: React.FC<LayoutProps> = ({ children, title, showBack = fals
                                   className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold border uppercase tracking-wider bg-green-500 text-white border-green-600 dark:bg-green-600 hover:bg-red-600 hover:border-red-700 hover:text-white transition-all cursor-pointer shadow-sm animate-pulse hover:animate-none"
                                 >
                                   <MapPin className="w-3 h-3 fill-current" /> GPS ON
+                                </button>
+                              )}
+                              {isOrganizer && (
+                                <button
+                                  onClick={async () => {
+                                    if (window.confirm("Voulez-vous vous déconnecter ?")) {
+                                      await signOut();
+                                      navigate('/login');
+                                    }
+                                  }}
+                                  className="flex items-center gap-1.5 px-3 py-1.5 bg-red-50 hover:bg-red-100 dark:bg-red-950/20 dark:hover:bg-red-950/40 text-red-600 dark:text-red-400 font-bold rounded-xl text-xs transition-colors shadow-xs outline-none cursor-pointer"
+                                  title="Se déconnecter"
+                                >
+                                  <LogOut className="w-4 h-4" />
+                                  <span className="hidden sm:inline">Déconnexion</span>
                                 </button>
                               )}
                               {/* Sync Indicator dans la navbar classique */}

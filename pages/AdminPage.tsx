@@ -79,6 +79,18 @@ export const AdminPage: React.FC = () => {
   const [editingMember, setEditingMember] = useState<UserProfile | null>(null);
   const [tempDiploma, setTempDiploma] = useState<Partial<Diploma>>({});
 
+  // User Creation State
+  const [showCreateUserModal, setShowCreateUserModal] = useState(false);
+  const [createUserForm, setCreateUserForm] = useState({
+      email: '',
+      password: '',
+      firstName: '',
+      lastName: '',
+      role: 'secouriste' as UserRole
+  });
+  const [createUserError, setCreateUserError] = useState('');
+  const [isCreatingUser, setIsCreatingUser] = useState(false);
+
   // Forms
   const [missionForm, setMissionForm] = useState({ title: '', date: '', timeStart: '', timeEnd: '', location: '', type: 'DPS' as any, req1: 2, req2: 1, reqIde: 0, reqMed: 0 });
   const [newsForm, setNewsForm] = useState({ title: '', content: '', isUrgent: false });
@@ -253,6 +265,36 @@ export const AdminPage: React.FC = () => {
   };
 
   // --- OTHER HANDLERS ---
+
+  const handleAdminCreateUser = async (e: React.FormEvent) => {
+      e.preventDefault();
+      setCreateUserError('');
+      
+      const { email, password, firstName, lastName, role } = createUserForm;
+      
+      if (!email.trim() || !password.trim() || !firstName.trim() || !lastName.trim()) {
+          setCreateUserError("Tous les champs sont obligatoires.");
+          return;
+      }
+      
+      if (password.length < 6) {
+          setCreateUserError("Le mot de passe doit contenir au moins 6 caractères.");
+          return;
+      }
+      
+      setIsCreatingUser(true);
+      try {
+          await authService.adminCreateUser(email, password, firstName, lastName, role);
+          setShowCreateUserModal(false);
+          await loadData(true);
+          alert(`Compte créé avec succès pour ${firstName} ${lastName} (${email}) !`);
+      } catch (err: any) {
+          console.error("Error creating user:", err);
+          setCreateUserError(err.message || "Une erreur est survenue lors de la création du compte.");
+      } finally {
+          setIsCreatingUser(false);
+      }
+  };
 
   const handleSaveMember = async () => {
       if (!editingMember) return;
@@ -468,6 +510,20 @@ export const AdminPage: React.FC = () => {
             </AdminCard>
 
             <AdminCard title="Membres de l'Asso" icon={<Users className="w-5 h-5" />} color="bg-indigo-100 text-indigo-600">
+                <Button 
+                    fullWidth 
+                    size="sm" 
+                    onClick={() => {
+                        setCreateUserError('');
+                        setCreateUserForm({ email: '', password: '', firstName: '', lastName: '', role: 'secouriste' });
+                        setShowCreateUserModal(true);
+                    }}
+                    icon={<Plus className="w-4 h-4" />}
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white mb-2"
+                >
+                    Créer un compte membre
+                </Button>
+
                 <CollapsibleList title="Liste des membres" count={profiles.length} icon={<Users className="w-4 h-4"/>}>
                     {profiles.map(p => (
                         <div key={p.id} className="p-2 border-b last:border-0 text-xs flex justify-between items-center dark:text-slate-300 dark:border-slate-700">
@@ -736,6 +792,104 @@ export const AdminPage: React.FC = () => {
                 )}
             </div>
         </AdminCard>
+
+        {/* MODAL CRÉATION UTILISATEUR */}
+        {showCreateUserModal && (
+            <div className="fixed inset-0 z-[1000] bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in" style={{ zIndex: 1000 }}>
+                <div className="bg-white dark:bg-slate-800 w-full max-w-md rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
+                    <div className="p-4 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-900">
+                        <h3 className="font-bold text-lg dark:text-white flex items-center gap-2">
+                            <Plus className="w-5 h-5 text-indigo-600" /> Créer un Utilisateur
+                        </h3>
+                        <button onClick={() => setShowCreateUserModal(false)} className="p-1 bg-slate-200 dark:bg-slate-700 rounded-full text-slate-500 hover:text-slate-800"><X className="w-5 h-5" /></button>
+                    </div>
+                    
+                    <form onSubmit={handleAdminCreateUser} className="flex flex-col flex-1 overflow-hidden">
+                        <div className="p-6 overflow-y-auto space-y-4">
+                            {createUserError && (
+                                <div className="p-3 rounded-lg bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/50 text-xs text-red-600 dark:text-red-400 flex items-center gap-2">
+                                    <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+                                    <span>{createUserError}</span>
+                                </div>
+                            )}
+
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className={labelClass}>Prénom</label>
+                                    <input 
+                                        type="text" 
+                                        required
+                                        className={inputClass} 
+                                        placeholder="Jean"
+                                        value={createUserForm.firstName} 
+                                        onChange={e => setCreateUserForm({...createUserForm, firstName: e.target.value})} 
+                                    />
+                                </div>
+                                <div>
+                                    <label className={labelClass}>Nom</label>
+                                    <input 
+                                        type="text" 
+                                        required
+                                        className={inputClass} 
+                                        placeholder="Dupont"
+                                        value={createUserForm.lastName} 
+                                        onChange={e => setCreateUserForm({...createUserForm, lastName: e.target.value})} 
+                                    />
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className={labelClass}>Email</label>
+                                <input 
+                                    type="email" 
+                                    required
+                                    className={inputClass} 
+                                    placeholder="jean.dupont@test.com"
+                                    value={createUserForm.email} 
+                                    onChange={e => setCreateUserForm({...createUserForm, email: e.target.value})} 
+                                />
+                            </div>
+
+                            <div>
+                                <label className={labelClass}>Mot de passe (Min. 6 car.)</label>
+                                <input 
+                                    type="password" 
+                                    required
+                                    className={inputClass} 
+                                    placeholder="******"
+                                    value={createUserForm.password} 
+                                    onChange={e => setCreateUserForm({...createUserForm, password: e.target.value})} 
+                                />
+                            </div>
+
+                            <div>
+                                <label className={labelClass}>Rôle / Fonction</label>
+                                <select 
+                                    className="w-full p-2.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 dark:text-white text-sm"
+                                    value={createUserForm.role}
+                                    onChange={e => setCreateUserForm({...createUserForm, role: e.target.value as UserRole})}
+                                >
+                                    <option value="secouriste">Secouriste</option>
+                                    <option value="infirmier">Infirmier (IDE)</option>
+                                    <option value="medecin">Médecin</option>
+                                    <option value="logisticien">Logisticien</option>
+                                    <option value="snu">SNU (Stagiaire)</option>
+                                    <option value="stagiaire">Stagiaire (Interne)</option>
+                                    <option value="admin">Administrateur</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div className="p-4 border-t border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 flex gap-3 sticky bottom-0 z-20">
+                            <Button type="button" variant="outline" fullWidth onClick={() => setShowCreateUserModal(false)} className="dark:text-slate-200 dark:border-slate-600">Annuler</Button>
+                            <Button type="submit" fullWidth disabled={isCreatingUser} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold">
+                                {isCreatingUser ? "Création..." : "Créer le compte"}
+                            </Button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        )}
 
         {/* MODAL ÉDITION MEMBRE - FIX Z-INDEX & LAYOUT */}
         {editingMember && (

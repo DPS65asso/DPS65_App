@@ -20,7 +20,13 @@ export const EventSettingsModal: React.FC<Props> = ({ isOpen, event, onClose, on
     const [supervisorPhone, setSupervisorPhone] = useState(event.supervisorPhone || '');
     const [organizerCode, setOrganizerCode] = useState(event.organizer_code || '');
     const [tracks, setTracks] = useState<Track[]>(event.tracks || []);
-    const [mapPdfUrl, setMapPdfUrl] = useState(event.mapPdfUrl || '');
+    const [mapPdfs, setMapPdfs] = useState<{ id: string; name: string; url: string; }[]>(
+        event.mapPdfs && event.mapPdfs.length > 0 
+            ? event.mapPdfs 
+            : event.mapPdfUrl 
+                ? [{ id: 'primary-pdf', name: 'Plan de cartographie.pdf', url: event.mapPdfUrl }] 
+                : []
+    );
     const [isSaving, setIsSaving] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const pdfInputRef = useRef<HTMLInputElement>(null);
@@ -92,7 +98,8 @@ export const EventSettingsModal: React.FC<Props> = ({ isOpen, event, onClose, on
             supervisorPhone: sanitizeInput(supervisorPhone),
             organizer_code: sanitizeInput(organizerCode).toUpperCase(),
             tracks: tracks.length > 0 ? tracks : undefined,
-            mapPdfUrl: mapPdfUrl || undefined,
+            mapPdfUrl: mapPdfs.length > 0 ? mapPdfs[0].url : undefined,
+            mapPdfs: mapPdfs.length > 0 ? mapPdfs : undefined,
             trackData: tracks.length > 0 ? tracks[0].data : undefined
         };
         await storageService.saveEvent(updatedEvent);
@@ -199,48 +206,66 @@ export const EventSettingsModal: React.FC<Props> = ({ isOpen, event, onClose, on
                     </div>
 
                     <div>
-                        <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Plan de cartographie (PDF)</label>
-                        {mapPdfUrl ? (
-                            <div className="flex items-center justify-between bg-slate-50 dark:bg-slate-900 p-3 rounded-lg border border-slate-200 dark:border-slate-700 mb-3">
-                                <div className="flex items-center gap-3">
-                                    <FileText className="w-5 h-5 text-red-500" />
-                                    <span className="text-sm font-bold text-slate-700 dark:text-slate-200">Document PDF enregistré</span>
-                                </div>
-                                <button onClick={() => setMapPdfUrl('')} className="text-slate-400 hover:text-red-500">
-                                    <Trash2 className="w-4 h-4" />
-                                </button>
+                        <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Plans de cartographie (PDF)</label>
+                        
+                        {mapPdfs.length > 0 && (
+                            <div className="space-y-2 mb-3">
+                                {mapPdfs.map(pdf => (
+                                    <div key={pdf.id} className="flex items-center justify-between bg-slate-50 dark:bg-slate-900 p-3 rounded-lg border border-slate-200 dark:border-slate-700 shadow-xs">
+                                        <div className="flex items-center gap-3 min-w-0 flex-1">
+                                            <FileText className="w-5 h-5 text-red-500 flex-shrink-0" />
+                                            <span className="text-sm font-bold text-slate-700 dark:text-slate-200 truncate pr-2">{pdf.name}</span>
+                                        </div>
+                                        <button 
+                                            type="button" 
+                                            onClick={() => setMapPdfs(prev => prev.filter(p => p.id !== pdf.id))} 
+                                            className="text-slate-400 hover:text-red-500 p-1.5 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-lg transition-colors"
+                                        >
+                                            <Trash2 className="w-4 h-4" />
+                                        </button>
+                                    </div>
+                                ))}
                             </div>
-                        ) : (
-                            <>
-                                <input 
-                                    type="file" 
-                                    accept=".pdf" 
-                                    ref={pdfInputRef} 
-                                    className="hidden" 
-                                    onChange={(e) => {
-                                        const file = e.target.files?.[0];
-                                        if (!file) return;
-                                        if (file.size > 5 * 1024 * 1024) {
-                                            alert("Le fichier est trop volumineux (max 5 Mo)");
-                                            return;
-                                        }
-                                        const reader = new FileReader();
-                                        reader.onload = (event) => {
-                                            setMapPdfUrl(event.target?.result as string);
-                                        };
-                                        reader.readAsDataURL(file);
-                                    }} 
-                                />
-                                <button 
-                                    type="button"
-                                    onClick={() => pdfInputRef.current?.click()}
-                                    className="w-full py-3 border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-lg text-slate-500 hover:text-red-500 hover:border-red-400 hover:bg-red-50 dark:hover:bg-red-900/10 transition-all flex items-center justify-center gap-2"
-                                >
-                                    <FileUp className="w-5 h-5" />
-                                    <span className="text-xs font-bold uppercase">Ajouter Plan PDF</span>
-                                </button>
-                            </>
                         )}
+
+                        <input 
+                            type="file" 
+                            accept=".pdf" 
+                            multiple
+                            ref={pdfInputRef} 
+                            className="hidden" 
+                            onChange={(e) => {
+                                const files = e.target.files;
+                                if (!files || files.length === 0) return;
+                                Array.from(files).forEach(file => {
+                                    if (file.size > 8 * 1024 * 1024) {
+                                        alert(`Le fichier ${file.name} est trop volumineux (max 8 Mo)`);
+                                        return;
+                                    }
+                                    const reader = new FileReader();
+                                    reader.onload = (ev) => {
+                                        setMapPdfs(prev => [
+                                            ...prev,
+                                            {
+                                                id: generateUUID(),
+                                                name: file.name,
+                                                url: ev.target?.result as string
+                                            }
+                                        ]);
+                                    };
+                                    reader.readAsDataURL(file);
+                                });
+                                if (pdfInputRef.current) pdfInputRef.current.value = '';
+                            }} 
+                        />
+                        <button 
+                            type="button"
+                            onClick={() => pdfInputRef.current?.click()}
+                            className="w-full py-3 border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-lg text-slate-500 hover:text-blue-500 hover:border-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/10 transition-all flex items-center justify-center gap-2"
+                        >
+                            <FileUp className="w-5 h-5" />
+                            <span className="text-xs font-bold uppercase">Ajouter des Plans PDF</span>
+                        </button>
                     </div>
                 </div>
 

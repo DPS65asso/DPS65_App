@@ -93,6 +93,23 @@ export const TacticalDashboardPage: React.FC = () => {
 
     const selectedEvent = useMemo(() => events.find(e => e.id === selectedEventId), [events, selectedEventId]);
 
+    const allPdfs = useMemo(() => {
+        return selectedEvent?.mapPdfs && selectedEvent.mapPdfs.length > 0
+            ? selectedEvent.mapPdfs
+            : selectedEvent?.mapPdfUrl
+                ? [{ id: 'primary', name: 'Plan principal.pdf', url: selectedEvent.mapPdfUrl }]
+                : [];
+    }, [selectedEvent]);
+
+    const [activePdfIndex, setActivePdfIndex] = useState(0);
+
+    // Reset active index when selected event changes
+    useEffect(() => {
+        setActivePdfIndex(0);
+    }, [selectedEventId]);
+
+    const activeMapPdfUrl = useMemo(() => allPdfs[activePdfIndex]?.url, [allPdfs, activePdfIndex]);
+
     const filteredVictims = useMemo(() => {
         return victims
             .filter(v => v.fullName.toLowerCase().includes(searchQuery.toLowerCase()) || (v.bibNumber && v.bibNumber.includes(searchQuery)))
@@ -114,9 +131,9 @@ export const TacticalDashboardPage: React.FC = () => {
                         <Button onClick={() => setShowMap(!showMap)} className={`flex-1 min-w-[120px] whitespace-nowrap ${showMap ? 'bg-slate-700' : 'bg-blue-600 hover:bg-blue-500'}`} icon={showMap ? <X className="w-5 h-5" /> : <MapIcon className="w-5 h-5" />} disabled={!selectedEventId}>
                             {showMap ? "Masquer Carte" : "Afficher Carte"}
                         </Button>
-                        {selectedEvent?.mapPdfUrl && (
+                        {allPdfs.length > 0 && (
                             <Button onClick={() => setShowPdf(!showPdf)} className={`flex-1 min-w-[120px] whitespace-nowrap ${showPdf ? 'bg-slate-700' : 'bg-red-600 hover:bg-red-500'}`} icon={showPdf ? <X className="w-5 h-5" /> : <FileText className="w-5 h-5" />}>
-                                {showPdf ? "Masquer Plan" : "Plan PDF"}
+                                {showPdf ? "Masquer Plan" : `Plan PDF (${allPdfs.length})`}
                             </Button>
                         )}
                         <Button onClick={handleOpenMapWindow} className="hidden md:flex bg-slate-800 hover:bg-slate-700 border border-slate-600 flex-1 min-w-[80px] whitespace-nowrap" icon={<Monitor className="w-5 h-5" />} disabled={!selectedEventId}>TV</Button>
@@ -147,14 +164,34 @@ export const TacticalDashboardPage: React.FC = () => {
                 </div>
             )}
 
-            {showPdf && selectedEvent?.mapPdfUrl && (
+            {showPdf && activeMapPdfUrl && (
                 <div className="mb-6 animate-in fade-in slide-in-from-top-4 duration-300">
-                    <div className="bg-slate-900 rounded-xl overflow-hidden border-2 border-red-500 shadow-2xl relative h-[800px]">
-                        <iframe 
-                            src={selectedEvent.mapPdfUrl} 
-                            className="w-full h-full border-none"
-                            title="Plan de cartographie détaillé"
-                        />
+                    <div className="bg-slate-900 rounded-xl overflow-hidden border-2 border-red-500 shadow-2xl relative h-[800px] flex flex-col">
+                        {allPdfs.length > 1 && (
+                            <div className="bg-slate-800 p-2 border-b border-red-500/30 flex gap-2 overflow-x-auto scrollbar-thin">
+                                {allPdfs.map((pdf, idx) => (
+                                    <button
+                                        key={pdf.id || idx}
+                                        onClick={() => setActivePdfIndex(idx)}
+                                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 ${
+                                            activePdfIndex === idx
+                                                ? 'bg-red-600 text-white shadow-md'
+                                                : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                                        }`}
+                                    >
+                                        <FileText className="w-3.5 h-3.5" />
+                                        {pdf.name || `Plan ${idx + 1}`}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                        <div className="flex-1">
+                            <iframe 
+                                src={activeMapPdfUrl} 
+                                className="w-full h-full border-none"
+                                title="Plan de cartographie détaillé"
+                            />
+                        </div>
                     </div>
                 </div>
             )}

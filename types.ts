@@ -23,6 +23,7 @@ export interface Event {
   tracks?: Track[]; // NOUVEAU: Plusieurs tracés GPX
   organizer_code?: string; // Code d'accès pour l'organisateur
   mapPdfUrl?: string; // URL ou DataURL du PDF de cartographie détaillé
+  mapPdfs?: { id: string; name: string; url: string; }[]; // NOUVEAU: Plusieurs fichiers PDF de cartographie
 }
 
 export interface TeamLocation {

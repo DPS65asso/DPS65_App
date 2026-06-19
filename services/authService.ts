@@ -3,7 +3,7 @@ import { UserProfile, UserRole, AppConfig } from '../types';
 import { initDB } from './db';
 import { generateUUID } from '../utils/security';
 import { syncService } from './syncService';
-import { supabase, isLive } from './supabaseClient';
+import { supabase, isLive, signUpWithoutChangingSession } from './supabaseClient';
 import { adminService } from './features/adminService';
 
 const SESSION_KEY = 'dps65_active_user_id';
@@ -79,6 +79,41 @@ export const authService = {
           await tx.done;
           if (isLive) syncService.processQueue();
       }
+  },
+
+  adminCreateUser: async (email: string, password: string, firstName: string, lastName: string, role: UserRole) => {
+      const user = await signUpWithoutChangingSession(email, password, firstName, lastName, role);
+      
+      const newProfile: UserProfile = {
+          id: user.id,
+          email: email.trim(),
+          firstName: firstName.trim(),
+          lastName: lastName.trim(),
+          role: role,
+          diplomas: [],
+          points: 0
+      };
+      
+      const db = await initDB();
+      const tx = db.transaction(['profiles', 'sync_queue'], 'readwrite');
+      await tx.objectStore('profiles').put(newProfile);
+      
+      if (isLive) {
+          await tx.objectStore('sync_queue').put({
+              id: generateUUID(),
+              table: 'profiles',
+              action: 'UPSERT',
+              data: newProfile,
+              timestamp: Date.now(),
+              status: 'PENDING',
+              retries: 0
+          });
+      }
+      
+      await tx.done;
+      if (isLive) syncService.processQueue();
+      
+      return newProfile;
   },
 
   register: async (email: string, password: string, firstName: string, lastName: string, requestedRole: UserRole, accessCode: string) => {

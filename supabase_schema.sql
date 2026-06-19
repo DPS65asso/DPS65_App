@@ -53,7 +53,8 @@ CREATE TABLE IF NOT EXISTS public.events (
     "trackData" JSONB DEFAULT '[]'::jsonb,
     tracks JSONB DEFAULT '[]'::jsonb,
     organizer_code TEXT,
-    "mapPdfUrl" TEXT
+    "mapPdfUrl" TEXT,
+    "mapPdfs" JSONB DEFAULT '[]'::jsonb
 );
 
 -- TABLE: victims

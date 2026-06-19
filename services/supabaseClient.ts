@@ -20,8 +20,8 @@ const getEnvVar = (key: string) => {
     return '';
 };
 
-const supabaseUrl = getEnvVar('VITE_SUPABASE_URL');
-const supabaseAnonKey = getEnvVar('VITE_SUPABASE_ANON_KEY');
+export const supabaseUrl = getEnvVar('VITE_SUPABASE_URL');
+export const supabaseAnonKey = getEnvVar('VITE_SUPABASE_ANON_KEY');
 
 let client: SupabaseClient;
 export let isLive = false; // Indicateur public : est-ce qu'on est connecté au vrai cloud ?
@@ -46,6 +46,39 @@ if (supabaseUrl && supabaseAnonKey && supabaseUrl !== 'undefined' && supabaseUrl
         isLive = false;
     }
 } 
+
+// Fonction pour inscrire un utilisateur sans modifier la session active (pour l'admin)
+export const signUpWithoutChangingSession = async (
+    email: string,
+    password: string,
+    firstName: string,
+    lastName: string,
+    role: string
+) => {
+    if (!isLive || !supabaseUrl || !supabaseAnonKey) {
+        throw new Error("L'inscription nécessite une connexion internet active et une configuration Supabase.");
+    }
+    const tempClient = createClient(supabaseUrl, supabaseAnonKey, {
+        auth: {
+            persistSession: false,
+            autoRefreshToken: false,
+        }
+    });
+    const { data, error } = await tempClient.auth.signUp({
+        email: email.trim(),
+        password: password,
+        options: {
+            data: {
+                firstName: firstName.trim(),
+                lastName: lastName.trim(),
+                role: role
+            }
+        }
+    });
+    if (error) throw error;
+    if (!data.user) throw new Error("Erreur de création de l'utilisateur d'authentification.");
+    return data.user;
+};
 
 // Mock (Mode Hors Ligne forcé ou Fallback si erreur init)
 if (!isLive || !client!) {
