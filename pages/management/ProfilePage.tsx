@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Layout } from '../../components/Layout';
 import { useAuth } from '../../context/AuthContext';
 import { authService } from '../../services/authService';
@@ -86,12 +87,19 @@ const CARD_BG_IMAGE = '/member_card_bg.png';
 export const ProfilePage: React.FC = () => {
     const { profile, refreshProfile, signOut } = useAuth();
     const { themeMode, setThemeMode } = useTheme();
+    const location = useLocation();
     
     // UI States
     const [isEditingProfile, setIsEditingProfile] = useState(false);
     const [showDiplomaModal, setShowDiplomaModal] = useState(false);
     const [showQrModal, setShowQrModal] = useState(false);
     const [showSettings, setShowSettings] = useState(false);
+
+    useEffect(() => {
+        if (location.state?.openSettings) {
+            setShowSettings(true);
+        }
+    }, [location]);
     
     // MAP STATES
     const [showMapModal, setShowMapModal] = useState(false);
