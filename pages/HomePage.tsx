@@ -439,53 +439,33 @@ export const HomePage: React.FC = () => {
             )}
 
             {/* PORTAIL ASSO & SCANNER (COMPACT BENTO) */}
-            <div className="flex flex-col gap-3 w-full">
-                <div className="grid grid-cols-2 gap-3 w-full">
-                    <button 
-                        onClick={() => navigate('/management')}
-                        className="bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 rounded-xl flex items-center gap-3 p-3 shadow-xs hover:border-blue-500/40 hover:shadow-md transition-all active:scale-95 group text-left relative"
-                    >
-                        <NewContentBadge show={hasPortalBadges} className="absolute top-2.5 right-2.5 border border-white dark:border-slate-800 shadow-xs z-10" />
-                        <div className="p-2.5 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg group-hover:scale-105 transition-transform shrink-0">
-                            <Users className="w-5 h-5" />
-                        </div>
-                        <div className="flex flex-col min-w-0">
-                            <span className="font-extrabold text-sm text-slate-805 dark:text-white uppercase tracking-wider truncate">ASSO</span>
-                            <span className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 font-bold truncate mt-0.5">Membres</span>
-                        </div>
-                    </button>
+            <div className="grid grid-cols-2 gap-3 w-full">
+                <button 
+                    onClick={() => navigate('/management')}
+                    className="bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 rounded-xl flex items-center gap-3 p-3 shadow-xs hover:border-blue-500/40 hover:shadow-md transition-all active:scale-95 group text-left relative"
+                >
+                    <NewContentBadge show={hasPortalBadges} className="absolute top-2.5 right-2.5 border border-white dark:border-slate-800 shadow-xs z-10" />
+                    <div className="p-2.5 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg group-hover:scale-105 transition-transform shrink-0">
+                        <Users className="w-5 h-5" />
+                    </div>
+                    <div className="flex flex-col min-w-0">
+                        <span className="font-extrabold text-sm text-slate-805 dark:text-white uppercase tracking-wider truncate">ASSO</span>
+                        <span className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 font-bold truncate mt-0.5">Membres</span>
+                    </div>
+                </button>
 
-                    <button 
-                        onClick={() => navigate('/scan')}
-                        className="bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 rounded-xl flex items-center gap-3 p-3 shadow-xs hover:border-indigo-500/40 hover:shadow-md transition-all active:scale-95 group text-left"
-                    >
-                        <div className="p-2.5 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-lg group-hover:scale-105 transition-transform shrink-0">
-                            <QrCode className="w-5 h-5" />
-                        </div>
-                        <div className="flex flex-col min-w-0">
-                            <span className="font-extrabold text-sm text-slate-805 dark:text-white uppercase tracking-wider truncate">SCAN</span>
-                            <span className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 font-bold truncate mt-0.5">QR Code</span>
-                        </div>
-                    </button>
-                </div>
-
-                {!isAdmin && (
-                    <button 
-                        onClick={() => navigate('/management/profile', { state: { openSettings: true } })}
-                        className="w-full bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 p-3 rounded-xl shadow-xs flex items-center justify-between group active:scale-95 transition-all text-left"
-                    >
-                        <div className="flex items-center gap-3 min-w-0">
-                            <div className="p-2.5 bg-slate-100 dark:bg-slate-700/50 text-slate-600 dark:text-slate-300 rounded-lg group-hover:scale-105 transition-transform shrink-0">
-                                <Settings className="w-5 h-5" />
-                            </div>
-                            <div className="flex flex-col min-w-0">
-                                <span className="font-extrabold text-sm text-slate-805 dark:text-white uppercase tracking-wider truncate">Réglages & Sécurité</span>
-                                <span className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 font-bold truncate mt-0.5">Préférences & Notifications</span>
-                            </div>
-                        </div>
-                        <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-blue-500 transition-colors" />
-                    </button>
-                )}
+                <button 
+                    onClick={() => navigate('/scan')}
+                    className="bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 rounded-xl flex items-center gap-3 p-3 shadow-xs hover:border-indigo-500/40 hover:shadow-md transition-all active:scale-95 group text-left"
+                >
+                    <div className="p-2.5 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-lg group-hover:scale-105 transition-transform shrink-0">
+                        <QrCode className="w-5 h-5" />
+                    </div>
+                    <div className="flex flex-col min-w-0">
+                        <span className="font-extrabold text-sm text-slate-805 dark:text-white uppercase tracking-wider truncate">SCAN</span>
+                        <span className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 font-bold truncate mt-0.5">QR Code</span>
+                    </div>
+                </button>
             </div>
         </div>
 
