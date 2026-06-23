@@ -188,6 +188,7 @@ export interface AppConfig {
   signupCode?: string; // Code d'accès inscription
   medications?: string[];
   solutes?: string[];
+  forcedUpdateAt?: string;
 }
 
 export interface Mission {

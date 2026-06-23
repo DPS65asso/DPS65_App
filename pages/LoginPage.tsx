@@ -9,7 +9,7 @@ import { authService } from '../services/authService';
 
 export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
-  const { checkAuth } = useAuth();
+  const { user, checkAuth } = useAuth();
   
   const [loginType, setLoginType] = useState<'MEMBER' | 'ORGANIZER'>('MEMBER');
   const [email, setEmail] = useState('');
@@ -17,6 +17,12 @@ export const LoginPage: React.FC = () => {
   const [organizerCode, setOrganizerCode] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  React.useEffect(() => {
+    if (user) {
+      navigate('/', { replace: true });
+    }
+  }, [user, navigate]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();

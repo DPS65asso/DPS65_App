@@ -706,7 +706,7 @@ export const EventMap3D: React.FC<Props> = ({
   }, [mapLoaded, hasInitialCentered, latestLocations, customMarkers, eventTracks, recenter]);
 
   return (
-    <div className={`${isFullscreen ? 'h-full' : 'h-[60vh]'} w-full rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 shadow-sm relative z-0`}>
+    <div className="w-full h-full relative z-0">
       <div ref={mapContainer} className="w-full h-full" />
       
       {/* BOUTONS MODE ÉDITION & BLITZORTUNG - Positionnés à gauche (sous le zoom) comme en 2D */}
@@ -767,7 +767,7 @@ export const EventMap3D: React.FC<Props> = ({
       )}
 
       {/* RECENTER BUTTON - TOP RIGHT */}
-      <div className="absolute top-20 right-4 z-[1000]">
+      <div className="absolute top-16 sm:top-20 right-2 sm:right-4 z-[1000]">
           <button 
               onClick={recenter}
               className="bg-white dark:bg-slate-800 p-3 rounded-full shadow-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-white hover:scale-110 transition-transform flex items-center justify-center"
@@ -778,7 +778,7 @@ export const EventMap3D: React.FC<Props> = ({
       </div>
 
       {/* LAYERS CONTROL - TOP RIGHT (UNDER RECENTER) */}
-      <div className="absolute top-36 right-4 z-[1000] flex flex-col items-end gap-2">
+      <div className="absolute top-32 sm:top-36 right-2 sm:right-4 z-[1000] flex flex-col items-end gap-2">
           <button 
               onClick={() => setShowLayersControl(!showLayersControl)}
               className={`p-3 rounded-full shadow-xl border transition-all ${showLayersControl ? 'bg-blue-600 border-blue-500 text-white' : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-white'}`}
@@ -787,7 +787,15 @@ export const EventMap3D: React.FC<Props> = ({
           </button>
 
           {showLayersControl && (
-              <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 p-4 w-64 animate-in slide-in-from-right-4">
+              <div 
+                  onClick={(e) => e.stopPropagation()}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onTouchStart={(e) => e.stopPropagation()}
+                  onTouchMove={(e) => e.stopPropagation()}
+                  onTouchEnd={(e) => e.stopPropagation()}
+                  onWheel={(e) => e.stopPropagation()}
+                  className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 p-4 w-64 max-w-[calc(100vw-32px)] max-h-[250px] sm:max-h-[450px] overflow-y-auto scrollbar-thin animate-in slide-in-from-right-4"
+              >
                   <h4 className="text-xs font-black uppercase tracking-widest text-slate-400 mb-3">Fonds de carte</h4>
                   <div className="grid grid-cols-1 gap-1 mb-4">
                       <button onClick={() => setCurrentStyle('standard')} className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-bold transition-all ${currentStyle === 'standard' ? 'bg-blue-600 text-white' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'}`}><Zap className="w-4 h-4"/> Plan Standard</button>

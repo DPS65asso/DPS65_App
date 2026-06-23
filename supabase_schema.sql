@@ -256,7 +256,8 @@ CREATE TABLE IF NOT EXISTS public.config (
     "yaplaLink" TEXT DEFAULT '',
     "signupCode" TEXT DEFAULT 'DPS65-2025',
     medications TEXT[] DEFAULT '{}'::text[],
-    solutes TEXT[] DEFAULT '{}'::text[]
+    solutes TEXT[] DEFAULT '{}'::text[],
+    "forcedUpdateAt" TEXT DEFAULT ''
 );
 
 -- TABLE: audit (Optionnelle au cas où on voudrait sauvegarder les logs d'audit sur le cloud)

@@ -41,7 +41,8 @@ export const adminService = {
               yaplaLink: config.yaplaLink || '',
               signupCode: config.signupCode || '',
               medications: Array.isArray(config.medications) ? config.medications : [],
-              solutes: Array.isArray(config.solutes) ? config.solutes : []
+              solutes: Array.isArray(config.solutes) ? config.solutes : [],
+              forcedUpdateAt: config.forcedUpdateAt || ''
           };
 
           // Sync Cloud (Important pour le Kill Switch)

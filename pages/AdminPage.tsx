@@ -217,6 +217,16 @@ export const AdminPage: React.FC = () => {
       await adminService.saveConfig(updatedConfig);
   };
 
+  const handleTriggerForcedUpdate = async () => {
+      if (!appConfig) return;
+      if (!confirm("Êtes-vous sûr de vouloir forcer une mise à jour globale pour tous les utilisateurs ?\n\nCela les déconnectera immédiatement et chargera la dernière version disponible de l'application.")) return;
+      
+      const updatedConfig: AppConfig = { ...appConfig, forcedUpdateAt: Date.now().toString() };
+      setAppConfig(updatedConfig);
+      await adminService.saveConfig(updatedConfig);
+      alert("Demande de mise à jour forcée envoyée à tous les utilisateurs !");
+  };
+
   // --- ACTIONS GLOBALES ---
   const handleRepairProfiles = async () => {
       if (!confirm("Cette action va re-synchroniser tous les profils locaux vers Supabase. Utile si certains membres manquent sur le serveur. Continuer ?")) return;
@@ -786,6 +796,31 @@ export const AdminPage: React.FC = () => {
                                         </div>
                                     ))}
                                 </CollapsibleList>
+                            </div>
+                        </div>
+
+                        {/* SECTION ADMINISTRATION DE VERSION */}
+                        <div className="pt-4 border-t border-slate-200 dark:border-slate-700">
+                            <h3 className="text-xs font-black text-red-500 uppercase tracking-widest mb-2 flex items-center gap-2">
+                                <RefreshCw className="w-4 h-4 animate-spin-slow text-red-500" /> Administration de Version
+                            </h3>
+                            <div className="bg-red-50 dark:bg-red-950/20 p-4 rounded-xl border border-red-200 dark:border-red-900/50 space-y-3">
+                                <p className="text-xs text-red-700 dark:text-red-300">
+                                    En cas de déploiement d'une nouvelle version majeure ou pour corriger un problème de synchronisation global, vous pouvez forcer tous les utilisateurs connectés à actualiser leur application.
+                                </p>
+                                {appConfig?.forcedUpdateAt && (
+                                    <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400">
+                                        Dernière mise à jour forcée demandée : {new Date(parseInt(appConfig.forcedUpdateAt)).toLocaleString()}
+                                    </p>
+                                )}
+                                <Button 
+                                    variant="danger" 
+                                    size="sm" 
+                                    onClick={handleTriggerForcedUpdate}
+                                    icon={<RefreshCw className="w-4 h-4" />}
+                                >
+                                    Forcer la mise à jour pour tous les utilisateurs
+                                </Button>
                             </div>
                         </div>
                     </div>

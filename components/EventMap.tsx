@@ -223,7 +223,7 @@ const MapBounds = ({ locations, trackData, tracks }: { locations: TeamLocation[]
     }, [locations, trackData, tracks, map, hasCentered]);
 
     return (
-        <div className="absolute top-20 right-4 z-[1000]">
+        <div className="absolute top-16 sm:top-20 right-2 sm:right-4 z-[1000]">
              <button 
                 onClick={() => {
                     const points: L.LatLngExpression[] = [];
@@ -681,7 +681,7 @@ export const EventMap: React.FC<Props> = ({
   const defaultCenter: [number, number] = [46.603354, 1.888334]; 
 
   return (
-    <div className={`${isFullscreen ? 'h-full' : 'h-[60vh]'} w-full rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 shadow-sm relative z-0`}>
+    <div className="w-full h-full relative z-0">
         {/* BOUTONS FLOTTANTS (TÉLÉCHARGEMENT LOCAL, ÉDITION & BLITZORTUNG) - ALIGNÉS À GAUCHE */}
         <div className="absolute top-48 left-3 z-[1000] flex flex-col gap-2">
             <button 
@@ -718,7 +718,7 @@ export const EventMap: React.FC<Props> = ({
         </div>
 
         {/* LAYERS CONTROL - TOP RIGHT (UNDER RECENTER) */}
-        <div className="absolute top-36 right-4 z-[1000] flex flex-col items-end gap-2">
+        <div className="absolute top-32 sm:top-36 right-2 sm:right-4 z-[1000] flex flex-col items-end gap-2">
             <button 
                 onClick={() => setShowLayersControl(!showLayersControl)}
                 className={`p-3 rounded-full shadow-xl border transition-all ${showLayersControl ? 'bg-blue-600 border-blue-500 text-white' : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-white'}`}
@@ -728,7 +728,15 @@ export const EventMap: React.FC<Props> = ({
             </button>
 
             {showLayersControl && (
-                <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl p-4 w-64 animate-in slide-in-from-right-4">
+                <div 
+                    onClick={(e) => e.stopPropagation()}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onTouchStart={(e) => e.stopPropagation()}
+                    onTouchMove={(e) => e.stopPropagation()}
+                    onTouchEnd={(e) => e.stopPropagation()}
+                    onWheel={(e) => e.stopPropagation()}
+                    className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl p-4 w-64 max-w-[calc(100vw-32px)] max-h-[250px] sm:max-h-[450px] overflow-y-auto scrollbar-thin animate-in slide-in-from-right-4"
+                >
                     <div className="flex items-center justify-between mb-4 border-b border-slate-100 dark:border-slate-700 pb-2">
                         <h3 className="text-xs font-black uppercase tracking-widest text-slate-400">Calques & Fonds</h3>
                         <button onClick={() => setShowLayersControl(false)}><X className="w-4 h-4 text-slate-400" /></button>

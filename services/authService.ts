@@ -12,6 +12,39 @@ const ADMIN_EMAIL = 'dps65.asso@gmail.com';
 export const authService = {
   // Récupère la session active (locale ou distante)
   getSession: async () => {
+    // Auto-login inside AI Studio preview if no session exists to bypass the login screen
+    const isAiStudioPreview = typeof window !== 'undefined' && 
+      (window.location.hostname.includes('europe-west2.run.app') || 
+       window.location.hostname.includes('aistudio.google.com') ||
+       window.location.search.includes('preview=true'));
+
+    if (isAiStudioPreview) {
+        const storedId = localStorage.getItem(SESSION_KEY);
+        if (!storedId) {
+            try {
+                const db = await initDB();
+                const previewAdminId = 'preview-admin-uid-dps65';
+                let profile = await db.get('profiles', previewAdminId);
+                if (!profile) {
+                    profile = {
+                        id: previewAdminId,
+                        email: 'dps65.asso@gmail.com',
+                        firstName: 'Admin',
+                        lastName: 'AI Studio',
+                        role: 'admin',
+                        diplomas: [],
+                        points: 100
+                    };
+                    await db.put('profiles', profile);
+                }
+                localStorage.setItem(SESSION_KEY, previewAdminId);
+                return { user: { id: previewAdminId, role: 'admin' }, profile };
+            } catch (err) {
+                console.error("Failed to auto-login preview admin:", err);
+            }
+        }
+    }
+
     // 1. Priorité au stockage local pour un chargement instantané (très important pour la fenêtre TV)
     const storedId = localStorage.getItem(SESSION_KEY);
     
@@ -239,31 +272,124 @@ export const authService = {
 
   loginAsOrganizer: async (code: string) => {
       const db = await initDB();
-      const events = await db.getAll('events');
-      const event = events.find(e => e.organizer_code && e.organizer_code.trim().toUpperCase() === code.trim().toUpperCase());
+      let event: any = null;
+
+      // 1. Si en ligne, on cherche d'abord l'événement via RPC dans Supabase pour s'assurer d'avoir les infos à jour
+      if (isLive) {
+          try {
+              const { data, error } = await supabase.rpc('get_event_by_organizer_code', { code_param: code });
+              if (error) {
+                  console.warn("RPC get_event_by_organizer_code failed, trying local fallback check:", error);
+              } else if (data && data.length > 0) {
+                  event = data[0];
+              }
+          } catch (rpcErr) {
+              console.error("RPC call failed:", rpcErr);
+          }
+      }
+
+      // Si hors ligne ou échec RPC, fallback sur la base IndexedDB locale
+      if (!event) {
+          const events = await db.getAll('events');
+          event = events.find(e => e.organizer_code && e.organizer_code.trim().toUpperCase() === code.trim().toUpperCase());
+      }
 
       if (!event) {
           throw new Error("Code organisateur invalide ou aucun événement actif trouvé avec ce code.");
       }
 
-      const ORGANIZER_ID = `organizer-${event.id}`;
-      let profile = await db.get('profiles', ORGANIZER_ID);
+      const ORGANIZER_EMAIL = `organizer-${event.id}@dps65.fr`.toLowerCase();
+      // Le mot de passe doit faire au moins 6 caractères, on garantit cela avec un préfixe unique et le code
+      const ORGANIZER_PWD = `dps65-org-${code.trim().toUpperCase()}`;
+      
+      let finalProfile: any = null;
 
-      if (!profile) {
-          profile = {
-              id: ORGANIZER_ID,
-              email: `organizer@${event.id}.dps65.fr`,
-              firstName: 'Organisateur',
-              lastName: event.name,
-              role: 'organisateur',
-              diplomas: [],
-              points: 0
-          };
-          await db.put('profiles', profile);
+      // 2. Si en ligne, on authentifie l'organisateur dans Supabase Auth
+      if (isLive) {
+          try {
+              // On essaie d'abord de se connecter
+              const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+                  email: ORGANIZER_EMAIL,
+                  password: ORGANIZER_PWD
+              });
+
+              if (signInError) {
+                  // Si l'utilisateur n'existe pas encore (premier login pour cet événement), on le crée
+                  if (signInError.message.includes("Invalid login credentials") || signInError.status === 400) {
+                      console.log("Compte organisateur inexistant, création automatique en cours...");
+                      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+                          email: ORGANIZER_EMAIL,
+                          password: ORGANIZER_PWD,
+                          options: {
+                              data: {
+                                  firstName: 'Organisateur',
+                                  lastName: event.name,
+                                  role: 'organisateur'
+                              }
+                          }
+                      });
+
+                      if (signUpError) throw signUpError;
+                      if (signUpData.user) {
+                          const userId = signUpData.user.id;
+                          // On attend 1,5 seconde que le trigger Supabase insère le profil associé
+                          await new Promise(resolve => setTimeout(resolve, 1500));
+
+                          // On récupère le profil
+                          const { data: profileData } = await supabase
+                              .from('profiles')
+                              .select('*')
+                              .eq('id', userId)
+                              .single();
+
+                          if (profileData) {
+                              finalProfile = profileData;
+                              await db.put('profiles', finalProfile);
+                          }
+                      }
+                  } else {
+                      throw signInError;
+                  }
+              } else if (signInData.user) {
+                  const userId = signInData.user.id;
+                  const { data: profileData } = await supabase
+                      .from('profiles')
+                      .select('*')
+                      .eq('id', userId)
+                      .single();
+
+                  if (profileData) {
+                      finalProfile = profileData;
+                      await db.put('profiles', finalProfile);
+                  }
+              }
+          } catch (liveAuthErr) {
+              console.error("Échec authentification Supabase pour l'organisateur, utilisation du mode déconnecté:", liveAuthErr);
+          }
       }
 
-      localStorage.setItem(SESSION_KEY, ORGANIZER_ID);
-      return profile;
+      // 3. Fallback hors ligne ou si l'authentification en ligne a échoué
+      if (!finalProfile) {
+          const ORGANIZER_ID = `organizer-${event.id}`;
+          let profile = await db.get('profiles', ORGANIZER_ID);
+
+          if (!profile) {
+              profile = {
+                  id: ORGANIZER_ID,
+                  email: ORGANIZER_EMAIL,
+                  firstName: 'Organisateur',
+                  lastName: event.name,
+                  role: 'organisateur',
+                  diplomas: [],
+                  points: 0
+              };
+              await db.put('profiles', profile);
+          }
+          finalProfile = profile;
+      }
+
+      localStorage.setItem(SESSION_KEY, finalProfile.id);
+      return finalProfile;
   },
 
   logout: async () => {
