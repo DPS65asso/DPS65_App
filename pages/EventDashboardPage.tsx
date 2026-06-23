@@ -337,8 +337,24 @@ export const EventDashboardPage: React.FC = () => {
         </div>
 
         <div className="grid grid-cols-2 gap-2 mt-4 flex-shrink-0">
-             <Button onClick={handleAddVictimClick} icon={<UserPlus />} fullWidth disabled={!isEventToday} variant={isEventToday ? "primary" : "outline"}>{isEventToday ? "Victime" : "Clos"}</Button>
-             <Button onClick={() => setIsNoviModalOpen(true)} icon={<Siren className="w-4 h-4 text-white" />} fullWidth disabled={!isEventToday} className="bg-red-700 hover:bg-red-800 text-white border-none shadow-red-700/20 font-black tracking-wide">PLAN NOVI</Button>
+             <Button 
+                 onClick={handleAddVictimClick} 
+                 icon={<UserPlus />} 
+                 fullWidth 
+                 disabled={!(isEventToday || profile?.role === 'admin')} 
+                 variant={(isEventToday || profile?.role === 'admin') ? "primary" : "outline"}
+             >
+                 {isEventToday ? "Victime" : (profile?.role === 'admin' ? "Victime (Admin)" : "Clos")}
+             </Button>
+             <Button 
+                 onClick={() => setIsNoviModalOpen(true)} 
+                 icon={<Siren className="w-4 h-4 text-white" />} 
+                 fullWidth 
+                 disabled={!(isEventToday || profile?.role === 'admin')} 
+                 className={(isEventToday || profile?.role === 'admin') ? "bg-red-700 hover:bg-red-800 text-white border-none shadow-red-700/20 font-black tracking-wide" : "bg-slate-200 dark:bg-slate-800 text-slate-400 border border-slate-300 dark:border-slate-700 font-black tracking-wide cursor-not-allowed"}
+             >
+                 PLAN NOVI
+             </Button>
         </div>
         
         {/* LISTE VICTIMES (PLEINE PAGE) */}
