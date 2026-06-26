@@ -311,7 +311,7 @@ export const PlanningPage: React.FC = () => {
             </div>
             {editingMission && (
                 <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-                    <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 w-full max-w-md shadow-xl">
+                    <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 w-full max-w-md shadow-xl max-h-[90vh] overflow-y-auto">
                         <h2 className="text-xl font-bold mb-4 text-slate-800 dark:text-white">Modifier la mission</h2>
                         <div className="space-y-4">
                             <div>
@@ -325,6 +325,47 @@ export const PlanningPage: React.FC = () => {
                             <div>
                                 <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Lieu</label>
                                 <input type="text" className="w-full p-2 border rounded dark:bg-slate-900" value={editingMission.location} onChange={e => setEditingMission({...editingMission, location: e.target.value})} />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Type</label>
+                                    <select className="w-full p-2 border rounded dark:bg-slate-900 text-xs" value={editingMission.type} onChange={e => setEditingMission({...editingMission, type: e.target.value as any})}>
+                                        <option value="DPS">DPS</option>
+                                        <option value="FORMATION">Formation</option>
+                                        <option value="REUNION">Réunion</option>
+                                        <option value="AUTRE">Autre</option>
+                                    </select>
+                                </div>
+                                <div className="flex gap-2">
+                                    <div className="flex-1">
+                                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Début</label>
+                                        <input type="time" className="w-full p-2 border rounded dark:bg-slate-900 text-xs" value={editingMission.timeStart || ''} onChange={e => setEditingMission({...editingMission, timeStart: e.target.value})} />
+                                    </div>
+                                    <div className="flex-1">
+                                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Fin</label>
+                                        <input type="time" className="w-full p-2 border rounded dark:bg-slate-900 text-xs" value={editingMission.timeEnd || ''} onChange={e => setEditingMission({...editingMission, timeEnd: e.target.value})} />
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-4 gap-2">
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">PSE1</label>
+                                    <input type="number" className="w-full p-2 border rounded dark:bg-slate-900 text-xs" value={editingMission.requiredPse1 || 0} onChange={e => setEditingMission({...editingMission, requiredPse1: parseInt(e.target.value) || 0})} />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">PSE2</label>
+                                    <input type="number" className="w-full p-2 border rounded dark:bg-slate-900 text-xs" value={editingMission.requiredPse2 || 0} onChange={e => setEditingMission({...editingMission, requiredPse2: parseInt(e.target.value) || 0})} />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">IDE</label>
+                                    <input type="number" className="w-full p-2 border rounded dark:bg-slate-900 text-xs" value={editingMission.requiredIde || 0} onChange={e => setEditingMission({...editingMission, requiredIde: parseInt(e.target.value) || 0})} />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">MED</label>
+                                    <input type="number" className="w-full p-2 border rounded dark:bg-slate-900 text-xs" value={editingMission.requiredMed || 0} onChange={e => setEditingMission({...editingMission, requiredMed: parseInt(e.target.value) || 0})} />
+                                </div>
                             </div>
 
                             <div className="grid grid-cols-2 gap-4">

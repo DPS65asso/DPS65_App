@@ -6,7 +6,7 @@ import { useAuth } from '../../context/AuthContext';
 import { authService } from '../../services/authService';
 import { storageService } from '../../services/storageService';
 import { Button } from '../../components/Button';
-import { User, Phone, Save, LogOut, Trash2, Database, Award, Plus, Pencil, X, Loader2, TrendingUp, Calendar, Mail, Edit3, Settings, Bell, CreditCard, ExternalLink, Download, FileCheck, Map as MapIcon, CalendarCheck, CheckCircle2, AlertCircle, Shield, QrCode, ChevronRight, Moon, HeartPulse, Sun, Monitor, Eye, Navigation, Layers, Building2, Radio, Flame, Plane, Zap, Stethoscope } from 'lucide-react';
+import { User, Phone, Save, LogOut, Trash2, Database, Award, Plus, Pencil, X, Loader2, TrendingUp, Calendar, Mail, Edit3, Settings, Bell, CreditCard, ExternalLink, Download, FileCheck, Map as MapIcon, CalendarCheck, CheckCircle2, AlertCircle, Shield, QrCode, ChevronRight, Moon, HeartPulse, Sun, Monitor, Eye, Navigation, Layers, Building2, Radio, Flame, Plane, Zap, Stethoscope, Key, Lock } from 'lucide-react';
 import { generateUUID } from '../../utils/security';
 import { Diploma, UserProfile, Mission, AppConfig } from '../../types';
 import { deleteDB } from 'idb';
@@ -94,6 +94,12 @@ export const ProfilePage: React.FC = () => {
     const [showDiplomaModal, setShowDiplomaModal] = useState(false);
     const [showQrModal, setShowQrModal] = useState(false);
     const [showSettings, setShowSettings] = useState(false);
+    const [showPasswordModal, setShowPasswordModal] = useState(false);
+    const [newPassword, setNewPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
+    const [passwordError, setPasswordError] = useState('');
+    const [passwordSuccess, setPasswordSuccess] = useState('');
+    const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
 
     useEffect(() => {
         if (location.state?.openSettings) {
@@ -132,7 +138,7 @@ export const ProfilePage: React.FC = () => {
 
     // Verrouillage du scroll d'arrière-plan quand un modal est ouvert
     useEffect(() => {
-        const isAnyModalOpen = showSettings || showDiplomaModal || showQrModal || showMapModal || isEditingProfile;
+        const isAnyModalOpen = showSettings || showDiplomaModal || showQrModal || showMapModal || isEditingProfile || showPasswordModal;
         if (isAnyModalOpen) {
             document.body.style.overflow = 'hidden';
         } else {
@@ -141,7 +147,7 @@ export const ProfilePage: React.FC = () => {
         return () => {
             document.body.style.overflow = '';
         };
-    }, [showSettings, showDiplomaModal, showQrModal, showMapModal, isEditingProfile]);
+    }, [showSettings, showDiplomaModal, showQrModal, showMapModal, isEditingProfile, showPasswordModal]);
 
     useEffect(() => {
         loadMissions();
@@ -226,6 +232,37 @@ export const ProfilePage: React.FC = () => {
             await refreshProfile();
             setIsEditingProfile(false);
         } catch (e) { alert("Erreur de sauvegarde"); } finally { setIsSaving(false); }
+    };
+
+    const handleSavePassword = async () => {
+        setPasswordError('');
+        setPasswordSuccess('');
+        
+        if (newPassword.length < 6) {
+            setPasswordError('Le mot de passe doit faire au moins 6 caractères.');
+            return;
+        }
+        
+        if (newPassword !== confirmPassword) {
+            setPasswordError('Les mots de passe ne correspondent pas.');
+            return;
+        }
+        
+        setIsUpdatingPassword(true);
+        try {
+            await authService.changePassword(newPassword);
+            setPasswordSuccess('Mot de passe mis à jour avec succès !');
+            setNewPassword('');
+            setConfirmPassword('');
+            setTimeout(() => {
+                setShowPasswordModal(false);
+                setPasswordSuccess('');
+            }, 1500);
+        } catch (err: any) {
+            setPasswordError(err.message || 'Erreur lors de la mise à jour du mot de passe.');
+        } finally {
+            setIsUpdatingPassword(false);
+        }
     };
 
     const handleExportCalendar = () => {
@@ -581,6 +618,77 @@ export const ProfilePage: React.FC = () => {
                     </div>
                 )}
 
+                {/* Password Change Modal */}
+                {showPasswordModal && (
+                    <div className="fixed inset-0 z-[260] bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
+                        <div className="bg-white dark:bg-slate-800 w-full max-w-sm rounded-2xl p-6 shadow-2xl scale-100 animate-in zoom-in-95">
+                            <div className="flex justify-between items-center mb-6">
+                                <h3 className="font-bold dark:text-white flex items-center gap-2">
+                                    <Lock className="w-5 h-5 text-blue-500" /> Modifier le mot de passe
+                                </h3>
+                                <button onClick={() => { setShowPasswordModal(false); setPasswordError(''); setPasswordSuccess(''); setNewPassword(''); setConfirmPassword(''); }} className="p-1 bg-slate-100 dark:bg-slate-700 rounded-full text-slate-500 hover:text-slate-700 dark:hover:text-slate-300">
+                                    <X className="w-5 h-5" />
+                                </button>
+                            </div>
+                            
+                            {passwordError && (
+                                <div className="mb-4 p-3 rounded-xl bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-xs font-bold flex items-center gap-2">
+                                    <AlertCircle className="w-4 h-4 shrink-0" />
+                                    <span>{passwordError}</span>
+                                </div>
+                            )}
+
+                            {passwordSuccess && (
+                                <div className="mb-4 p-3 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 text-xs font-bold flex items-center gap-2">
+                                    <CheckCircle2 className="w-4 h-4 shrink-0" />
+                                    <span>{passwordSuccess}</span>
+                                </div>
+                            )}
+
+                            <div className="space-y-4 mb-6">
+                                <div>
+                                    <label className={labelClass}>Nouveau mot de passe</label>
+                                    <input 
+                                        type="password" 
+                                        className={inputClass} 
+                                        value={newPassword} 
+                                        onChange={e => setNewPassword(e.target.value)} 
+                                        placeholder="Min. 6 caractères"
+                                    />
+                                </div>
+                                <div>
+                                    <label className={labelClass}>Confirmer le mot de passe</label>
+                                    <input 
+                                        type="password" 
+                                        className={inputClass} 
+                                        value={confirmPassword} 
+                                        onChange={e => setConfirmPassword(e.target.value)} 
+                                        placeholder="Ressaisir le mot de passe"
+                                    />
+                                </div>
+                            </div>
+                            
+                            <div className="flex gap-2">
+                                <Button 
+                                    variant="outline" 
+                                    fullWidth 
+                                    onClick={() => { setShowPasswordModal(false); setPasswordError(''); setPasswordSuccess(''); setNewPassword(''); setConfirmPassword(''); }}
+                                >
+                                    Annuler
+                                </Button>
+                                <Button 
+                                    variant="primary" 
+                                    fullWidth 
+                                    onClick={handleSavePassword} 
+                                    disabled={isUpdatingPassword || !newPassword || !confirmPassword}
+                                >
+                                    {isUpdatingPassword ? <Loader2 className="animate-spin w-5 h-5"/> : "Confirmer"}
+                                </Button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 {/* 3. Settings Modal */}
                 {showSettings && (
                     <div className="fixed inset-0 z-[250] bg-slate-950 flex flex-col animate-in slide-in-from-bottom h-[100dvh] w-full overscroll-none">
@@ -621,6 +729,7 @@ export const ProfilePage: React.FC = () => {
                             </div>
                             <div className="space-y-2 pb-safe">
                                 <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Actions Compte</h3>
+                                <button onClick={() => setShowPasswordModal(true)} className="w-full p-4 bg-slate-900 rounded-xl border border-slate-800 text-white font-bold flex items-center gap-3 hover:bg-slate-800 active:scale-[0.98] transition-transform"><Key className="w-5 h-5 text-blue-400" /> Modifier mon mot de passe</button>
                                 <button onClick={signOut} className="w-full p-4 bg-slate-900 rounded-xl border border-slate-800 text-white font-bold flex items-center gap-3 hover:bg-slate-800 active:scale-[0.98] transition-transform"><LogOut className="w-5 h-5" /> Déconnexion</button>
                                 <button onClick={handleWipeLocalData} className="w-full p-4 bg-slate-900 rounded-xl border border-orange-900/50 text-orange-500 font-bold flex items-center gap-3 hover:bg-slate-800 active:scale-[0.98] transition-transform"><Database className="w-5 h-5" /> Réparer (Vider Cache)</button>
                                 <button onClick={handleDeleteAccount} className="w-full p-4 bg-red-900/20 rounded-xl border border-red-900/50 text-red-500 font-bold flex items-center gap-3 hover:bg-red-900/30 active:scale-[0.98] transition-transform"><Trash2 className="w-5 h-5" /> Supprimer mon compte</button>

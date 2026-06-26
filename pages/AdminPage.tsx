@@ -93,6 +93,7 @@ export const AdminPage: React.FC = () => {
 
   // Forms
   const [missionForm, setMissionForm] = useState({ title: '', date: '', timeStart: '', timeEnd: '', location: '', type: 'DPS' as any, req1: 2, req2: 1, reqIde: 0, reqMed: 0 });
+  const [editingMissionId, setEditingMissionId] = useState<string | null>(null);
   const [newsForm, setNewsForm] = useState({ title: '', content: '', isUrgent: false });
   const [docForm, setDocForm] = useState({ title: '', category: 'Procédure', url: '', adminOnly: false });
   const [courseForm, setCourseForm] = useState({ title: '', description: '', url: '', category: 'PSE1', type: 'PDF' });
@@ -342,32 +343,60 @@ export const AdminPage: React.FC = () => {
 
   const handleAddMission = async () => {
       if(!missionForm.title || !missionForm.date) return;
-      const missionId = generateUUID();
-      await storageService.saveMission({
-          id: missionId,
-          title: missionForm.title,
-          date: missionForm.date,
-          timeStart: missionForm.timeStart,
-          timeEnd: missionForm.timeEnd,
-          location: missionForm.location,
-          type: missionForm.type,
-          requiredPse1: missionForm.req1,
-          requiredPse2: missionForm.req2,
-          requiredIde: missionForm.reqIde,
-          requiredMed: missionForm.reqMed,
-          registeredUserIds: []
-      });
       
-      // On crée automatiquement un événement correspondant avec les mêmes données
-      await storageService.saveEvent({
-          id: generateUUID(),
-          name: missionForm.title,
-          date: missionForm.date,
-          location: missionForm.location || 'Non spécifié',
-          createdAt: Date.now()
-      });
+      let missionToSave: Mission;
+      
+      if (editingMissionId) {
+          const original = missions.find(m => m.id === editingMissionId);
+          missionToSave = {
+              id: editingMissionId,
+              title: missionForm.title,
+              date: missionForm.date,
+              timeStart: missionForm.timeStart,
+              timeEnd: missionForm.timeEnd,
+              location: missionForm.location,
+              type: missionForm.type,
+              requiredPse1: missionForm.req1,
+              requiredPse2: missionForm.req2,
+              requiredIde: missionForm.reqIde,
+              requiredMed: missionForm.reqMed,
+              registeredUserIds: original ? (original.registeredUserIds || []) : [],
+              absentUserIds: original ? (original.absentUserIds || []) : [],
+              reservistUserIds: original ? (original.reservistUserIds || []) : []
+          };
+      } else {
+          const missionId = generateUUID();
+          missionToSave = {
+              id: missionId,
+              title: missionForm.title,
+              date: missionForm.date,
+              timeStart: missionForm.timeStart,
+              timeEnd: missionForm.timeEnd,
+              location: missionForm.location,
+              type: missionForm.type,
+              requiredPse1: missionForm.req1,
+              requiredPse2: missionForm.req2,
+              requiredIde: missionForm.reqIde,
+              requiredMed: missionForm.reqMed,
+              registeredUserIds: [],
+              absentUserIds: [],
+              reservistUserIds: []
+          };
+          
+          // On crée automatiquement un événement correspondant avec les mêmes données
+          await storageService.saveEvent({
+              id: generateUUID(),
+              name: missionForm.title,
+              date: missionForm.date,
+              location: missionForm.location || 'Non spécifié',
+              createdAt: Date.now()
+          });
+      }
 
+      await storageService.saveMission(missionToSave);
+      
       setMissionForm({ title: '', date: '', timeStart: '', timeEnd: '', location: '', type: 'DPS', req1: 2, req2: 1, reqIde: 0, reqMed: 0 });
+      setEditingMissionId(null);
       loadData(true); // Silent reload
   };
 
@@ -588,13 +617,61 @@ export const AdminPage: React.FC = () => {
                             <div><label className={labelClass}>IDE</label><input type="number" className={inputClass} value={missionForm.reqIde} onChange={e => setMissionForm({...missionForm, reqIde: parseInt(e.target.value)||0})} /></div>
                             <div><label className={labelClass}>MED</label><input type="number" className={inputClass} value={missionForm.reqMed} onChange={e => setMissionForm({...missionForm, reqMed: parseInt(e.target.value)||0})} /></div>
                         </div>
-                        <Button fullWidth size="sm" onClick={handleAddMission} icon={<Plus />}>Publier la mission</Button>
+                        {editingMissionId ? (
+                            <div className="flex gap-2">
+                                <Button fullWidth size="sm" onClick={handleAddMission} icon={<Save />}>Enregistrer les modifications</Button>
+                                <Button 
+                                    variant="outline" 
+                                    size="sm" 
+                                    onClick={() => {
+                                        setEditingMissionId(null);
+                                        setMissionForm({ title: '', date: '', timeStart: '', timeEnd: '', location: '', type: 'DPS', req1: 2, req2: 1, reqIde: 0, reqMed: 0 });
+                                    }}
+                                >
+                                    Annuler
+                                </Button>
+                            </div>
+                        ) : (
+                            <Button fullWidth size="sm" onClick={handleAddMission} icon={<Plus />}>Publier la mission</Button>
+                        )}
                         
                         <CollapsibleList title="Missions existantes" count={missions.length} icon={<List className="w-4 h-4"/>}>
                             {missions.map(m => (
                                 <div key={m.id} className="flex justify-between items-center p-2 border-b last:border-0 border-slate-100 dark:border-slate-700 text-xs hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                                    <div className="truncate"><span className="font-bold dark:text-white">{m.title}</span> <span className="opacity-50">({m.date})</span></div>
-                                    <button onClick={() => handleDeleteMission(m.id)} className="text-red-500 p-1 hover:bg-red-50 dark:hover:bg-red-900/20 rounded"><Trash2 className="w-4 h-4"/></button>
+                                    <div className="truncate flex-1 pr-2">
+                                        <span className="font-bold dark:text-white">{m.title}</span> <span className="opacity-50">({m.date})</span>
+                                        {editingMissionId === m.id && <span className="ml-2 text-blue-500 font-bold">(En cours d'édition)</span>}
+                                    </div>
+                                    <div className="flex gap-1 shrink-0">
+                                        <button 
+                                            onClick={() => {
+                                                setEditingMissionId(m.id);
+                                                setMissionForm({
+                                                    title: m.title || '',
+                                                    date: m.date || '',
+                                                    timeStart: m.timeStart || '',
+                                                    timeEnd: m.timeEnd || '',
+                                                    location: m.location || '',
+                                                    type: (m.type || 'DPS') as any,
+                                                    req1: m.requiredPse1 || 0,
+                                                    req2: m.requiredPse2 || 0,
+                                                    reqIde: m.requiredIde || 0,
+                                                    reqMed: m.requiredMed || 0
+                                                });
+                                            }} 
+                                            className="text-blue-500 p-1 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded"
+                                            title="Modifier"
+                                        >
+                                            <Pencil className="w-4 h-4" />
+                                        </button>
+                                        <button 
+                                            onClick={() => handleDeleteMission(m.id)} 
+                                            className="text-red-500 p-1 hover:bg-red-50 dark:hover:bg-red-900/20 rounded"
+                                            title="Supprimer"
+                                        >
+                                            <Trash2 className="w-4 h-4"/>
+                                        </button>
+                                    </div>
                                 </div>
                             ))}
                         </CollapsibleList>

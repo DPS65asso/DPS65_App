@@ -426,5 +426,14 @@ export const authService = {
       const { error } = await supabase.auth.resetPasswordForEmail(email);
       if (error) throw error;
       return true;
+  },
+
+  changePassword: async (password: string) => {
+      if (!isLive) {
+          throw new Error("Le changement de mot de passe nécessite une connexion active.");
+      }
+      const { error } = await supabase.auth.updateUser({ password });
+      if (error) throw error;
+      return true;
   }
 };
