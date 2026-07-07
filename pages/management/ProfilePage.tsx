@@ -309,7 +309,28 @@ export const ProfilePage: React.FC = () => {
     };
 
     const handleWipeLocalData = async () => {
-        if (confirm("Effacer cache local ?")) { await deleteDB('dps65_db_local'); window.location.reload(); }
+        if (confirm("Effacer cache local ?")) {
+            try {
+                const { initDB } = await import('../../services/db');
+                const db = await initDB();
+                const storeNames = Array.from(db.objectStoreNames);
+                const tx = db.transaction(storeNames as any, 'readwrite');
+                for (const storeName of storeNames) {
+                    await tx.objectStore(storeName as any).clear();
+                }
+                await tx.done;
+                alert("Cache local vidé avec succès !");
+                window.location.reload();
+            } catch (err) {
+                console.error("Failed to clear IndexedDB stores, falling back to deleteDB", err);
+                try {
+                    await deleteDB('dps65_db_local');
+                    window.location.reload();
+                } catch (e) {
+                    alert("Erreur lors de la réinitialisation du cache.");
+                }
+            }
+        }
     };
 
     const handleDeleteAccount = async () => {

@@ -249,6 +249,9 @@ class SyncService {
                         );
 
                         const tx = db.transaction(dbStoreName as any, 'readwrite');
+                        let changed = false;
+
+                        // 1. Mise à jour / Ajout des données distantes
                         for (const remote of data) {
                             if (pendingDeletes.has(remote.id)) {
                                 console.log(`[Sync Pull] Ignoré car en cours de suppression locale: ${tableName}:${remote.id}`);
@@ -260,13 +263,68 @@ class SyncService {
                                 localData.eventId = localData.event_id;
                             }
 
-                            if (dbStoreName === 'config') {
-                                await tx.store.put(localData, 'main');
+                            if (dbStoreName !== 'config') {
+                                const localExisting = await tx.store.get(remote.id);
+                                if (!localExisting || JSON.stringify(localExisting) !== JSON.stringify(localData)) {
+                                    await tx.store.put(localData);
+                                    changed = true;
+                                }
                             } else {
-                                await tx.store.put(localData);
+                                const localExisting = await tx.store.get('main');
+                                if (!localExisting || JSON.stringify(localExisting) !== JSON.stringify(localData)) {
+                                    await tx.store.put(localData, 'main');
+                                    changed = true;
+                                }
                             }
                         }
+
+                        // 2. Nettoyage (Pruning) des données supprimées/archivées sur Supabase
+                        if (dbStoreName !== 'config') {
+                            const localItems = await tx.store.getAll();
+                            const remoteIds = new Set(data.map(r => r.id));
+                            const pendingUpserts = new Set(
+                                queue
+                                    .filter(item => item.table === tableName && item.action === 'UPSERT')
+                                    .map(item => item.data.id)
+                            );
+
+                            for (const localItem of localItems) {
+                                if (localItem && localItem.id) {
+                                    if (!remoteIds.has(localItem.id) && !pendingDeletes.has(localItem.id) && !pendingUpserts.has(localItem.id)) {
+                                        console.log(`[Sync Prune] Suppression de l'élément local obsolète: ${tableName}:${localItem.id}`);
+                                        await tx.store.delete(localItem.id);
+                                        changed = true;
+                                    }
+                                }
+                            }
+                        }
+
                         await tx.done;
+
+                        // 3. Notification de l'interface en cas de modification
+                        if (changed) {
+                            const bcMap: any = { 
+                                'events': 'dps65_events_channel', 
+                                'missions': 'dps65_events_channel', 
+                                'victims': 'dps65_victims_channel', 
+                                'logbook': 'dps65_comms_channel',
+                                'config': 'dps65_config_channel',
+                                'news': 'dps65_asso_channel',
+                                'documents': 'dps65_asso_channel',
+                                'custom_markers': 'dps65_gps_channel',
+                                'team_locations': 'dps65_gps_channel'
+                            };
+                            const channelName = bcMap[tableName];
+                            if (channelName) {
+                                try {
+                                    const channel = new BroadcastChannel(channelName);
+                                    channel.postMessage({ type: 'UPDATE_' + tableName.toUpperCase() });
+                                    channel.close();
+                                } catch (bcErr) {
+                                    console.error(`Error sending broadcast for ${tableName}:`, bcErr);
+                                }
+                            }
+                        }
                     }
                 } catch (e) {
                     console.error(`Sync: Error pulling ${tableName}`, e);
@@ -312,6 +370,9 @@ class SyncService {
                     );
 
                     const tx = db.transaction(dbStoreName as any, 'readwrite');
+                    let changed = false;
+
+                    // 1. Mettre à jour / Insérer les éléments distants de l'événement
                     for (const remote of data) {
                         if (pendingDeletes.has(remote.id)) {
                             console.log(`[Sync Pull Filtered] Ignoré car en cours de suppression locale: ${tableName}:${remote.id}`);
@@ -321,9 +382,62 @@ class SyncService {
                         if (localData.event_id && !localData.eventId) {
                             localData.eventId = localData.event_id;
                         }
-                        await tx.store.put(localData);
+
+                        const localExisting = await tx.store.get(remote.id);
+                        if (!localExisting || JSON.stringify(localExisting) !== JSON.stringify(localData)) {
+                            await tx.store.put(localData);
+                            changed = true;
+                        }
                     }
+
+                    // 2. Nettoyer les éléments locaux de cet événement qui n'existent plus sur Supabase
+                    const localItems = await tx.store.getAll();
+                    const remoteIds = new Set(data.map(r => r.id));
+                    const pendingUpserts = new Set(
+                        queue
+                            .filter(item => item.table === tableName && item.action === 'UPSERT')
+                            .map(item => item.data.id)
+                    );
+
+                    for (const localItem of localItems) {
+                        if (localItem && localItem.id) {
+                            const itemEventId = localItem.eventId || localItem.event_id;
+                            if (itemEventId === eventId) {
+                                if (!remoteIds.has(localItem.id) && !pendingDeletes.has(localItem.id) && !pendingUpserts.has(localItem.id)) {
+                                    console.log(`[Sync Prune Filtered] Suppression de l'élément local obsolète: ${tableName}:${localItem.id}`);
+                                    await tx.store.delete(localItem.id);
+                                    changed = true;
+                                }
+                            }
+                        }
+                    }
+
                     await tx.done;
+
+                    // 3. Notification de l'interface en cas de modification
+                    if (changed) {
+                        const bcMap: any = { 
+                            'events': 'dps65_events_channel', 
+                            'missions': 'dps65_events_channel', 
+                            'victims': 'dps65_victims_channel', 
+                            'logbook': 'dps65_comms_channel',
+                            'config': 'dps65_config_channel',
+                            'news': 'dps65_asso_channel',
+                            'documents': 'dps65_asso_channel',
+                            'custom_markers': 'dps65_gps_channel',
+                            'team_locations': 'dps65_gps_channel'
+                        };
+                        const channelName = bcMap[tableName];
+                        if (channelName) {
+                            try {
+                                const channel = new BroadcastChannel(channelName);
+                                channel.postMessage({ type: 'UPDATE_' + tableName.toUpperCase(), eventId });
+                                channel.close();
+                            } catch (bcErr) {
+                                console.error(`Error sending broadcast for ${tableName}:`, bcErr);
+                            }
+                        }
+                    }
                 }
             } catch (e) {
                 console.error(`Sync: Error pulling filtered ${tableName}`, e);
