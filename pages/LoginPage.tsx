@@ -32,16 +32,19 @@ export const LoginPage: React.FC = () => {
     try {
       if (loginType === 'MEMBER') {
         await authService.login(email, password);
+        await checkAuth(); 
+        
+        // Déclenchement d'une synchro complète après connexion
+        const { syncService } = await import('../services/syncService');
+        syncService.retrySync();
+        
+        navigate('/');
       } else {
         await authService.loginAsOrganizer(organizerCode);
+        await checkAuth(); 
+        
+        navigate('/organizer-dashboard');
       }
-      await checkAuth(); 
-      
-      // Déclenchement d'une synchro complète après connexion
-      const { syncService } = await import('../services/syncService');
-      syncService.retrySync();
-      
-      navigate('/');
     } catch (err: any) {
       setError(err.message || "Erreur de connexion");
     } finally {

@@ -51,6 +51,23 @@ export const authService = {
     if (storedId) {
         if (storedId.startsWith('temp-organizer-')) {
             const eventId = storedId.replace('temp-organizer-', '');
+            
+            // Reconnexion transparente à Supabase en tant qu'organisateur si en ligne
+            if (isLive) {
+                try {
+                    const { data: { session: currentSession } } = await supabase.auth.getSession();
+                    if (!currentSession?.user || currentSession.user.email !== 'organisateur@dps65.fr') {
+                        console.log("Reconnexion transparente du compte générique organisateur...");
+                        await supabase.auth.signInWithPassword({
+                            email: 'organisateur@dps65.fr',
+                            password: 'dps65-organisateur-secure'
+                        });
+                    }
+                } catch (liveAuthErr) {
+                    console.error("Échec reconnexion Supabase organisateur:", liveAuthErr);
+                }
+            }
+
             try {
                 const db = await initDB();
                 const event = await db.get('events', eventId);
