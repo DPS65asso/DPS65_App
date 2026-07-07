@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 
 interface Props {
@@ -10,6 +10,7 @@ interface Props {
 
 export const ProtectedRoute: React.FC<Props> = ({ children }) => {
   const { user, loading } = useAuth();
+  const location = useLocation();
 
   if (loading) {
     return (
@@ -21,6 +22,11 @@ export const ProtectedRoute: React.FC<Props> = ({ children }) => {
 
   if (!user) {
       return <Navigate to="/login" replace />;
+  }
+
+  // Si c'est un organisateur, il n'a accès qu'à son tableau de bord spécifique
+  if (user.role === 'organisateur' && location.pathname !== '/organizer-dashboard') {
+      return <Navigate to="/organizer-dashboard" replace />;
   }
 
   return <>{children}</>;

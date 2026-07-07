@@ -49,6 +49,25 @@ export const authService = {
     const storedId = localStorage.getItem(SESSION_KEY);
     
     if (storedId) {
+        if (storedId.startsWith('temp-organizer-')) {
+            const eventId = storedId.replace('temp-organizer-', '');
+            try {
+                const db = await initDB();
+                const event = await db.get('events', eventId);
+                const profile = {
+                    id: storedId,
+                    email: `organizer-${eventId}@dps65.fr`.toLowerCase(),
+                    firstName: 'Organisateur',
+                    lastName: event ? event.name : 'Événement',
+                    role: 'organisateur' as UserRole,
+                    diplomas: [],
+                    points: 0
+                };
+                return { user: { id: storedId, role: 'organisateur' }, profile };
+            } catch (e) {
+                console.warn("Failed to load organizer profile locally", e);
+            }
+        }
         try {
             // On essaie de récupérer le profil localement
             const db = await initDB();
@@ -274,121 +293,114 @@ export const authService = {
       const db = await initDB();
       let event: any = null;
 
+      const cleanCode = code.trim().toUpperCase();
+
       // 1. Si en ligne, on cherche d'abord l'événement via RPC dans Supabase pour s'assurer d'avoir les infos à jour
       if (isLive) {
           try {
-              const { data, error } = await supabase.rpc('get_event_by_organizer_code', { code_param: code });
+              const { data, error } = await supabase.rpc('get_event_by_organizer_code', { code_param: cleanCode });
               if (error) {
-                  console.warn("RPC get_event_by_organizer_code failed, trying local fallback check:", error);
+                  console.warn("RPC get_event_by_organizer_code failed, trying direct select:", error);
               } else if (data && data.length > 0) {
                   event = data[0];
               }
           } catch (rpcErr) {
               console.error("RPC call failed:", rpcErr);
           }
+
+          // Fallback direct select si RPC ne renvoie rien mais qu'on est connecté
+          if (!event) {
+              try {
+                  const { data, error } = await supabase
+                      .from('events')
+                      .select('*')
+                      .eq('organizer_code', cleanCode);
+                  if (!error && data && data.length > 0) {
+                      event = data[0];
+                  }
+              } catch (selectErr) {
+                  console.error("Direct select failed:", selectErr);
+              }
+          }
       }
 
-      // Si hors ligne ou échec RPC, fallback sur la base IndexedDB locale
+      // Si hors ligne ou échec de récupération en ligne, fallback sur la base IndexedDB locale
       if (!event) {
           const events = await db.getAll('events');
-          event = events.find(e => e.organizer_code && e.organizer_code.trim().toUpperCase() === code.trim().toUpperCase());
+          event = events.find(e => e.organizer_code && e.organizer_code.trim().toUpperCase() === cleanCode);
       }
 
       if (!event) {
           throw new Error("Code organisateur invalide ou aucun événement actif trouvé avec ce code.");
       }
 
-      const ORGANIZER_EMAIL = `organizer-${event.id}@dps65.fr`.toLowerCase();
-      // Le mot de passe doit faire au moins 6 caractères, on garantit cela avec un préfixe unique et le code
-      const ORGANIZER_PWD = `dps65-org-${code.trim().toUpperCase()}`;
-      
-      let finalProfile: any = null;
-
-      // 2. Si en ligne, on authentifie l'organisateur dans Supabase Auth
+      // 2. Si en ligne, on se connecte avec le compte générique unique pour les organisateurs (évite la création de comptes multiples)
       if (isLive) {
+          const GUEST_EMAIL = 'organisateur@dps65.fr';
+          const GUEST_PWD = 'dps65-organisateur-secure';
           try {
-              // On essaie d'abord de se connecter
               const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
-                  email: ORGANIZER_EMAIL,
-                  password: ORGANIZER_PWD
+                  email: GUEST_EMAIL,
+                  password: GUEST_PWD
               });
 
               if (signInError) {
-                  // Si l'utilisateur n'existe pas encore (premier login pour cet événement), on le crée
+                  // Si le compte générique n'existe pas encore sur cette instance, on le crée de façon transparente
                   if (signInError.message.includes("Invalid login credentials") || signInError.status === 400) {
-                      console.log("Compte organisateur inexistant, création automatique en cours...");
-                      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-                          email: ORGANIZER_EMAIL,
-                          password: ORGANIZER_PWD,
+                      console.log("Compte générique organisateur inexistant, création en cours...");
+                      const { error: signUpError } = await supabase.auth.signUp({
+                          email: GUEST_EMAIL,
+                          password: GUEST_PWD,
                           options: {
                               data: {
                                   firstName: 'Organisateur',
-                                  lastName: event.name,
+                                  lastName: 'Générique',
                                   role: 'organisateur'
                               }
                           }
                       });
-
-                      if (signUpError) throw signUpError;
-                      if (signUpData.user) {
-                          const userId = signUpData.user.id;
-                          // On attend 1,5 seconde que le trigger Supabase insère le profil associé
-                          await new Promise(resolve => setTimeout(resolve, 1500));
-
-                          // On récupère le profil
-                          const { data: profileData } = await supabase
-                              .from('profiles')
-                              .select('*')
-                              .eq('id', userId)
-                              .single();
-
-                          if (profileData) {
-                              finalProfile = profileData;
-                              await db.put('profiles', finalProfile);
-                          }
+                      if (!signUpError) {
+                          // Connexion immédiate après création
+                          await supabase.auth.signInWithPassword({
+                              email: GUEST_EMAIL,
+                              password: GUEST_PWD
+                          });
                       }
-                  } else {
-                      throw signInError;
-                  }
-              } else if (signInData.user) {
-                  const userId = signInData.user.id;
-                  const { data: profileData } = await supabase
-                      .from('profiles')
-                      .select('*')
-                      .eq('id', userId)
-                      .single();
-
-                  if (profileData) {
-                      finalProfile = profileData;
-                      await db.put('profiles', finalProfile);
                   }
               }
           } catch (liveAuthErr) {
-              console.error("Échec authentification Supabase pour l'organisateur, utilisation du mode déconnecté:", liveAuthErr);
+              console.error("Échec authentification Supabase pour le compte générique organisateur:", liveAuthErr);
           }
       }
 
-      // 3. Fallback hors ligne ou si l'authentification en ligne a échoué
-      if (!finalProfile) {
-          const ORGANIZER_ID = `organizer-${event.id}`;
-          let profile = await db.get('profiles', ORGANIZER_ID);
+      // 3. Stockage de la session virtuelle locale spécifique à cet événement
+      const ORGANIZER_ID = `temp-organizer-${event.id}`;
+      localStorage.setItem(SESSION_KEY, ORGANIZER_ID);
 
-          if (!profile) {
-              profile = {
-                  id: ORGANIZER_ID,
-                  email: ORGANIZER_EMAIL,
-                  firstName: 'Organisateur',
-                  lastName: event.name,
-                  role: 'organisateur',
-                  diplomas: [],
-                  points: 0
-              };
-              await db.put('profiles', profile);
+      // On sauvegarde l'événement localement pour l'affichage immédiat
+      await db.put('events', event);
+
+      // On déclenche une synchronisation des données pour cet événement si en ligne
+      if (isLive) {
+          try {
+              // Import dynamique pour éviter une dépendance circulaire au démarrage
+              const { syncService } = await import('./syncService');
+              await syncService.pullLatestData();
+          } catch (syncErr) {
+              console.warn("Pulling data after organizer login failed, using local cache:", syncErr);
           }
-          finalProfile = profile;
       }
 
-      localStorage.setItem(SESSION_KEY, finalProfile.id);
+      const finalProfile = {
+          id: ORGANIZER_ID,
+          email: `organizer-${event.id}@dps65.fr`.toLowerCase(),
+          firstName: 'Organisateur',
+          lastName: event.name,
+          role: 'organisateur' as UserRole,
+          diplomas: [],
+          points: 0
+      };
+
       return finalProfile;
   },
 

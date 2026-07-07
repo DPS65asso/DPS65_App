@@ -37,7 +37,7 @@ export const HomePage: React.FC = () => {
   // Redirection automatique pour les organisateurs
   useEffect(() => {
     if (profile?.role === 'organisateur') {
-      navigate('/tactical', { replace: true });
+      navigate('/organizer-dashboard', { replace: true });
     }
   }, [profile, navigate]);
   const [showEmergency, setShowEmergency] = useState(false);

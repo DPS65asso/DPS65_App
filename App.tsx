@@ -64,6 +64,7 @@ const DashboardPage = safeLazy(() => import('./pages/management/DashboardPage').
 const ProfilePage = safeLazy(() => import('./pages/management/ProfilePage').then(module => ({ default: module.ProfilePage })));
 const AssoLifePage = safeLazy(() => import('./pages/management/AssoLifePage').then(module => ({ default: module.AssoLifePage })));
 const UniformPage = safeLazy(() => import('./pages/management/UniformPage').then(module => ({ default: module.UniformPage })));
+const OrganizerDashboardPage = safeLazy(() => import('./pages/OrganizerDashboardPage').then(module => ({ default: module.OrganizerDashboardPage })));
 
 const LoadingScreen = () => (
   <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950">
@@ -91,6 +92,7 @@ const AppRoutes: React.FC = () => {
               <Route path="/events/:id/add" element={<ProtectedRoute><AddVictimPage /></ProtectedRoute>} />
               <Route path="/events/:id/edit/:victimId" element={<ProtectedRoute><AddVictimPage /></ProtectedRoute>} />
               <Route path="/tactical" element={<ProtectedRoute><TacticalDashboardPage /></ProtectedRoute>} />
+              <Route path="/organizer-dashboard" element={<ProtectedRoute><OrganizerDashboardPage /></ProtectedRoute>} />
               <Route path="/map/:id" element={<FullscreenMapPage />} />
               <Route path="/tv-debug/:id" element={<TvDebugPage />} />
               <Route path="/admin/diagnostics" element={<ProtectedRoute><DiagnosticsPage /></ProtectedRoute>} />
