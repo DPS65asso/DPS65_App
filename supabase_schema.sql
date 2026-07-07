@@ -698,3 +698,35 @@ BEGIN
     END LOOP;
 END $$;
 
+
+-- =========================================================================
+-- SECURE ORGANIZER RPC FUNCTIONS (SECURITY DEFINER to bypass RLS safely)
+-- =========================================================================
+
+-- RPC 1: Récupérer un événement via son code organisateur
+CREATE OR REPLACE FUNCTION public.get_event_by_organizer_code(code_param TEXT)
+RETURNS SETOF public.events AS $$
+BEGIN
+    RETURN QUERY 
+    SELECT * FROM public.events 
+    WHERE UPPER(TRIM(organizer_code)) = UPPER(TRIM(code_param));
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- RPC 2: Récupérer les victimes d'un événement via son code organisateur
+CREATE OR REPLACE FUNCTION public.get_victims_by_organizer_code(event_id_param UUID, code_param TEXT)
+RETURNS SETOF public.victims AS $$
+BEGIN
+    -- On vérifie que le code correspond bien à l'événement demandé pour assurer la sécurité
+    IF EXISTS (
+        SELECT 1 FROM public.events 
+        WHERE id = event_id_param AND UPPER(TRIM(organizer_code)) = UPPER(TRIM(code_param))
+    ) THEN
+        RETURN QUERY 
+        SELECT * FROM public.victims 
+        WHERE event_id = event_id_param;
+    END IF;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+

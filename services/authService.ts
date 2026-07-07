@@ -393,6 +393,7 @@ export const authService = {
       // 3. Stockage de la session virtuelle locale spécifique à cet événement
       const ORGANIZER_ID = `temp-organizer-${event.id}`;
       localStorage.setItem(SESSION_KEY, ORGANIZER_ID);
+      localStorage.setItem('dps65_organizer_code', cleanCode);
 
       // On sauvegarde l'événement localement pour l'affichage immédiat
       await db.put('events', event);
@@ -402,7 +403,7 @@ export const authService = {
           try {
               // Import dynamique pour éviter une dépendance circulaire au démarrage
               const { syncService } = await import('./syncService');
-              await syncService.pullLatestData();
+              await syncService.pullOrganizerData();
           } catch (syncErr) {
               console.warn("Pulling data after organizer login failed, using local cache:", syncErr);
           }
@@ -424,6 +425,7 @@ export const authService = {
   logout: async () => {
       if (isLive) await supabase.auth.signOut();
       localStorage.removeItem(SESSION_KEY);
+      localStorage.removeItem('dps65_organizer_code');
   },
 
   deleteAccount: async (userId: string) => { 

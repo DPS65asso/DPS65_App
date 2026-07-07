@@ -227,6 +227,14 @@ class SyncService {
 
     public async pullLatestData() {
         if (!this.isOnline || !isLive) return;
+
+        // Éviter la synchronisation globale pour les sessions organisateur
+        const storedId = localStorage.getItem('dps65_active_user_id');
+        if (storedId && storedId.startsWith('temp-organizer-')) {
+            console.log("Sync: skipping global pull for organizer session. Triggering pullOrganizerData.");
+            await this.pullOrganizerData();
+            return;
+        }
         
         try {
             const syncTable = async (tableName: string, dbStoreName: string) => {
@@ -348,6 +356,148 @@ class SyncService {
             this.hasError = true; 
         } finally { 
             this.notifyListeners(); 
+        }
+    }
+
+    public async pullOrganizerData() {
+        if (!this.isOnline || !isLive) return;
+
+        const storedId = localStorage.getItem('dps65_active_user_id');
+        if (!storedId || !storedId.startsWith('temp-organizer-')) return;
+        const eventId = storedId.replace('temp-organizer-', '');
+        const organizerCode = localStorage.getItem('dps65_organizer_code') || '';
+
+        console.log(`[Sync Organizer] Starting pull for eventId: ${eventId}`);
+
+        try {
+            const db = await initDB();
+
+            // 1. Récupérer l'événement via RPC ou Direct Select
+            let event: any = null;
+            try {
+                const { data, error } = await supabase.rpc('get_event_by_organizer_code', { code_param: organizerCode });
+                if (!error && data && data.length > 0) {
+                    event = data[0];
+                }
+            } catch (rpcErr) {
+                console.warn("RPC get_event_by_organizer_code failed during organizer sync:", rpcErr);
+            }
+
+            if (!event) {
+                try {
+                    const { data, error } = await supabase.from('events').select('*').eq('id', eventId).maybeSingle();
+                    if (!error && data) {
+                        event = data;
+                    }
+                } catch (selectErr) {
+                    console.error("Direct event select failed during organizer sync:", selectErr);
+                }
+            }
+
+            if (event) {
+                await db.put('events', event);
+                console.log("[Sync Organizer] Event synced successfully.");
+            }
+
+            // 2. Récupérer les victimes de l'événement via RPC ou Direct Select
+            let victims: any[] = [];
+            let victimsLoaded = false;
+            try {
+                const { data, error } = await supabase.rpc('get_victims_by_organizer_code', { 
+                    event_id_param: eventId, 
+                    code_param: organizerCode 
+                });
+                if (!error && data) {
+                    victims = data;
+                    victimsLoaded = true;
+                } else if (error) {
+                    console.warn("RPC get_victims_by_organizer_code failed during organizer sync:", error);
+                }
+            } catch (rpcErr) {
+                console.warn("RPC get_victims_by_organizer_code raised exception:", rpcErr);
+            }
+
+            if (!victimsLoaded) {
+                try {
+                    const { data, error } = await supabase.from('victims').select('*').eq('event_id', eventId);
+                    if (!error && data) {
+                        victims = data;
+                        victimsLoaded = true;
+                    }
+                } catch (selectErr) {
+                    console.error("Direct victims select failed during organizer sync:", selectErr);
+                }
+            }
+
+            if (victimsLoaded) {
+                // Mettre à jour les victimes locales sans vider les autres événements
+                const tx = db.transaction('victims', 'readwrite');
+                
+                // On récupère toutes les victimes locales de cet événement
+                const localVictims = await tx.store.index('by-event').getAll(eventId);
+                const remoteIds = new Set(victims.map(v => v.id));
+
+                // 1. Enregistrer/Mettre à jour les victimes distantes
+                for (const remote of victims) {
+                    const localData = { ...remote, eventId: remote.event_id || remote.eventId };
+                    await tx.store.put(localData);
+                }
+
+                // 2. Pruning local : supprimer les victimes locales qui n'existent plus à distance pour cet événement
+                for (const local of localVictims) {
+                    if (local && local.id && !remoteIds.has(local.id)) {
+                        console.log(`[Sync Organizer Prune] Removing local victim ${local.id}`);
+                        await tx.store.delete(local.id);
+                    }
+                }
+
+                await tx.done;
+                console.log(`[Sync Organizer] Synced ${victims.length} victims.`);
+
+                // Diffuser l'événement pour mettre à jour l'IHM
+                try {
+                    const channel = new BroadcastChannel('dps65_victims_channel');
+                    channel.postMessage({ type: 'UPDATE_VICTIMS' });
+                    channel.close();
+                } catch (bcErr) {
+                    console.error("Error sending broadcast for victims update:", bcErr);
+                }
+            }
+
+            // 3. Récupérer les marqueurs de l'événement (custom_markers)
+            try {
+                const { data: markersData, error: markersErr } = await supabase.from('custom_markers').select('*').eq('event_id', eventId);
+                if (!markersErr && markersData) {
+                    const txMarkers = db.transaction('custom_markers', 'readwrite');
+                    const localMarkers = await txMarkers.store.index('by-event').getAll(eventId);
+                    const remoteMarkerIds = new Set(markersData.map(m => m.id));
+
+                    for (const m of markersData) {
+                        const localData = { ...m, eventId: m.event_id || m.eventId };
+                        await txMarkers.store.put(localData);
+                    }
+
+                    for (const lm of localMarkers) {
+                        if (lm && lm.id && !remoteMarkerIds.has(lm.id)) {
+                            await txMarkers.store.delete(lm.id);
+                        }
+                    }
+                    await txMarkers.done;
+
+                    const channel = new BroadcastChannel('dps65_gps_channel');
+                    channel.postMessage({ type: 'UPDATE_CUSTOM_MARKERS' });
+                    channel.close();
+                }
+            } catch (markerErr) {
+                console.warn("Failed to sync custom markers for organizer:", markerErr);
+            }
+
+            this.hasError = false;
+        } catch (globalErr) {
+            console.error("[Sync Organizer] Global error:", globalErr);
+            this.hasError = true;
+        } finally {
+            this.notifyListeners();
         }
     }
 
