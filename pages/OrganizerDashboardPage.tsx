@@ -35,18 +35,11 @@ export const OrganizerDashboardPage: React.FC = () => {
     return '';
   }, []);
 
-  const refreshData = async () => {
+  const refreshData = async (forceSync: boolean = false) => {
     if (!eventId) return;
-    setIsLoading(true);
+
+    // 1. Lire immédiatement les données locales pour un affichage instantané (Offline-First !)
     try {
-      // Tenter un pull léger via syncService si possible
-      try {
-        const { syncService } = await import('../services/syncService');
-        await syncService.pullLatestData();
-      } catch (err) {
-        console.warn("Pull auto failed, loading locally:", err);
-      }
-      
       const updatedVictims = await storageService.getVictimsByEvent(eventId);
       setVictims(updatedVictims);
       
@@ -54,12 +47,35 @@ export const OrganizerDashboardPage: React.FC = () => {
       if (currentEvt) {
         setEvent(currentEvt);
       }
-      
       setLastRefresh(Date.now());
-    } catch (e) {
-      console.error("Failed to refresh organizer dashboard", e);
-    } finally {
-      setIsLoading(false);
+    } catch (localErr) {
+      console.error("Failed to load local data:", localErr);
+    }
+
+    // 2. Tenter un pull léger en arrière-plan (sans bloquer l'affichage)
+    if (forceSync) {
+      setIsLoading(true);
+      // Lance la synchronisation en arrière-plan sans bloquer
+      (async () => {
+        try {
+          const { syncService } = await import('../services/syncService');
+          await syncService.pullLatestData();
+          
+          // Re-charger les données locales fraîches après le pull
+          const updatedVictims = await storageService.getVictimsByEvent(eventId);
+          setVictims(updatedVictims);
+          
+          const currentEvt = await storageService.getEventById(eventId);
+          if (currentEvt) {
+            setEvent(currentEvt);
+          }
+          setLastRefresh(Date.now());
+        } catch (syncErr) {
+          console.warn("Background pull failed, keeping local data:", syncErr);
+        } finally {
+          setIsLoading(false);
+        }
+      })();
     }
   };
 
@@ -69,18 +85,22 @@ export const OrganizerDashboardPage: React.FC = () => {
       return;
     }
 
-    refreshData();
+    // Chargement initial : chargement local immédiat + synchro en arrière-plan
+    refreshData(true);
 
-    // Ecouteur en temps réel pour synchroniser les victimes
+    // Écouteur en temps réel pour synchroniser les victimes
     const bc = new BroadcastChannel('dps65_victims_channel');
     bc.onmessage = (e) => {
       if (e.data.type === 'UPDATE_VICTIMS') {
-        refreshData();
+        // Chargement local sans refaire un pull réseau lourd
+        refreshData(false);
       }
     };
 
-    // Polling régulier de secours toutes les 15 secondes
-    const interval = setInterval(refreshData, 15000);
+    // Polling régulier de secours toutes les 15 secondes en arrière-plan
+    const interval = setInterval(() => {
+      refreshData(true);
+    }, 15000);
 
     return () => {
       clearInterval(interval);
@@ -171,7 +191,7 @@ export const OrganizerDashboardPage: React.FC = () => {
           <div className="relative z-10 flex flex-wrap items-center gap-3">
             {/* BOUTON RAFFRAICHIR AVEC ANIMATION */}
             <button 
-              onClick={refreshData}
+              onClick={() => refreshData(true)}
               disabled={isLoading}
               className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-white font-bold px-4 py-3 rounded-2xl border border-slate-700 transition-all cursor-pointer shadow-sm text-sm"
               title="Mettre à jour les données"
