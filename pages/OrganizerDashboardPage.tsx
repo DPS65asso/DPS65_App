@@ -50,8 +50,7 @@ export const OrganizerDashboardPage: React.FC = () => {
       const updatedVictims = await storageService.getVictimsByEvent(eventId);
       setVictims(updatedVictims);
       
-      const allEvents = await storageService.getEvents();
-      const currentEvt = allEvents.find(e => e.id === eventId);
+      const currentEvt = await storageService.getEventById(eventId);
       if (currentEvt) {
         setEvent(currentEvt);
       }

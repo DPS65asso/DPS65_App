@@ -126,12 +126,14 @@ export const LoginPage: React.FC = () => {
           </Button>
         </form>
 
-        <div className="mt-6 text-center text-sm text-slate-500 dark:text-slate-400">
-          Pas encore de compte ?{' '}
-          <Link to="/signup" className="text-blue-600 dark:text-blue-400 font-bold hover:underline">
-            Créer un compte
-          </Link>
-        </div>
+        {loginType === 'MEMBER' && (
+          <div className="mt-6 text-center text-sm text-slate-500 dark:text-slate-400">
+            Pas encore de compte ?{' '}
+            <Link to="/signup" className="text-blue-600 dark:text-blue-400 font-bold hover:underline">
+              Créer un compte
+            </Link>
+          </div>
+        )}
       </div>
     </div>
   );
