@@ -682,126 +682,6 @@ export const EventMap: React.FC<Props> = ({
 
   return (
     <div className="w-full h-full relative z-0">
-        {/* BOUTONS FLOTTANTS (TÉLÉCHARGEMENT LOCAL, ÉDITION & BLITZORTUNG) - ALIGNÉS À GAUCHE */}
-        <div className="absolute top-48 left-3 z-[1000] flex flex-col gap-2">
-            <button 
-                onClick={handleDownloadLocalMap} 
-                className={`p-3 rounded-full shadow-lg border-2 transition-all active:scale-95 ${isDownloadingLocal ? 'bg-blue-600 border-blue-700 text-white' : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:text-blue-600 dark:hover:text-blue-400'}`}
-                title="Télécharger la carte locale de l'événement (~10km)"
-                disabled={isDownloadingLocal}
-                id="btn-download-local-map"
-            >
-                <Download className="w-6 h-6" />
-            </button>
-
-            {!readOnly && (
-                <>
-                    <button 
-                        onClick={() => setIsEditMode(!isEditMode)} 
-                        className={`p-3 rounded-full shadow-lg border-2 transition-all active:scale-95 ${isEditMode ? 'bg-orange-500 border-orange-600 text-white animate-pulse' : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-200'}`}
-                        title={isEditMode ? "Quitter mode ajout" : "Ajouter un point"}
-                    >
-                        {isEditMode ? <X className="w-6 h-6" /> : <MapPin className="w-6 h-6" />}
-                    </button>
-
-                    <a 
-                        href="https://www.lightningmaps.org" 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="p-3 rounded-full shadow-lg border-2 bg-yellow-500 border-yellow-600 text-white transition-all active:scale-95 flex items-center justify-center animate-in fade-in"
-                        title="Ouvrir Carte Foudre (Blitzortung)"
-                    >
-                        <Zap className="w-6 h-6" />
-                    </a>
-                </>
-            )}
-        </div>
-
-        {/* LAYERS CONTROL - TOP RIGHT (UNDER RECENTER) */}
-        <div className="absolute top-32 sm:top-36 right-2 sm:right-4 z-[1000] flex flex-col items-end gap-2">
-            <button 
-                onClick={() => setShowLayersControl(!showLayersControl)}
-                className={`p-3 rounded-full shadow-xl border transition-all ${showLayersControl ? 'bg-blue-600 border-blue-500 text-white' : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-white'}`}
-                title="Contrôle des calques"
-            >
-                <Layers className="w-6 h-6" />
-            </button>
-
-            {showLayersControl && (
-                <div 
-                    onClick={(e) => e.stopPropagation()}
-                    onMouseDown={(e) => e.stopPropagation()}
-                    onTouchStart={(e) => e.stopPropagation()}
-                    onTouchMove={(e) => e.stopPropagation()}
-                    onTouchEnd={(e) => e.stopPropagation()}
-                    onWheel={(e) => e.stopPropagation()}
-                    className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl p-4 w-64 max-w-[calc(100vw-32px)] max-h-[250px] sm:max-h-[450px] overflow-y-auto scrollbar-thin animate-in slide-in-from-right-4"
-                >
-                    <div className="flex items-center justify-between mb-4 border-b border-slate-100 dark:border-slate-700 pb-2">
-                        <h3 className="text-xs font-black uppercase tracking-widest text-slate-400">Calques & Fonds</h3>
-                        <button onClick={() => setShowLayersControl(false)}><X className="w-4 h-4 text-slate-400" /></button>
-                    </div>
-
-                    {/* Base Styles */}
-                    <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">Fonds de carte</h4>
-                    <div className="grid grid-cols-1 gap-1 mb-4">
-                        <button onClick={() => setCurrentStyle('standard')} className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-bold transition-all ${currentStyle === 'standard' ? 'bg-blue-600 text-white' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'}`}><Zap className="w-4 h-4"/> Plan Standard</button>
-                        <button onClick={() => setCurrentStyle('topo')} className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-bold transition-all ${currentStyle === 'topo' ? 'bg-blue-600 text-white' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'}`}><Mountain className="w-4 h-4"/> Relief (Topo)</button>
-                        <button onClick={() => setCurrentStyle('satellite')} className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-bold transition-all ${currentStyle === 'satellite' ? 'bg-blue-600 text-white' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'}`}><Layers className="w-4 h-4"/> Satellite (ESRI)</button>
-                    </div>
-
-                    {/* Overlays */}
-                    <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">Données Tactiques</h4>
-                    <div className="space-y-1">
-                        {Object.entries(layersVisibility).map(([key, visible]) => (
-                            <button 
-                                key={key}
-                                onClick={() => setLayersVisibility(prev => ({ ...prev, [key]: !visible }))}
-                                className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-bold transition-all ${visible ? 'bg-slate-100 dark:bg-slate-700 text-blue-600 dark:text-blue-400' : 'text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
-                            >
-                                <span>{LAYER_LABELS[key] || key}</span>
-                                <div className={`w-2 h-2 rounded-full ${visible ? 'bg-blue-600' : 'bg-slate-300'}`}></div>
-                            </button>
-                        ))}
-                    </div>
-                </div>
-            )}
-        </div>
-
-        {/* INSTRUCTION FLOTTANTE */}
-        {isEditMode && (
-            <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-[1000] bg-orange-600 text-white px-4 py-2 rounded-full shadow-xl text-xs font-bold uppercase animate-in slide-in-from-top-4 pointer-events-none">
-                Touchez la carte pour ajouter
-            </div>
-        )}
-
-        {/* MODAL AJOUT MARQUEUR */}
-        {showMarkerModal && (
-            <div className="fixed inset-0 z-[5000] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={(e) => { e.stopPropagation(); setShowMarkerModal(false); }}>
-                <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-2xl w-full max-w-xs border border-slate-200 dark:border-slate-700 animate-in zoom-in-95 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-                    <h3 className="font-bold text-lg mb-4 dark:text-white flex items-center gap-2"><MapPin className="w-5 h-5"/> Nouveau Point</h3>
-                    
-                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Nom du point</label>
-                    <input autoFocus type="text" className="w-full p-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-600 rounded-lg mb-4 font-bold outline-none focus:ring-2 focus:ring-blue-500 dark:text-white" placeholder="ex: PC Avançé, Danger..." value={newMarkerLabel} onChange={e => setNewMarkerLabel(e.target.value)} />
-                    
-                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Type</label>
-                    <div className="grid grid-cols-3 gap-2 mb-6">
-                        <button onClick={() => setNewMarkerType('POST')} className={`p-2 rounded-lg border-2 flex flex-col items-center gap-1 transition-all ${newMarkerType === 'POST' ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30 ring-2 ring-blue-500/20' : 'border-slate-200 dark:border-slate-700 opacity-60'}`}><Tent className="w-5 h-5 text-blue-600"/><span className="text-[10px] font-bold text-slate-700 dark:text-slate-200">Poste</span></button>
-                        <button onClick={() => setNewMarkerType('VEHICLE')} className={`p-2 rounded-lg border-2 flex flex-col items-center gap-1 transition-all ${newMarkerType === 'VEHICLE' ? 'border-red-500 bg-red-50 dark:bg-red-900/30 ring-2 ring-red-500/20' : 'border-slate-200 dark:border-slate-700 opacity-60'}`}><Truck className="w-5 h-5 text-red-600"/><span className="text-[10px] font-bold text-slate-700 dark:text-slate-200">VPSP</span></button>
-                        <button onClick={() => setNewMarkerType('QUAD')} className={`p-2 rounded-lg border-2 flex flex-col items-center gap-1 transition-all ${newMarkerType === 'QUAD' ? 'border-orange-500 bg-orange-50 dark:bg-orange-900/30 ring-2 ring-orange-500/20' : 'border-slate-200 dark:border-slate-700 opacity-60'}`}><Car className="w-5 h-5 text-orange-500"/><span className="text-[10px] font-bold text-slate-700 dark:text-slate-200">Quad</span></button>
-                        <button onClick={() => setNewMarkerType('DANGER')} className={`p-2 rounded-lg border-2 flex flex-col items-center gap-1 transition-all ${newMarkerType === 'DANGER' ? 'border-yellow-500 bg-yellow-50 dark:bg-yellow-900/30 ring-2 ring-yellow-500/20' : 'border-slate-200 dark:border-slate-700 opacity-60'}`}><AlertTriangle className="w-5 h-5 text-yellow-500"/><span className="text-[10px] font-bold text-slate-700 dark:text-slate-200">Danger</span></button>
-                        <button onClick={() => setNewMarkerType('POI')} className={`p-2 rounded-lg border-2 flex flex-col items-center gap-1 transition-all ${newMarkerType === 'POI' ? 'border-cyan-500 bg-cyan-50 dark:bg-cyan-900/30 ring-2 ring-cyan-500/20' : 'border-slate-200 dark:border-slate-700 opacity-60'}`}><MapPin className="w-5 h-5 text-cyan-500"/><span className="text-[10px] font-bold text-slate-700 dark:text-slate-200">Info</span></button>
-                        <button onClick={() => setNewMarkerType('TEAM')} className={`p-2 rounded-lg border-2 flex flex-col items-center gap-1 transition-all ${newMarkerType === 'TEAM' ? 'border-green-500 bg-green-50 dark:bg-green-900/30 ring-2 ring-green-500/20' : 'border-slate-200 dark:border-slate-700 opacity-60'}`}><User className="w-5 h-5 text-green-600"/><span className="text-[10px] font-bold text-slate-700 dark:text-slate-200">Équipe</span></button>
-                    </div>
-
-                    <div className="flex gap-3">
-                        <Button onClick={() => setShowMarkerModal(false)} variant="outline" fullWidth>Annuler</Button>
-                        <Button onClick={handleSaveMarker} fullWidth icon={<Save className="w-4 h-4"/>}>Placer</Button>
-                    </div>
-                </div>
-            </div>
-        )}
-
         <MapContainer 
             center={defaultCenter} 
             zoom={6} 
@@ -976,6 +856,126 @@ export const EventMap: React.FC<Props> = ({
                 <TacticalMarker key={loc.team_name} loc={loc} zoomLevel={zoomLevel} />
             ))}
         </MapContainer>
+
+        {/* BOUTONS FLOTTANTS (TÉLÉCHARGEMENT LOCAL, ÉDITION & BLITZORTUNG) - ALIGNÉS À GAUCHE */}
+        <div className="absolute top-48 left-3 z-[1000] flex flex-col gap-2">
+            <button 
+                onClick={handleDownloadLocalMap} 
+                className={`p-3 rounded-full shadow-lg border-2 transition-all active:scale-95 ${isDownloadingLocal ? 'bg-blue-600 border-blue-700 text-white' : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:text-blue-600 dark:hover:text-blue-400'}`}
+                title="Télécharger la carte locale de l'événement (~10km)"
+                disabled={isDownloadingLocal}
+                id="btn-download-local-map"
+            >
+                <Download className="w-6 h-6" />
+            </button>
+
+            {!readOnly && (
+                <>
+                    <button 
+                        onClick={() => setIsEditMode(!isEditMode)} 
+                        className={`p-3 rounded-full shadow-lg border-2 transition-all active:scale-95 ${isEditMode ? 'bg-orange-500 border-orange-600 text-white animate-pulse' : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-200'}`}
+                        title={isEditMode ? "Quitter mode ajout" : "Ajouter un point"}
+                    >
+                        {isEditMode ? <X className="w-6 h-6" /> : <MapPin className="w-6 h-6" />}
+                    </button>
+
+                    <a 
+                        href="https://www.lightningmaps.org" 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="p-3 rounded-full shadow-lg border-2 bg-yellow-500 border-yellow-600 text-white transition-all active:scale-95 flex items-center justify-center animate-in fade-in"
+                        title="Ouvrir Carte Foudre (Blitzortung)"
+                    >
+                        <Zap className="w-6 h-6" />
+                    </a>
+                </>
+            )}
+        </div>
+
+        {/* LAYERS CONTROL - TOP RIGHT (UNDER RECENTER) */}
+        <div className="absolute top-32 sm:top-36 right-2 sm:right-4 z-[1000] flex flex-col items-end gap-2">
+            <button 
+                onClick={() => setShowLayersControl(!showLayersControl)}
+                className={`p-3 rounded-full shadow-xl border transition-all ${showLayersControl ? 'bg-blue-600 border-blue-500 text-white' : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-white'}`}
+                title="Contrôle des calques"
+            >
+                <Layers className="w-6 h-6" />
+            </button>
+
+            {showLayersControl && (
+                <div 
+                    onClick={(e) => e.stopPropagation()}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onTouchStart={(e) => e.stopPropagation()}
+                    onTouchMove={(e) => e.stopPropagation()}
+                    onTouchEnd={(e) => e.stopPropagation()}
+                    onWheel={(e) => e.stopPropagation()}
+                    className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl p-4 w-64 max-w-[calc(100vw-32px)] max-h-[250px] sm:max-h-[450px] overflow-y-auto scrollbar-thin animate-in slide-in-from-right-4"
+                >
+                    <div className="flex items-center justify-between mb-4 border-b border-slate-100 dark:border-slate-700 pb-2">
+                        <h3 className="text-xs font-black uppercase tracking-widest text-slate-400">Calques & Fonds</h3>
+                        <button onClick={() => setShowLayersControl(false)}><X className="w-4 h-4 text-slate-400" /></button>
+                    </div>
+
+                    {/* Base Styles */}
+                    <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">Fonds de carte</h4>
+                    <div className="grid grid-cols-1 gap-1 mb-4">
+                        <button onClick={() => setCurrentStyle('standard')} className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-bold transition-all ${currentStyle === 'standard' ? 'bg-blue-600 text-white' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'}`}><Zap className="w-4 h-4"/> Plan Standard</button>
+                        <button onClick={() => setCurrentStyle('topo')} className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-bold transition-all ${currentStyle === 'topo' ? 'bg-blue-600 text-white' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'}`}><Mountain className="w-4 h-4"/> Relief (Topo)</button>
+                        <button onClick={() => setCurrentStyle('satellite')} className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-bold transition-all ${currentStyle === 'satellite' ? 'bg-blue-600 text-white' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'}`}><Layers className="w-4 h-4"/> Satellite (ESRI)</button>
+                    </div>
+
+                    {/* Overlays */}
+                    <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">Données Tactiques</h4>
+                    <div className="space-y-1">
+                        {Object.entries(layersVisibility).map(([key, visible]) => (
+                            <button 
+                                key={key}
+                                onClick={() => setLayersVisibility(prev => ({ ...prev, [key]: !visible }))}
+                                className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-bold transition-all ${visible ? 'bg-slate-100 dark:bg-slate-700 text-blue-600 dark:text-blue-400' : 'text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
+                            >
+                                <span>{LAYER_LABELS[key] || key}</span>
+                                <div className={`w-2 h-2 rounded-full ${visible ? 'bg-blue-600' : 'bg-slate-300'}`}></div>
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            )}
+        </div>
+
+        {/* INSTRUCTION FLOTTANTE */}
+        {isEditMode && (
+            <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-[1000] bg-orange-600 text-white px-4 py-2 rounded-full shadow-xl text-xs font-bold uppercase animate-in slide-in-from-top-4 pointer-events-none">
+                Touchez la carte pour ajouter
+            </div>
+        )}
+
+        {/* MODAL AJOUT MARQUEUR */}
+        {showMarkerModal && (
+            <div className="fixed inset-0 z-[5000] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={(e) => { e.stopPropagation(); setShowMarkerModal(false); }}>
+                <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-2xl w-full max-w-xs border border-slate-200 dark:border-slate-700 animate-in zoom-in-95 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+                    <h3 className="font-bold text-lg mb-4 dark:text-white flex items-center gap-2"><MapPin className="w-5 h-5"/> Nouveau Point</h3>
+                    
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Nom du point</label>
+                    <input autoFocus type="text" className="w-full p-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-600 rounded-lg mb-4 font-bold outline-none focus:ring-2 focus:ring-blue-500 dark:text-white" placeholder="ex: PC Avançé, Danger..." value={newMarkerLabel} onChange={e => setNewMarkerLabel(e.target.value)} />
+                    
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Type</label>
+                    <div className="grid grid-cols-3 gap-2 mb-6">
+                        <button onClick={() => setNewMarkerType('POST')} className={`p-2 rounded-lg border-2 flex flex-col items-center gap-1 transition-all ${newMarkerType === 'POST' ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30 ring-2 ring-blue-500/20' : 'border-slate-200 dark:border-slate-700 opacity-60'}`}><Tent className="w-5 h-5 text-blue-600"/><span className="text-[10px] font-bold text-slate-700 dark:text-slate-200">Poste</span></button>
+                        <button onClick={() => setNewMarkerType('VEHICLE')} className={`p-2 rounded-lg border-2 flex flex-col items-center gap-1 transition-all ${newMarkerType === 'VEHICLE' ? 'border-red-500 bg-red-50 dark:bg-red-900/30 ring-2 ring-red-500/20' : 'border-slate-200 dark:border-slate-700 opacity-60'}`}><Truck className="w-5 h-5 text-red-600"/><span className="text-[10px] font-bold text-slate-700 dark:text-slate-200">VPSP</span></button>
+                        <button onClick={() => setNewMarkerType('QUAD')} className={`p-2 rounded-lg border-2 flex flex-col items-center gap-1 transition-all ${newMarkerType === 'QUAD' ? 'border-orange-500 bg-orange-50 dark:bg-orange-900/30 ring-2 ring-orange-500/20' : 'border-slate-200 dark:border-slate-700 opacity-60'}`}><Car className="w-5 h-5 text-orange-500"/><span className="text-[10px] font-bold text-slate-700 dark:text-slate-200">Quad</span></button>
+                        <button onClick={() => setNewMarkerType('DANGER')} className={`p-2 rounded-lg border-2 flex flex-col items-center gap-1 transition-all ${newMarkerType === 'DANGER' ? 'border-yellow-500 bg-yellow-50 dark:bg-yellow-900/30 ring-2 ring-yellow-500/20' : 'border-slate-200 dark:border-slate-700 opacity-60'}`}><AlertTriangle className="w-5 h-5 text-yellow-500"/><span className="text-[10px] font-bold text-slate-700 dark:text-slate-200">Danger</span></button>
+                        <button onClick={() => setNewMarkerType('POI')} className={`p-2 rounded-lg border-2 flex flex-col items-center gap-1 transition-all ${newMarkerType === 'POI' ? 'border-cyan-500 bg-cyan-50 dark:bg-cyan-900/30 ring-2 ring-cyan-500/20' : 'border-slate-200 dark:border-slate-700 opacity-60'}`}><MapPin className="w-5 h-5 text-cyan-500"/><span className="text-[10px] font-bold text-slate-700 dark:text-slate-200">Info</span></button>
+                        <button onClick={() => setNewMarkerType('TEAM')} className={`p-2 rounded-lg border-2 flex flex-col items-center gap-1 transition-all ${newMarkerType === 'TEAM' ? 'border-green-500 bg-green-50 dark:bg-green-900/30 ring-2 ring-green-500/20' : 'border-slate-200 dark:border-slate-700 opacity-60'}`}><User className="w-5 h-5 text-green-600"/><span className="text-[10px] font-bold text-slate-700 dark:text-slate-200">Équipe</span></button>
+                    </div>
+
+                    <div className="flex gap-3">
+                        <Button onClick={() => setShowMarkerModal(false)} variant="outline" fullWidth>Annuler</Button>
+                        <Button onClick={handleSaveMarker} fullWidth icon={<Save className="w-4 h-4"/>}>Placer</Button>
+                    </div>
+                </div>
+            </div>
+        )}
         {locs.length === 0 && (
             <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-black/50 text-white px-3 py-1 rounded-full text-xs pointer-events-none z-[1000]">
                 Aucune équipe géolocalisée pour cet événement.

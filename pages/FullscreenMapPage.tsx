@@ -4,6 +4,9 @@ import { useParams } from 'react-router-dom';
 import { Loader2, WifiOff, Battery, Maximize, Users, AlertCircle, Activity, Bed, CheckCircle2, Monitor, Map as MapIcon } from 'lucide-react';
 import { supabase } from '../services/supabaseClient';
 import { Event, Victim, TriageColor, Outcome, TeamLocation, CustomMarker } from '../types';
+import { authService } from '../services/authService';
+import { storageService } from '../services/storageService';
+import { initDB } from '../services/db';
 
 // Lazy load map components
 const EventMap = lazy(() => import('../components/EventMap').then(module => ({ 
@@ -48,7 +51,12 @@ export const FullscreenMapPage: React.FC = () => {
         .eq('id', id)
         .maybeSingle();
 
-      if (eventData) setEvent(eventData);
+      if (eventData) {
+        setEvent(eventData);
+      } else {
+        const localEvent = await storageService.getEventById(id);
+        if (localEvent) setEvent(localEvent);
+      }
 
       // 2. Victimes
       const { data: victimsData } = await supabase
@@ -56,11 +64,14 @@ export const FullscreenMapPage: React.FC = () => {
         .select('*')
         .eq('event_id', id);
 
-      if (victimsData) {
+      if (victimsData && victimsData.length > 0) {
         setVictims(victimsData.map((v: any) => ({
           ...v,
           eventId: v.event_id || v.eventId
         })));
+      } else {
+        const localVictims = await storageService.getVictimsByEvent(id);
+        if (localVictims) setVictims(localVictims);
       }
 
       // 3. Équipes (GPS)
@@ -68,10 +79,18 @@ export const FullscreenMapPage: React.FC = () => {
         .from('team_locations')
         .select('*');
       
-      if (teamsData) {
-        // On filtre les équipes de cet événement ou les équipes libres
+      if (teamsData && teamsData.length > 0) {
         const STALE_THRESHOLD = 15 * 60 * 1000;
         const filteredTeams = teamsData.filter((l: any) => {
+          const isStale = (Date.now() - l.timestamp) > STALE_THRESHOLD;
+          return !isStale && (!l.event_id || l.event_id === id);
+        });
+        setTeamLocations(filteredTeams);
+      } else {
+        const db = await initDB();
+        const localLocs = await db.getAll('team_locations');
+        const STALE_THRESHOLD = 15 * 60 * 1000;
+        const filteredTeams = localLocs.filter((l: any) => {
           const isStale = (Date.now() - l.timestamp) > STALE_THRESHOLD;
           return !isStale && (!l.event_id || l.event_id === id);
         });
@@ -84,10 +103,36 @@ export const FullscreenMapPage: React.FC = () => {
         .select('*')
         .eq('event_id', id);
       
-      if (markersData) setCustomMarkers(markersData);
+      if (markersData && markersData.length > 0) {
+        setCustomMarkers(markersData);
+      } else {
+        const localMarkers = await storageService.getCustomMarkers(id);
+        if (localMarkers) setCustomMarkers(localMarkers);
+      }
 
     } catch (err) {
-      console.error("Erreur fetch direct:", err);
+      console.error("Erreur fetch direct, fallback local:", err);
+      try {
+        const localEvent = await storageService.getEventById(id);
+        if (localEvent) setEvent(localEvent);
+
+        const localVictims = await storageService.getVictimsByEvent(id);
+        if (localVictims) setVictims(localVictims);
+
+        const localMarkers = await storageService.getCustomMarkers(id);
+        if (localMarkers) setCustomMarkers(localMarkers);
+        
+        const db = await initDB();
+        const localLocs = await db.getAll('team_locations');
+        const STALE_THRESHOLD = 15 * 60 * 1000;
+        const filteredTeams = localLocs.filter((l: any) => {
+          const isStale = (Date.now() - l.timestamp) > STALE_THRESHOLD;
+          return !isStale && (!l.event_id || l.event_id === id);
+        });
+        setTeamLocations(filteredTeams);
+      } catch (localErr) {
+        console.error("Erreur fallback local:", localErr);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -96,7 +141,16 @@ export const FullscreenMapPage: React.FC = () => {
   useEffect(() => {
     if (!id) return;
 
-    fetchDirectData();
+    const initSessionAndFetch = async () => {
+      try {
+        await authService.getSession();
+      } catch (err) {
+        console.error("Erreur restauration session dans FullscreenMapPage:", err);
+      }
+      fetchDirectData();
+    };
+
+    initSessionAndFetch();
 
     // ABONNEMENTS TEMPS RÉEL
     // Note: On écoute sans filtre sur DELETE pour être sûr de capter les suppressions

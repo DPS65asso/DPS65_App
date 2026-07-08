@@ -4,7 +4,8 @@ import { storageService } from '../services/storageService';
 import { Event, Victim, TriageColor, Outcome } from '../types';
 import { 
   Phone, ShieldAlert, Activity, Bed, Users, RefreshCw, FileText, 
-  Map as MapIcon, X, AlertCircle, Loader2, LogOut, Search, Clock, ShieldCheck
+  Map as MapIcon, X, AlertCircle, Loader2, LogOut, Search, Clock, ShieldCheck,
+  Monitor, ExternalLink, ZoomIn, ZoomOut
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../components/Button';
@@ -117,6 +118,7 @@ export const OrganizerDashboardPage: React.FC = () => {
   }, [event]);
 
   const [activePdfIndex, setActivePdfIndex] = useState(0);
+  const [pdfZoom, setPdfZoom] = useState<number>(100);
   const activeMapPdfUrl = useMemo(() => allPdfs[activePdfIndex]?.url, [allPdfs, activePdfIndex]);
 
   // Filtrage et recherche de la liste des victimes (Module D)
@@ -319,7 +321,7 @@ export const OrganizerDashboardPage: React.FC = () => {
             <span className="text-xs font-bold text-slate-300 uppercase">Cartographie Tactique de l'événement</span>
           </div>
 
-          <div className="flex gap-2">
+          <div className="flex gap-2 items-center">
             <button 
               onClick={() => setShowMap(!showMap)} 
               className={`flex items-center gap-2 font-bold px-4 py-2.5 rounded-xl text-xs transition-all cursor-pointer ${showMap ? 'bg-orange-500 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}
@@ -327,6 +329,17 @@ export const OrganizerDashboardPage: React.FC = () => {
               <MapIcon className="w-4 h-4" />
               <span>{showMap ? "Masquer la Carte" : "Afficher la Carte"}</span>
             </button>
+
+            <a 
+              href={`#/map/${eventId}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 font-bold px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs transition-all cursor-pointer shadow-lg shadow-blue-500/20"
+              title="Diffuser la carte sur un autre écran (TV, Moniteur, Projecteur)"
+            >
+              <Monitor className="w-4 h-4" />
+              <span>Diffuser la Carte</span>
+            </a>
 
             {allPdfs.length > 0 && (
               <button 
@@ -363,14 +376,62 @@ export const OrganizerDashboardPage: React.FC = () => {
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
-              className="bg-slate-900 border-2 border-red-500/40 rounded-3xl overflow-hidden shadow-2xl relative h-[700px] flex flex-col"
+              className="bg-slate-900 border-2 border-red-500/40 rounded-3xl overflow-hidden shadow-2xl relative h-[750px] flex flex-col"
             >
+              {/* BARRE D'OUTILS ET ACCÈS DU PDF AVEC CONTRÔLES DE ZOOM */}
+              <div className="bg-slate-850 p-4 border-b border-red-500/20 flex flex-wrap gap-3 items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <FileText className="w-5 h-5 text-red-500 animate-pulse" />
+                  <span className="text-xs font-black text-white uppercase tracking-wider">
+                    {allPdfs[activePdfIndex]?.name || "Plan de Cartographie"}
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-3 font-sans">
+                  {/* Zoom controls */}
+                  <div className="flex items-center gap-1 bg-slate-900 border border-slate-700 rounded-xl px-2 py-1">
+                    <button 
+                      onClick={() => setPdfZoom(prev => Math.max(50, prev - 25))}
+                      className="p-1 text-slate-400 hover:text-white transition-colors cursor-pointer"
+                      title="Zoom arrière"
+                    >
+                      <ZoomOut className="w-4 h-4" />
+                    </button>
+                    <span className="text-xs font-mono font-bold text-slate-300 min-w-[40px] text-center">
+                      {pdfZoom}%
+                    </span>
+                    <button 
+                      onClick={() => setPdfZoom(prev => Math.min(250, prev + 25))}
+                      className="p-1 text-slate-400 hover:text-white transition-colors cursor-pointer"
+                      title="Zoom avant"
+                    >
+                      <ZoomIn className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  {/* Bouton pour ouvrir en plein écran dans un nouvel onglet */}
+                  <a 
+                    href={activeMapPdfUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1.5 font-bold px-3 py-1.5 bg-red-600/30 hover:bg-red-600/50 text-red-400 hover:text-white border border-red-500/30 rounded-xl text-xs transition-all cursor-pointer shadow-md"
+                    title="Ouvrir dans un nouvel onglet pour zoomer librement, tourner ou imprimer"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    <span>Zoom Plein Écran</span>
+                  </a>
+                </div>
+              </div>
+
               {allPdfs.length > 1 && (
                 <div className="bg-slate-850 p-3 border-b border-red-500/20 flex gap-2 overflow-x-auto scrollbar-thin">
                   {allPdfs.map((pdf, idx) => (
                     <button
                       key={pdf.id || idx}
-                      onClick={() => setActivePdfIndex(idx)}
+                      onClick={() => {
+                        setActivePdfIndex(idx);
+                        setPdfZoom(100); // Reset zoom
+                      }}
                       className={`px-4 py-2 rounded-xl text-xs font-black transition-all whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${
                         activePdfIndex === idx
                           ? 'bg-red-600 text-white shadow-lg shadow-red-600/20'
@@ -385,7 +446,7 @@ export const OrganizerDashboardPage: React.FC = () => {
               )}
               <div className="flex-1 bg-slate-950">
                 <iframe 
-                  src={activeMapPdfUrl} 
+                  src={`${activeMapPdfUrl}#zoom=${pdfZoom}`} 
                   className="w-full h-full border-none"
                   title="Plan de cartographie"
                 />
