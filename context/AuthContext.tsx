@@ -64,6 +64,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // setSessionTeam(null); // On ne vide plus l'équipe à la déconnexion
   }, [currentTeam]);
 
+  // Surveillance de la durée de session (expiration automatique après 6h)
+  useEffect(() => {
+    const handleSessionCheck = async () => {
+      if (profile && authService.isSessionExpired()) {
+        console.warn("Session expirée (> 6h). Déconnexion automatique et rechargement pour mise à jour...");
+        await signOut();
+        window.location.reload();
+      }
+    };
+
+    // Vérification chaque minute
+    const interval = setInterval(handleSessionCheck, 60 * 1000);
+
+    // Vérification immédiate lorsque l'application revient au premier plan (ex: réouverture PWA)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        handleSessionCheck();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [profile, signOut]);
+
   const refreshProfile = useCallback(async () => {
       const data = await authService.getSession();
       setProfile(data.profile);

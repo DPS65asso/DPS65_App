@@ -7,9 +7,22 @@ import { supabase, isLive, signUpWithoutChangingSession } from './supabaseClient
 import { adminService } from './features/adminService';
 
 const SESSION_KEY = 'dps65_active_user_id';
+const SESSION_TIMESTAMP_KEY = 'dps65_session_login_time';
+const SESSION_MAX_AGE_MS = 6 * 60 * 60 * 1000; // 6 heures en millisecondes
 const ADMIN_EMAIL = 'dps65.asso@gmail.com';
 
 export const authService = {
+  // Vérifie si la session actuelle est expirée (> 6h)
+  isSessionExpired: (): boolean => {
+      const storedId = localStorage.getItem(SESSION_KEY);
+      if (!storedId) return false;
+      const timestampStr = localStorage.getItem(SESSION_TIMESTAMP_KEY);
+      if (!timestampStr) return false;
+      const timestamp = parseInt(timestampStr, 10);
+      if (isNaN(timestamp)) return false;
+      return Date.now() - timestamp > SESSION_MAX_AGE_MS;
+  },
+
   // Récupère la session active (locale ou distante)
   getSession: async () => {
     // Auto-login inside AI Studio preview if no session exists to bypass the login screen
@@ -38,6 +51,7 @@ export const authService = {
                     await db.put('profiles', profile);
                 }
                 localStorage.setItem(SESSION_KEY, previewAdminId);
+                localStorage.setItem(SESSION_TIMESTAMP_KEY, Date.now().toString());
                 return { user: { id: previewAdminId, role: 'admin' }, profile };
             } catch (err) {
                 console.error("Failed to auto-login preview admin:", err);
@@ -49,6 +63,23 @@ export const authService = {
     const storedId = localStorage.getItem(SESSION_KEY);
     
     if (storedId) {
+        // Vérification de la durée de session (expiration à 6h)
+        const timestampStr = localStorage.getItem(SESSION_TIMESTAMP_KEY);
+        if (timestampStr) {
+            const timestamp = parseInt(timestampStr, 10);
+            if (!isNaN(timestamp) && (Date.now() - timestamp > SESSION_MAX_AGE_MS)) {
+                console.warn("Session expirée (> 6 heures). Déconnexion automatique pour rechargement...");
+                if (isLive) await supabase.auth.signOut();
+                localStorage.removeItem(SESSION_KEY);
+                localStorage.removeItem(SESSION_TIMESTAMP_KEY);
+                localStorage.removeItem('dps65_organizer_code');
+                return { user: null, profile: null };
+            }
+        } else {
+            // Initialisation du horodatage pour une session préexistante
+            localStorage.setItem(SESSION_TIMESTAMP_KEY, Date.now().toString());
+        }
+
         if (storedId.startsWith('temp-organizer-')) {
             const eventId = storedId.replace('temp-organizer-', '');
             
@@ -259,6 +290,7 @@ export const authService = {
       await tx.done;
       
       localStorage.setItem(SESSION_KEY, newProfile.id);
+      localStorage.setItem(SESSION_TIMESTAMP_KEY, Date.now().toString());
       syncService.processQueue();
       
       return newProfile;
@@ -292,6 +324,7 @@ export const authService = {
 
           if (profile) {
               localStorage.setItem(SESSION_KEY, profile.id);
+              localStorage.setItem(SESSION_TIMESTAMP_KEY, Date.now().toString());
               return profile;
           }
           throw new Error("Profil introuvable.");
@@ -302,6 +335,7 @@ export const authService = {
 
           if (!user) throw new Error("Utilisateur inconnu localement.");
           localStorage.setItem(SESSION_KEY, user.id);
+          localStorage.setItem(SESSION_TIMESTAMP_KEY, Date.now().toString());
           return user;
       }
   },
@@ -393,6 +427,7 @@ export const authService = {
       // 3. Stockage de la session virtuelle locale spécifique à cet événement
       const ORGANIZER_ID = `temp-organizer-${event.id}`;
       localStorage.setItem(SESSION_KEY, ORGANIZER_ID);
+      localStorage.setItem(SESSION_TIMESTAMP_KEY, Date.now().toString());
       localStorage.setItem('dps65_organizer_code', cleanCode);
 
       // On sauvegarde l'événement localement pour l'affichage immédiat
@@ -425,6 +460,7 @@ export const authService = {
   logout: async () => {
       if (isLive) await supabase.auth.signOut();
       localStorage.removeItem(SESSION_KEY);
+      localStorage.removeItem(SESSION_TIMESTAMP_KEY);
       localStorage.removeItem('dps65_organizer_code');
   },
 
@@ -448,6 +484,7 @@ export const authService = {
       await tx.done;
       if (localStorage.getItem(SESSION_KEY) === userId) {
           localStorage.removeItem(SESSION_KEY);
+          localStorage.removeItem(SESSION_TIMESTAMP_KEY);
       }
       if (isLive) syncService.processQueue();
   },
