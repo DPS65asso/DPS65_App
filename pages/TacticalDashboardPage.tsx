@@ -3,6 +3,7 @@ import React, { useEffect, useState, Suspense, lazy, useMemo } from 'react';
 import { useVitalsNotifications } from '../hooks/useVitalsNotifications';
 import { Layout } from '../components/Layout';
 import { storageService } from '../services/storageService';
+import { syncService } from '../services/syncService';
 import { Event, Victim, TriageColor, Outcome } from '../types';
 import { Loader2, AlertCircle, Users, Activity, Bed, Monitor, ExternalLink, Map as MapIcon, X, RefreshCw, FileText } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -45,9 +46,36 @@ export const TacticalDashboardPage: React.FC = () => {
 
             const sorted = evts.sort((a,b) => b.createdAt - a.createdAt);
             setEvents(sorted);
-            if (sorted.length > 0) setSelectedEventId(sorted[0].id);
+            setSelectedEventId(prev => {
+                if (!prev && sorted.length > 0) return sorted[0].id;
+                return prev;
+            });
         };
         load();
+
+        const bc = new BroadcastChannel('dps65_events_channel');
+        bc.onmessage = (e) => {
+            if (e.data.type === 'UPDATE_EVENTS') {
+                load();
+            }
+        };
+
+        const unsubSync = syncService.subscribe(() => {
+            load();
+        });
+
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'visible') {
+                load();
+            }
+        };
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+
+        return () => {
+            bc.close();
+            unsubSync();
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+        };
     }, [profile]);
 
     useEffect(() => {

@@ -387,13 +387,15 @@ CREATE POLICY delete_profiles ON public.profiles
     USING (public.current_user_role() = 'admin');
 
 -- ----------------- TABLE: EVENTS -----------------
+DROP POLICY IF EXISTS select_events ON public.events;
 CREATE POLICY select_events ON public.events
-    FOR SELECT TO authenticated USING (true);
+    FOR SELECT TO anon, authenticated USING (true);
 
+DROP POLICY IF EXISTS modify_events ON public.events;
 CREATE POLICY modify_events ON public.events
     FOR ALL TO authenticated
-    USING (public.current_user_role() = 'admin')
-    WITH CHECK (public.current_user_role() = 'admin');
+    USING (true)
+    WITH CHECK (true);
 
 -- ----------------- TABLE: VICTIMS (Données Sensibles) -----------------
 CREATE POLICY select_victims ON public.victims

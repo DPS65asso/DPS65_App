@@ -74,16 +74,24 @@ export const EventDashboardPage: React.FC = () => {
         checkVictimsFreshness(timeNow);
     }, 60000); 
 
-    const bc = new BroadcastChannel('dps65_victims_channel');
-    bc.onmessage = (e) => {
+    const bcVictims = new BroadcastChannel('dps65_victims_channel');
+    bcVictims.onmessage = (e) => {
         if (e.data.type === 'UPDATE_VICTIMS' && e.data.eventId === id) {
+            loadData();
+        }
+    };
+
+    const bcEvents = new BroadcastChannel('dps65_events_channel');
+    bcEvents.onmessage = (e) => {
+        if (e.data.type === 'UPDATE_EVENTS' && (!e.data.eventId || e.data.eventId === id)) {
             loadData();
         }
     };
     
     return () => { 
         clearInterval(interval);
-        bc.close();
+        bcVictims.close();
+        bcEvents.close();
     };
   }, [id]);
 

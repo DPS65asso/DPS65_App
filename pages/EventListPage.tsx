@@ -5,6 +5,7 @@ import { Layout } from '../components/Layout';
 import { Button } from '../components/Button';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { storageService } from '../services/storageService';
+import { syncService } from '../services/syncService';
 import { isLive } from '../services/supabaseClient';
 import { useAuth } from '../context/AuthContext';
 import { Event } from '../types';
@@ -104,9 +105,27 @@ export const EventListPage: React.FC = () => {
         loadEvents();
       }
     };
+
+    // Synchronisation en direct avec le service de synchronisation
+    const unsubSync = syncService.subscribe(() => {
+      loadEvents();
+    });
+
+    // Rechargement au retour sur l'onglet
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        loadEvents();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleVisibilityChange);
     
     return () => {
       bc.close();
+      unsubSync();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleVisibilityChange);
     };
   }, [showArchived]);
 

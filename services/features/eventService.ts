@@ -12,7 +12,7 @@ const bc = new BroadcastChannel('dps65_events_channel');
 export const eventService = {
     getEvents: async (): Promise<AppEvent[]> => {
         const db = await initDB();
-        return await db.getAllFromIndex('events', 'by-date');
+        return await db.getAll('events');
     },
 
     saveEvent: async (event: AppEvent): Promise<void> => {

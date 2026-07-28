@@ -70,6 +70,26 @@ export const HomePage: React.FC = () => {
         setTodayEvent(found || null);
     };
     loadTodayEvent();
+
+    // Écoute des mises à jour en temps réel de l'événement du jour
+    const bcEvents = new BroadcastChannel('dps65_events_channel');
+    bcEvents.onmessage = (e) => {
+        if (e.data.type === 'UPDATE_EVENTS') {
+            loadTodayEvent();
+        }
+    };
+
+    const unsubSync = syncService.subscribe(() => {
+        loadTodayEvent();
+    });
+
+    const handleVisibilityChange = () => {
+        if (document.visibilityState === 'visible') {
+            loadTodayEvent();
+        }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
     
     // Tentative de restauration de session GPS (si app redémarrée)
     const initGps = async () => {
@@ -78,6 +98,12 @@ export const HomePage: React.FC = () => {
         setIsTracking(geoService.isTracking);
     };
     initGps();
+
+    return () => {
+        bcEvents.close();
+        unsubSync();
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, []);
 
   // Surveiller la config pour les mises à jour
