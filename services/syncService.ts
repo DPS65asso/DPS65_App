@@ -23,12 +23,16 @@ class SyncService {
     private isOnline = navigator.onLine;
     private hasError = false;
     private connectivityInterval: any = null;
+    private realtimeRetryCount = 0;
+    private realtimeChannel: any = null;
+    private realtimeRetryTimeout: any = null;
     
     constructor() {
         // En plus des évènements window, on fait un vrai ping actif toutes les 15 secondes
         this.checkConnectivity();
         
         window.addEventListener('online', () => {
+            console.log("🌐 Événement ONLINE détecté.");
             this.checkConnectivity();
         });
         window.addEventListener('offline', () => { 
@@ -36,9 +40,37 @@ class SyncService {
             this.notifyListeners(); 
         });
 
+        // Surveillance du retour au premier plan (Crucial pour PWA iOS Safari / Android Chrome)
+        const handleForegroundReturn = async () => {
+            if (document.visibilityState === 'visible') {
+                console.log("📱 PWA revenue au premier plan. Vérification connectivité, resynchronisation et reconnexion Realtime...");
+                const connected = await this.checkConnectivity();
+                if (connected) {
+                    this.reconnectRealtime();
+                    this.processQueue();
+                    this.pullLatestData();
+                }
+            }
+        };
+
+        document.addEventListener('visibilitychange', handleForegroundReturn);
+        window.addEventListener('focus', handleForegroundReturn);
+        window.addEventListener('pageshow', handleForegroundReturn);
+
         this.connectivityInterval = setInterval(() => {
             this.checkConnectivity();
         }, 15000);
+
+        // Verification périodique de l'état du canal Realtime (30s)
+        setInterval(() => {
+            if (this.isOnline && isLive) {
+                const channelState = this.realtimeChannel?.state;
+                if (!this.realtimeChannel || channelState === 'closed' || channelState === 'errored' || channelState === 'leaving') {
+                    console.warn(`⚠️ Canal Realtime inactif ou déconnecté (état: ${channelState || 'null'}). Reconnexion de sécurité...`);
+                    this.reconnectRealtime();
+                }
+            }
+        }, 30000);
 
         this.initializeRealtime();
 
@@ -77,7 +109,7 @@ class SyncService {
                 this.notifyListeners();
                 if (online) {
                     this.processQueue();
-                    this.initializeRealtime();
+                    this.reconnectRealtime();
                     this.pullLatestData();
                 }
             }
@@ -91,8 +123,31 @@ class SyncService {
         }
     }
 
-    private realtimeRetryCount = 0;
-    private realtimeChannel: any = null;
+    public async reconnectRealtime() {
+        if (!isLive || !supabase) return;
+        if (this.realtimeRetryTimeout) {
+            clearTimeout(this.realtimeRetryTimeout);
+            this.realtimeRetryTimeout = null;
+        }
+        console.log("🔄 Reconnexion du socket Supabase Realtime...");
+        try {
+            if (this.realtimeChannel) {
+                await supabase.removeChannel(this.realtimeChannel);
+                this.realtimeChannel = null;
+            }
+            if ((supabase as any).realtime) {
+                try {
+                    (supabase as any).realtime.disconnect();
+                    (supabase as any).realtime.connect();
+                } catch (e) {
+                    console.warn("WebSocket reconnect warning:", e);
+                }
+            }
+        } catch (e) {
+            console.warn("Erreur lors du nettoyage du canal Realtime:", e);
+        }
+        await this.initializeRealtime();
+    }
 
     private async initializeRealtime() {
         if (!this.isOnline || !isLive) return;
@@ -129,7 +184,8 @@ class SyncService {
                 const delay = Math.min(30000, Math.pow(2, this.realtimeRetryCount) * 1000) + (Math.random() * 1500);
                 
                 console.log(`[Realtime Reconnector] Reconnexion dans ${Math.round(delay)}ms (Essai #${this.realtimeRetryCount})`);
-                setTimeout(() => {
+                if (this.realtimeRetryTimeout) clearTimeout(this.realtimeRetryTimeout);
+                this.realtimeRetryTimeout = setTimeout(() => {
                     this.initializeRealtime();
                 }, delay);
             }

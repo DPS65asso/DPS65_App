@@ -670,6 +670,7 @@ ALTER TABLE public.config REPLICA IDENTITY FULL;
 DO $$
 DECLARE
     t text;
+    is_all_tables boolean := false;
     tables_to_add text[] := ARRAY[
         'events', 'victims', 'logbook', 'team_locations', 'custom_markers', 
         'missions', 'profiles', 'bags', 'bag_items', 'uniforms', 
@@ -681,21 +682,28 @@ BEGIN
         CREATE PUBLICATION supabase_realtime;
     END IF;
 
-    -- Ajoute chaque table de manière individuelle s'il n'est pas déjà présent
-    FOREACH t IN ARRAY tables_to_add LOOP
-        IF NOT EXISTS (
-            SELECT 1 
-            FROM pg_publication_rel pr
-            JOIN pg_class c ON pr.prrelid = c.oid
-            JOIN pg_namespace n ON c.relnamespace = n.oid
-            JOIN pg_publication p ON pr.prpubid = p.oid
-            WHERE p.pubname = 'supabase_realtime' 
-              AND n.nspname = 'public' 
-              AND c.relname = t
-        ) THEN
-            EXECUTE format('ALTER PUBLICATION supabase_realtime ADD TABLE public.%I', t);
-        END IF;
-    END LOOP;
+    -- Vérifie si la publication est déjà configurée pour TOUTES les tables (FOR ALL TABLES)
+    SELECT puballtables INTO is_all_tables 
+    FROM pg_publication 
+    WHERE pubname = 'supabase_realtime';
+
+    -- Si elle n'est pas FOR ALL TABLES, on ajoute chaque table individuellement si elle n'est pas présente
+    IF NOT is_all_tables THEN
+        FOREACH t IN ARRAY tables_to_add LOOP
+            IF NOT EXISTS (
+                SELECT 1 
+                FROM pg_publication_rel pr
+                JOIN pg_class c ON pr.prrelid = c.oid
+                JOIN pg_namespace n ON c.relnamespace = n.oid
+                JOIN pg_publication p ON pr.prpubid = p.oid
+                WHERE p.pubname = 'supabase_realtime' 
+                  AND n.nspname = 'public' 
+                  AND c.relname = t
+            ) THEN
+                EXECUTE format('ALTER PUBLICATION supabase_realtime ADD TABLE public.%I', t);
+            END IF;
+        END LOOP;
+    END IF;
 END $$;
 
 

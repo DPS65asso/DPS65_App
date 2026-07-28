@@ -58,6 +58,14 @@ class GeoService {
 
     constructor() {
         this.initBattery();
+
+        // Relance le watcher GPS au retour au premier plan si le suivi est actif (Contourne le gel du GPS en arrière-plan sur iOS)
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible' && this.isTracking) {
+                console.log("📍 Application revenue au premier plan. Redémarrage du suivi GPS...");
+                this.restartWatch();
+            }
+        });
     }
 
     private async initBattery() {

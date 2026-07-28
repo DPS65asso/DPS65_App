@@ -38,6 +38,7 @@ if (supabaseUrl && supabaseAnonKey && supabaseUrl !== 'undefined' && supabaseUrl
                 params: {
                     eventsPerSecond: 10,
                 },
+                heartbeatIntervalMs: 15000,
             },
         });
         isLive = true;

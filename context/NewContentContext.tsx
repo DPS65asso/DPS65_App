@@ -208,9 +208,20 @@ export const NewContentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
             return bc;
         });
 
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'visible') {
+                refresh();
+            }
+        };
+
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        window.addEventListener('online', handleVisibilityChange);
+
         return () => {
             unsub();
             listeners.forEach(bc => bc.close());
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+            window.removeEventListener('online', handleVisibilityChange);
         };
     }, [refresh]);
 
