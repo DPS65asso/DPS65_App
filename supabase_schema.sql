@@ -472,19 +472,17 @@ CREATE POLICY delete_custom_markers ON public.custom_markers
     USING (true);
 
 -- ----------------- TABLE: MISSIONS -----------------
+DROP POLICY IF EXISTS select_missions ON public.missions;
 CREATE POLICY select_missions ON public.missions
-    FOR SELECT TO authenticated USING (true);
+    FOR SELECT TO anon, authenticated USING (true);
 
--- Les secouristes ont le droit de s'inscrire à une mission (ce qui implique un update de la ligne)
-CREATE POLICY update_missions ON public.missions
-    FOR UPDATE TO authenticated
+DROP POLICY IF EXISTS update_missions ON public.missions;
+DROP POLICY IF EXISTS admin_modify_missions ON public.missions;
+DROP POLICY IF EXISTS modify_missions ON public.missions;
+CREATE POLICY modify_missions ON public.missions
+    FOR ALL TO authenticated
     USING (true)
     WITH CHECK (true);
-
-CREATE POLICY admin_modify_missions ON public.missions
-    FOR ALL TO authenticated
-    USING (public.current_user_role() = 'admin')
-    WITH CHECK (public.current_user_role() = 'admin');
 
 -- ----------------- TABLE: BAGS -----------------
 CREATE POLICY select_bags ON public.bags
@@ -546,42 +544,48 @@ CREATE POLICY modify_vehicle_checks ON public.vehicle_checks
     WITH CHECK (public.current_user_role() IN ('admin', 'logisticien'));
 
 -- ----------------- TABLE: NEWS -----------------
+DROP POLICY IF EXISTS select_news ON public.news;
 CREATE POLICY select_news ON public.news
-    FOR SELECT TO authenticated USING (true);
+    FOR SELECT TO anon, authenticated USING (true);
 
+DROP POLICY IF EXISTS modify_news ON public.news;
 CREATE POLICY modify_news ON public.news
     FOR ALL TO authenticated
-    USING (public.current_user_role() = 'admin')
-    WITH CHECK (public.current_user_role() = 'admin');
+    USING (true)
+    WITH CHECK (true);
 
 -- ----------------- TABLE: DOCUMENTS -----------------
+DROP POLICY IF EXISTS select_documents ON public.documents;
 CREATE POLICY select_documents ON public.documents
-    FOR SELECT TO authenticated
-    USING (NOT "adminOnly" OR public.current_user_role() = 'admin');
+    FOR SELECT TO anon, authenticated USING (true);
 
+DROP POLICY IF EXISTS modify_documents ON public.documents;
 CREATE POLICY modify_documents ON public.documents
     FOR ALL TO authenticated
-    USING (public.current_user_role() = 'admin')
-    WITH CHECK (public.current_user_role() = 'admin');
+    USING (true)
+    WITH CHECK (true);
 
 -- ----------------- TABLE: COURSES -----------------
+DROP POLICY IF EXISTS select_courses ON public.courses;
 CREATE POLICY select_courses ON public.courses
-    FOR SELECT TO authenticated USING (true);
+    FOR SELECT TO anon, authenticated USING (true);
 
+DROP POLICY IF EXISTS modify_courses ON public.courses;
 CREATE POLICY modify_courses ON public.courses
     FOR ALL TO authenticated
-    USING (public.current_user_role() = 'admin')
-    WITH CHECK (public.current_user_role() = 'admin');
+    USING (true)
+    WITH CHECK (true);
 
 -- ----------------- TABLE: CONFIG -----------------
 DROP POLICY IF EXISTS select_config ON public.config;
 CREATE POLICY select_config ON public.config
     FOR SELECT TO anon, authenticated USING (true);
 
+DROP POLICY IF EXISTS modify_config ON public.config;
 CREATE POLICY modify_config ON public.config
     FOR ALL TO authenticated
-    USING (public.current_user_role() = 'admin')
-    WITH CHECK (public.current_user_role() = 'admin');
+    USING (true)
+    WITH CHECK (true);
 
 -- ----------------- TABLE: AUDIT -----------------
 CREATE POLICY select_audit ON public.audit

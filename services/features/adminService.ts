@@ -103,6 +103,27 @@ export const adminService = {
             retries: 0
         });
         await tx.done;
+
+        // Broadcast local immédiat
+        try {
+            const bc = new BroadcastChannel('dps65_asso_channel');
+            bc.postMessage({ type: 'UPDATE_NEWS' });
+            bc.close();
+        } catch(e) {}
+
+        // Push direct vers Supabase si en ligne
+        const isLive = typeof window !== 'undefined' && (window as any).isLiveMode !== false;
+        if (isLive && navigator.onLine) {
+            try {
+                const { supabase } = await import('../supabaseClient');
+                if (supabase) {
+                    await supabase.from('news').upsert(news);
+                }
+            } catch (e) {
+                console.warn("Direct news sync warning:", e);
+            }
+        }
+
         syncService.processQueue();
     },
 
@@ -120,6 +141,25 @@ export const adminService = {
             retries: 0
         });
         await tx.done;
+
+        try {
+            const bc = new BroadcastChannel('dps65_asso_channel');
+            bc.postMessage({ type: 'UPDATE_NEWS' });
+            bc.close();
+        } catch(e) {}
+
+        const isLive = typeof window !== 'undefined' && (window as any).isLiveMode !== false;
+        if (isLive && navigator.onLine) {
+            try {
+                const { supabase } = await import('../supabaseClient');
+                if (supabase) {
+                    await supabase.from('news').delete().eq('id', id);
+                }
+            } catch (e) {
+                console.warn("Direct delete news warning:", e);
+            }
+        }
+
         syncService.processQueue();
     },
 
@@ -153,6 +193,28 @@ export const adminService = {
             retries: 0
         });
         await tx.done;
+
+        // Broadcast local immédiat pour mise à jour instantanée de la vue Portail Asso & Admin
+        try {
+            const bc = new BroadcastChannel('dps65_asso_channel');
+            bc.postMessage({ type: 'UPDATE_DOCUMENTS' });
+            bc.close();
+        } catch(e) {}
+
+        // Envoi direct à Supabase si connecté
+        const isLive = typeof window !== 'undefined' && (window as any).isLiveMode !== false;
+        if (isLive && navigator.onLine) {
+            try {
+                const { supabase } = await import('../supabaseClient');
+                if (supabase) {
+                    await supabase.from('documents').upsert(cleanDoc);
+                    console.log("Admin: Document synchro directe Supabase OK.");
+                }
+            } catch (e) {
+                console.warn("Direct document sync warning:", e);
+            }
+        }
+
         syncService.processQueue();
     },
 
@@ -170,6 +232,25 @@ export const adminService = {
             retries: 0
         });
         await tx.done;
+
+        try {
+            const bc = new BroadcastChannel('dps65_asso_channel');
+            bc.postMessage({ type: 'UPDATE_DOCUMENTS' });
+            bc.close();
+        } catch(e) {}
+
+        const isLive = typeof window !== 'undefined' && (window as any).isLiveMode !== false;
+        if (isLive && navigator.onLine) {
+            try {
+                const { supabase } = await import('../supabaseClient');
+                if (supabase) {
+                    await supabase.from('documents').delete().eq('id', id);
+                }
+            } catch (e) {
+                console.warn("Direct delete document warning:", e);
+            }
+        }
+
         syncService.processQueue();
     },
 
@@ -192,6 +273,25 @@ export const adminService = {
             retries: 0
         });
         await tx.done;
+
+        try {
+            const bc = new BroadcastChannel('dps65_asso_channel');
+            bc.postMessage({ type: 'UPDATE_COURSES' });
+            bc.close();
+        } catch(e) {}
+
+        const isLive = typeof window !== 'undefined' && (window as any).isLiveMode !== false;
+        if (isLive && navigator.onLine) {
+            try {
+                const { supabase } = await import('../supabaseClient');
+                if (supabase) {
+                    await supabase.from('courses').upsert(course);
+                }
+            } catch (e) {
+                console.warn("Direct course sync warning:", e);
+            }
+        }
+
         syncService.processQueue();
     },
 
@@ -209,6 +309,25 @@ export const adminService = {
             retries: 0
         });
         await tx.done;
+
+        try {
+            const bc = new BroadcastChannel('dps65_asso_channel');
+            bc.postMessage({ type: 'UPDATE_COURSES' });
+            bc.close();
+        } catch(e) {}
+
+        const isLive = typeof window !== 'undefined' && (window as any).isLiveMode !== false;
+        if (isLive && navigator.onLine) {
+            try {
+                const { supabase } = await import('../supabaseClient');
+                if (supabase) {
+                    await supabase.from('courses').delete().eq('id', id);
+                }
+            } catch (e) {
+                console.warn("Direct delete course warning:", e);
+            }
+        }
+
         syncService.processQueue();
     },
 
