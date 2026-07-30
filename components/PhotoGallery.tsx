@@ -1,6 +1,6 @@
 
 import React, { useRef, useState, useEffect, useMemo } from 'react';
-import { Camera, Trash2, Maximize2, X, AlertTriangle } from 'lucide-react';
+import { Camera, Image, Trash2, Maximize2, X, AlertTriangle } from 'lucide-react';
 import { VictimPhoto } from '../types';
 import { generateUUID } from '../utils/security';
 import { Button } from './Button';
@@ -14,7 +14,8 @@ interface PhotoGalleryProps {
 const MAX_PHOTOS = 4;
 
 export const PhotoGallery: React.FC<PhotoGalleryProps> = ({ photos, onUpdate, readOnly = false }) => {
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
   const workerRef = useRef<Worker | null>(null);
   const [isCompressing, setIsCompressing] = useState(false);
   const [fullscreenPhoto, setFullscreenPhoto] = useState<string | null>(null);
@@ -136,27 +137,50 @@ export const PhotoGallery: React.FC<PhotoGalleryProps> = ({ photos, onUpdate, re
                     </label>
                 </div>
 
+                {/* Entrées de fichier pour Appareil photo (capture) et Galerie du téléphone */}
                 <input 
                     type="file" 
                     accept="image/*" 
                     capture="environment" 
-                    ref={fileInputRef} 
+                    ref={cameraInputRef} 
                     className="hidden" 
                     onChange={handleCapture}
                 />
-                <Button 
-                    type="button"
-                    variant="outline" 
-                    fullWidth 
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={isCompressing || photos.length >= MAX_PHOTOS}
-                    icon={<Camera className="w-5 h-5" />}
-                    className="border-dashed border-2 py-8"
-                >
-                    {isCompressing ? "Traitement optimisé..." : photos.length >= MAX_PHOTOS ? "Limite Atteinte" : "Ajouter Photo (Preuve/Blessure)"}
-                </Button>
+                <input 
+                    type="file" 
+                    accept="image/*" 
+                    ref={galleryInputRef} 
+                    className="hidden" 
+                    onChange={handleCapture}
+                />
+                
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <Button 
+                        type="button"
+                        variant="outline" 
+                        fullWidth 
+                        onClick={() => cameraInputRef.current?.click()}
+                        disabled={isCompressing || photos.length >= MAX_PHOTOS}
+                        icon={<Camera className="w-5 h-5 text-red-500" />}
+                        className="border-dashed border-2 py-4"
+                    >
+                        {isCompressing ? "Traitement..." : photos.length >= MAX_PHOTOS ? "Limite Atteinte" : "Prendre une photo"}
+                    </Button>
+
+                    <Button 
+                        type="button"
+                        variant="outline" 
+                        fullWidth 
+                        onClick={() => galleryInputRef.current?.click()}
+                        disabled={isCompressing || photos.length >= MAX_PHOTOS}
+                        icon={<Image className="w-5 h-5 text-blue-500" />}
+                        className="border-dashed border-2 py-4"
+                    >
+                        {isCompressing ? "Traitement..." : photos.length >= MAX_PHOTOS ? "Limite Atteinte" : "Choisir dans la galerie"}
+                    </Button>
+                </div>
                 {photos.length >= MAX_PHOTOS && (
-                    <div className="text-xs text-orange-600 flex items-center gap-1 justify-center font-bold">
+                    <div className="text-xs text-orange-600 flex items-center gap-1 justify-center font-bold mt-1">
                         <AlertTriangle className="w-3 h-3" /> Limite : {MAX_PHOTOS} photos.
                     </div>
                 )}

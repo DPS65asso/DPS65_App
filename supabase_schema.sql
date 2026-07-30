@@ -260,6 +260,11 @@ CREATE TABLE IF NOT EXISTS public.config (
     "forcedUpdateAt" TEXT DEFAULT ''
 );
 
+-- Insertion de la configuration par défaut si elle n'existe pas encore
+INSERT INTO public.config (id, "signupCode", hospitals, teams, medications, solutes)
+VALUES ('main', 'DPS65-2025', ARRAY['CH Tarbes', 'Clinique Ormeau', 'CH Pau', 'CH Lourdes'], ARRAY['Alpha', 'Bravo', 'Charlie', 'Delta', 'Echo', 'Tango'], ARRAY['Paracétamol', 'Ibuprofène', 'Spasfon', 'Gaviscon'], ARRAY['NaCl 0.9%', 'G5%', 'Ringer Lactate'])
+ON CONFLICT (id) DO NOTHING;
+
 -- TABLE: audit (Optionnelle au cas où on voudrait sauvegarder les logs d'audit sur le cloud)
 CREATE TABLE IF NOT EXISTS public.audit (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -569,8 +574,9 @@ CREATE POLICY modify_courses ON public.courses
     WITH CHECK (public.current_user_role() = 'admin');
 
 -- ----------------- TABLE: CONFIG -----------------
+DROP POLICY IF EXISTS select_config ON public.config;
 CREATE POLICY select_config ON public.config
-    FOR SELECT TO authenticated USING (true);
+    FOR SELECT TO anon, authenticated USING (true);
 
 CREATE POLICY modify_config ON public.config
     FOR ALL TO authenticated

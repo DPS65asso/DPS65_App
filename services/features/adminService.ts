@@ -64,6 +64,20 @@ export const adminService = {
           localBc.postMessage({ type: 'UPDATE_CONFIG' });
           localBc.close();
 
+          // Tentative d'envoi immédiat sur Supabase si en ligne
+          const isLive = typeof window !== 'undefined' && (window as any).isLiveMode !== false;
+          if (isLive && navigator.onLine) {
+              try {
+                  const { supabase } = await import('../supabaseClient');
+                  if (supabase) {
+                      await supabase.from('config').upsert(cleanConfig);
+                      console.log("Admin: Config sync directe vers Supabase réussie.");
+                  }
+              } catch (supaErr) {
+                  console.warn("Admin: Sync directe Supabase en échec, file de sync prend le relais:", supaErr);
+              }
+          }
+
           console.log("Admin: Config saved locally and added to sync queue.");
           syncService.processQueue();
           auditService.log('CONFIG_UPDATE', 'Configuration mise à jour');

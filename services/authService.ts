@@ -227,11 +227,15 @@ export const authService = {
               .from('config')
               .select('signupCode')
               .eq('id', 'main')
-              .single();
-          if (!error && data) currentSignupCode = data.signupCode;
-      } catch (e) {}
+              .maybeSingle();
+          if (!error && data && data.signupCode !== undefined && data.signupCode !== null) {
+              currentSignupCode = data.signupCode;
+          }
+      } catch (e) {
+          console.warn("Impossible de récupérer le code d'inscription depuis Supabase, repli sur IndexedDB local", e);
+      }
 
-      if (!currentSignupCode) {
+      if (currentSignupCode === '') {
           const config = await adminService.getConfig();
           currentSignupCode = config.signupCode || '';
       }
@@ -240,7 +244,7 @@ export const authService = {
       const validCode = currentSignupCode.trim().toUpperCase();
 
       if (validCode && providedCode !== validCode) {
-          throw new Error("Code d'accès invalide.");
+          throw new Error("Code d'accès invalide. Veuillez vérifier le code fourni par l'association.");
       }
 
       let finalRole = requestedRole;

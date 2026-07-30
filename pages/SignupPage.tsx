@@ -43,11 +43,6 @@ export const SignupPage: React.FC = () => {
       return;
     }
 
-    if (!formData.accessCode) {
-        setError("Code d'accès obligatoire.");
-        return;
-    }
-
     setLoading(true);
 
     try {
@@ -57,7 +52,7 @@ export const SignupPage: React.FC = () => {
           formData.firstName, 
           formData.lastName, 
           formData.role,
-          formData.accessCode // Transmis au service
+          formData.accessCode || '' // Transmis au service
       );
       await checkAuth();
       navigate('/');
