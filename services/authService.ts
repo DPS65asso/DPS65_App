@@ -159,7 +159,9 @@ export const authService = {
       if (current) {
           const updatedProfile = { ...current, ...updates };
           
-          delete (updatedProfile as any).password;
+          if (!updates.password) {
+              delete (updatedProfile as any).password;
+          }
 
           const tx = db.transaction(['profiles', 'sync_queue'], 'readwrite');
           await tx.objectStore('profiles').put(updatedProfile);
@@ -177,6 +179,13 @@ export const authService = {
           }
           
           await tx.done;
+
+          try {
+              const bc = new BroadcastChannel('dps65_profiles_channel');
+              bc.postMessage({ type: 'UPDATE_PROFILE', userId, profile: updatedProfile });
+              bc.close();
+          } catch(e) {}
+
           if (isLive) syncService.processQueue();
       }
   },

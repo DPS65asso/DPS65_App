@@ -5,6 +5,8 @@ import { Layout } from '../components/Layout';
 import { Calendar, Truck, GraduationCap, ArrowRight, MessageSquare, Briefcase, Shirt, User, QrCode, Shield, TrendingUp } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { storageService } from '../services/storageService';
+import { adminService } from '../services/features/adminService';
+import { AppConfig } from '../types';
 import { useNewContent } from '../context/NewContentContext';
 import { NewContentBadge } from '../components/NewContentBadge';
 
@@ -19,7 +21,9 @@ const ModuleCard: React.FC<{
     className?: string;
     wide?: boolean; // Option pour affichage large
     badge?: boolean;
-}> = ({ title, desc, icon, color, onClick, className, wide = false, badge = false }) => {
+    badgeText?: string;
+    badgeVariant?: 'dot' | 'pill';
+}> = ({ title, desc, icon, color, onClick, className, wide = false, badge = false, badgeText, badgeVariant = 'dot' }) => {
     
     // CONFIGURATION DES "IMAGES" (LOGOS)
     // On simule une image d'app avec des dégradés riches et des ombres
@@ -41,8 +45,8 @@ const ModuleCard: React.FC<{
             flex ${wide ? 'flex-row items-center gap-4' : 'flex-col justify-center items-start'} h-full min-h-0
             ${className}`}
         >
-            {/* Pastille de nouveauté déplacée au coin supérieur droit de la carte */}
-            <NewContentBadge show={badge} className="absolute top-2.5 right-2.5 border-2 border-white dark:border-slate-900 shadow-xs z-10" />
+            {/* Pastille ou badge de nouveauté au coin supérieur droit de la carte */}
+            <NewContentBadge show={badge} text={badgeText} variant={badgeVariant} className="absolute top-2.5 right-2.5 z-20" />
 
             {/* LOGO / IMAGE */}
             <div className={`
@@ -70,7 +74,7 @@ const ModuleCard: React.FC<{
 export const ManagementDashboardPage: React.FC = () => {
     const navigate = useNavigate();
     const { profile } = useAuth();
-    const { badges } = useNewContent();
+    const { badges, markSectionAsSeen } = useNewContent();
     
     // RESTRICTION : Organisateur ne peut pas accéder à la gestion
     useEffect(() => {
@@ -80,6 +84,7 @@ export const ManagementDashboardPage: React.FC = () => {
     }, [profile, navigate]);
 
     const [counts, setCounts] = useState({ missions: 0, docs: 0, courses: 0, fleet: 0 });
+    const [appConfig, setAppConfig] = useState<AppConfig | null>(null);
 
     // Rôle SNU ne voit pas le vestiaire
     const isSnu = profile?.role === 'snu';
@@ -87,14 +92,23 @@ export const ManagementDashboardPage: React.FC = () => {
     useEffect(() => { 
         const loadCounts = async () => {
             try {
-                const [missions, news, docs, courses, fleet] = await Promise.all([
+                const [missions, news, docs, courses, fleet, conf] = await Promise.all([
                     storageService.getMissions(), storageService.getNews(), storageService.getDocuments(),
-                    storageService.getCourses(), storageService.getFleet()
+                    storageService.getCourses(), storageService.getFleet(), adminService.getConfig()
                 ]);
                 setCounts({ missions: missions.length, docs: news.length + docs.length, courses: courses.length, fleet: fleet.length });
+                setAppConfig(conf);
             } catch (e) {}
         };
         loadCounts();
+
+        const bcConfig = new BroadcastChannel('dps65_config_channel');
+        bcConfig.onmessage = () => {
+            adminService.getConfig().then(setAppConfig);
+        };
+        return () => {
+            bcConfig.close();
+        };
     }, []);
 
     const handleNavigation = (path: string, type: 'missions' | 'docs' | 'courses' | 'fleet') => {
@@ -165,7 +179,6 @@ export const ManagementDashboardPage: React.FC = () => {
                             desc="Carnet & Pannes."
                             icon={<Truck />}
                             color="orange"
-                            badge={badges.fleet}
                             onClick={() => handleNavigation('/management/logistics', 'fleet')}
                             className="h-full"
                         />
@@ -194,6 +207,9 @@ export const ManagementDashboardPage: React.FC = () => {
                                     desc="Tailles & Commandes."
                                     icon={<Shirt />}
                                     color="emerald"
+                                    badge={!!appConfig?.clothingOrderInProgress}
+                                    badgeText="Commande en cours"
+                                    badgeVariant="pill"
                                     onClick={() => navigate('/management/uniforms')}
                                     className="h-full"
                                 />

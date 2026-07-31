@@ -18,23 +18,23 @@ export const NewContentBadge: React.FC<NewContentBadgeProps> = ({
     if (!show) return null;
 
     if (variant === 'pill' || text) {
+        const hasBg = className.includes('bg-');
+        const bgClass = hasBg ? '' : (text ? 'bg-gradient-to-r from-amber-500 to-orange-600 dark:from-amber-600 dark:to-orange-700' : 'bg-red-500 dark:bg-rose-600');
         return (
-            <span className={`inline-flex items-center justify-center px-1.5 py-0.5 text-[10px] font-black uppercase tracking-tighter leading-none text-white bg-red-500 dark:bg-rose-600 rounded-full shadow-sm shadow-red-500/20 ${className}`}>
+            <span className={`inline-flex items-center justify-center px-2 py-0.5 text-[9px] sm:text-[10px] font-black uppercase tracking-tight leading-none text-white rounded-full shadow-xs shrink-0 ${bgClass} ${className}`}>
                 {text || 'NEW'}
             </span>
         );
     }
 
-    const isAbsolute = className.includes('absolute');
-    const hasSize = className.includes('h-') || className.includes('w-');
-    const sizeClasses = hasSize ? '' : 'h-3 w-3';
+    const hasPosition = className.includes('absolute') || className.includes('fixed') || className.includes('relative');
 
     return (
-        <span className={`${isAbsolute ? '' : 'relative'} flex ${sizeClasses} shrink-0 rounded-full ${className}`} id="new-content-badge">
+        <span className={`${hasPosition ? '' : 'relative'} inline-flex items-center justify-center shrink-0 w-3 h-3 ${className}`} id="new-content-badge">
             {animate && (
-                <span className="animate-ping absolute inset-0 rounded-full bg-red-400 dark:bg-rose-400 opacity-75"></span>
+                <span className="animate-ping absolute inset-0 rounded-full bg-red-500 opacity-75 pointer-events-none"></span>
             )}
-            <span className="relative flex h-full w-full rounded-full bg-red-500 dark:bg-rose-500 shadow-xs shadow-red-500/30"></span>
+            <span className="relative inline-block w-2.5 h-2.5 rounded-full bg-red-500 ring-2 ring-white dark:ring-slate-900 shadow-xs shrink-0"></span>
         </span>
     );
 };

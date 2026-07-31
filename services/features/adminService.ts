@@ -13,7 +13,8 @@ const DEFAULT_CONFIG: AppConfig = {
     yaplaLink: 'https://dispositif-premiers-secours-65.s2.yapla.com/fr/espace-membres',
     signupCode: 'DPS65-2025', // Code par défaut
     medications: ['Paracétamol', 'Ibuprofène', 'Spasfon', 'Gaviscon'],
-    solutes: ['NaCl 0.9%', 'G5%', 'Ringer Lactate']
+    solutes: ['NaCl 0.9%', 'G5%', 'Ringer Lactate'],
+    clothingOrderInProgress: false
 };
 
 export const adminService = {
@@ -42,7 +43,8 @@ export const adminService = {
               signupCode: config.signupCode || '',
               medications: Array.isArray(config.medications) ? config.medications : [],
               solutes: Array.isArray(config.solutes) ? config.solutes : [],
-              forcedUpdateAt: config.forcedUpdateAt || ''
+              forcedUpdateAt: config.forcedUpdateAt || '',
+              clothingOrderInProgress: !!config.clothingOrderInProgress
           };
 
           // Sync Cloud (Important pour le Kill Switch)

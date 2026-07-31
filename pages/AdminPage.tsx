@@ -12,7 +12,7 @@ import { logisticsService } from '../services/features/logisticsService';
 import { testConnection } from '../services/supabaseClient'; 
 import { syncService } from '../services/syncService';
 import { Event, UserProfile, VehicleDefinition, TrainingCourse, Mission, NewsPost, AssociationDocument, Diploma, UserRole, AppConfig } from '../types';
-import { Activity, Trash2, Plus, X, List, Loader2, FileText, Truck, Users, Database, GraduationCap, Link as LinkIcon, Video, RefreshCw, Pencil, Shield, Award, Save, Lock, AlertTriangle, CheckCircle2, AlertCircle, Settings, Building2, Radio, Pill, Syringe } from 'lucide-react';
+import { Activity, Trash2, Plus, X, List, Loader2, FileText, Truck, Users, Database, GraduationCap, Link as LinkIcon, Video, RefreshCw, Pencil, Shield, Award, Save, Lock, AlertTriangle, CheckCircle2, AlertCircle, Settings, Building2, Radio, Pill, Syringe, Shirt } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { SyncIndicator } from '../components/SyncIndicator';
 
@@ -75,9 +75,45 @@ export const AdminPage: React.FC = () => {
   const [missions, setMissions] = useState<Mission[]>([]);
   const [appConfig, setAppConfig] = useState<AppConfig | null>(null);
 
-  // Member Edition State
+  // Member Edition State & Advanced Troubleshooting
   const [editingMember, setEditingMember] = useState<UserProfile | null>(null);
+  const [memberModalTab, setMemberModalTab] = useState<'IDENTITÉ' | 'RÔLE' | 'DIPLÔMES' | 'VESTIAIRE' | 'MISSIONS' | 'DÉPANNAGE'>('IDENTITÉ');
+  const [memberUniform, setMemberUniform] = useState<any | null>(null);
+  const [memberPassword, setMemberPassword] = useState('');
   const [tempDiploma, setTempDiploma] = useState<Partial<Diploma>>({});
+  const [actionSuccessMsg, setActionSuccessMsg] = useState('');
+  const [isSavingMember, setIsSavingMember] = useState(false);
+
+  useEffect(() => {
+      if (editingMember) {
+          setMemberPassword('');
+          setActionSuccessMsg('');
+          setTempDiploma({});
+          setMemberModalTab('IDENTITÉ');
+          logisticsService.getMyUniforms(editingMember.id).then(u => {
+              if (u) {
+                  setMemberUniform(u);
+              } else {
+                  setMemberUniform({
+                      id: editingMember.id,
+                      sizes: { top: 'M', bottom: '40', shoes: '42', head: 'M' },
+                      items: [
+                          { type: 'TSHIRT', label: 'T-Shirt Secouriste DPS65', hasItem: true, condition: 'BON', requestedQty: 2 },
+                          { type: 'POLO', label: 'Polo Secouriste DPS65', hasItem: true, condition: 'BON', requestedQty: 2 },
+                          { type: 'POLAIRE', label: 'Veste Polaire', hasItem: true, condition: 'BON', requestedQty: 1 },
+                          { type: 'SOFTSHELL', label: 'Veste Softshell Réflectiv', hasItem: false, condition: 'NEUF', requestedQty: 1 },
+                          { type: 'PANTALON', label: 'Pantalon d\'Intervention', hasItem: true, condition: 'BON', requestedQty: 2 },
+                          { type: 'CASQUETTE', label: 'Casquette DPS 65', hasItem: false, condition: 'NEUF', requestedQty: 1 },
+                          { type: 'CHAUSSURES', label: 'Chaussures de Sécurité', hasItem: true, condition: 'BON', requestedQty: 1 },
+                      ],
+                      lastUpdated: Date.now()
+                  });
+              }
+          });
+      } else {
+          setMemberUniform(null);
+      }
+  }, [editingMember?.id]);
 
   // User Creation State
   const [showCreateUserModal, setShowCreateUserModal] = useState(false);
@@ -307,14 +343,106 @@ export const AdminPage: React.FC = () => {
       }
   };
 
+  const showToast = (msg: string) => {
+      setActionSuccessMsg(msg);
+      setTimeout(() => setActionSuccessMsg(''), 4000);
+  };
+
   const handleSaveMember = async () => {
       if (!editingMember) return;
+      setIsSavingMember(true);
       try {
-          await authService.updateProfile(editingMember.id, editingMember);
-          setEditingMember(null);
-          loadData(true);
+          const updates: Partial<UserProfile> = { ...editingMember };
+          if (memberPassword.trim()) {
+              updates.password = memberPassword.trim();
+          }
+
+          await authService.updateProfile(editingMember.id, updates);
+
+          if (memberUniform) {
+              await logisticsService.saveUniforms(editingMember.id, memberUniform);
+          }
+
+          await loadData(true);
+          showToast("Compte utilisateur mis à jour et synchronisé avec succès !");
+          setTimeout(() => setEditingMember(null), 700);
+      } catch (e: any) {
+          alert("Erreur lors de la sauvegarde du profil : " + (e.message || "Erreur inconnue"));
+      } finally {
+          setIsSavingMember(false);
+      }
+  };
+
+  const handleAddPresetDiploma = (presetName: string, validYears: number) => {
+      if (!editingMember) return;
+      const todayStr = getLocalDateString();
+      let expiresAt: string | undefined = undefined;
+      if (validYears > 0) {
+          const expDate = new Date();
+          expDate.setFullYear(expDate.getFullYear() + validYears);
+          expiresAt = expDate.toISOString().split('T')[0];
+      }
+      const newD: Diploma = {
+          id: generateUUID(),
+          name: presetName,
+          dateObtained: todayStr,
+          expiresAt: expiresAt
+      };
+      setEditingMember({
+          ...editingMember,
+          diplomas: [...(editingMember.diplomas || []), newD]
+      });
+      showToast(`Diplôme ${presetName} ajouté !`);
+  };
+
+  const handleRemoteSyncMember = async () => {
+      if (!editingMember) return;
+      try {
+          const db = await initDB();
+          await db.put('sync_queue', {
+              id: generateUUID(),
+              table: 'profiles',
+              action: 'UPSERT',
+              data: editingMember,
+              timestamp: Date.now(),
+              status: 'PENDING',
+              retries: 0
+          });
+          await syncService.processQueue(true);
+          showToast(`Profil de ${editingMember.firstName} forcé en synchro Cloud !`);
       } catch (e) {
-          alert("Erreur lors de la mise à jour du profil.");
+          alert("Échec de la synchronisation à distance.");
+      }
+  };
+
+  const handleUnlockMemberFields = () => {
+      if (!editingMember) return;
+      setEditingMember({
+          ...editingMember,
+          lockedFields: []
+      });
+      showToast("Champs restreints déverrouillés avec succès !");
+  };
+
+  const handleQuickRenewMembership = () => {
+      if (!editingMember) return;
+      const year = new Date().getFullYear();
+      setEditingMember({
+          ...editingMember,
+          membershipExpiry: `${year}-12-31`
+      });
+      showToast(`Cotisation validée jusqu'au 31/12/${year} !`);
+  };
+
+  const handleToggleMemberMissionStatus = async (missionId: string, status: 'present' | 'reservist' | 'absent' | 'none') => {
+      if (!editingMember) return;
+      try {
+          await storageService.setMissionStatus(missionId, editingMember.id, status);
+          const updatedMissions = await storageService.getMissions();
+          setMissions(updatedMissions);
+          showToast("Inscription mission mise à jour en direct !");
+      } catch (err) {
+          alert("Erreur lors du changement de statut sur la mission.");
       }
   };
 
@@ -763,6 +891,33 @@ export const AdminPage: React.FC = () => {
 
                 {resourceTab === 'CONFIG' && (
                     <div className="space-y-6">
+                        {/* BADGE COMMANDES VESTIAIRE */}
+                        <div>
+                            <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest mb-2 flex items-center gap-2">
+                                <Shirt className="w-4 h-4 text-emerald-500" /> Vestiaire & Badges
+                            </h3>
+                            <div className="bg-slate-100 dark:bg-slate-900/50 p-3 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center justify-between gap-4">
+                                <div>
+                                    <p className="text-xs font-bold text-slate-800 dark:text-white">Badge "Commande en cours"</p>
+                                    <p className="text-[11px] text-slate-500 dark:text-slate-400">Affiche le badge "Commande en cours" sur la carte Vestiaire du tableau de bord</p>
+                                </div>
+                                <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                                    <input 
+                                        type="checkbox" 
+                                        className="sr-only peer"
+                                        checked={!!appConfig?.clothingOrderInProgress}
+                                        onChange={async (e) => {
+                                            if (!appConfig) return;
+                                            const updated = { ...appConfig, clothingOrderInProgress: e.target.checked };
+                                            setAppConfig(updated);
+                                            await adminService.saveConfig(updated);
+                                        }}
+                                    />
+                                    <div className="w-11 h-6 bg-slate-300 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:after:border-slate-600 peer-checked:bg-emerald-500"></div>
+                                </label>
+                            </div>
+                        </div>
+
                         {/* CODE D'ACCÈS */}
                         <div>
                             <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest mb-2 flex items-center gap-2">
@@ -1003,118 +1158,532 @@ export const AdminPage: React.FC = () => {
             </div>
         )}
 
-        {/* MODAL ÉDITION MEMBRE - FIX Z-INDEX & LAYOUT */}
+        {/* MODAL ÉDITION INTEGRALE & DÉPANNAGE COMPTE MEMBRE */}
         {editingMember && (
-            <div className="fixed inset-0 z-[1000] bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in" style={{ zIndex: 1000 }}>
-                <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
-                    <div className="p-4 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-900">
-                        <h3 className="font-bold text-lg dark:text-white flex items-center gap-2">
-                            <Pencil className="w-5 h-5 text-blue-600" /> Édition Membre
-                        </h3>
-                        <button onClick={() => setEditingMember(null)} className="p-1 bg-slate-200 dark:bg-slate-700 rounded-full text-slate-500 hover:text-slate-800"><X className="w-5 h-5" /></button>
+            <div className="fixed inset-0 z-[1000] bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 animate-in fade-in" style={{ zIndex: 1000 }}>
+                <div className="bg-white dark:bg-slate-800 w-full max-w-3xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh] border border-slate-200 dark:border-slate-700">
+                    
+                    {/* EN-TÊTE DE LA MODAL */}
+                    <div className="p-4 border-b border-slate-100 dark:border-slate-700 bg-slate-900 text-white flex justify-between items-center shrink-0">
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-full bg-indigo-600 flex items-center justify-center font-black text-base shadow-inner text-white uppercase">
+                                {editingMember.firstName?.[0] || 'U'}{editingMember.lastName?.[0] || ''}
+                            </div>
+                            <div>
+                                <h3 className="font-bold text-base flex items-center gap-2">
+                                    {editingMember.firstName} {editingMember.lastName}
+                                    <span className="text-[10px] bg-indigo-500/30 text-indigo-300 border border-indigo-400/30 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">
+                                        {editingMember.role}
+                                    </span>
+                                </h3>
+                                <p className="text-xs text-slate-400 flex items-center gap-2">
+                                    <span>{editingMember.email}</span>
+                                    {editingMember.phone && <span>• {editingMember.phone}</span>}
+                                </p>
+                            </div>
+                        </div>
+                        <button onClick={() => setEditingMember(null)} className="p-1.5 bg-slate-800 hover:bg-slate-700 rounded-full text-slate-300 hover:text-white transition-colors">
+                            <X className="w-5 h-5" />
+                        </button>
+                    </div>
+
+                    {/* TOAST NOTIFICATION S'IL Y A UNE ACTION REUSSIE */}
+                    {actionSuccessMsg && (
+                        <div className="bg-emerald-500 text-white px-4 py-2 text-xs font-bold flex items-center justify-between shadow-inner animate-in fade-in">
+                            <span className="flex items-center gap-2">
+                                <CheckCircle2 className="w-4 h-4" /> {actionSuccessMsg}
+                            </span>
+                            <button onClick={() => setActionSuccessMsg('')} className="p-0.5 hover:bg-emerald-600 rounded"><X className="w-3.5 h-3.5"/></button>
+                        </div>
+                    )}
+
+                    {/* NAVIGATION PAR ONGLETS */}
+                    <div className="flex bg-slate-100 dark:bg-slate-900 p-1.5 border-b border-slate-200 dark:border-slate-700 overflow-x-auto shrink-0 scrollbar-none">
+                        {[
+                            { id: 'IDENTITÉ', label: 'Identité & Auth', icon: <Users className="w-3.5 h-3.5"/> },
+                            { id: 'RÔLE', label: 'Rôle & Cotisation', icon: <Shield className="w-3.5 h-3.5"/> },
+                            { id: 'DIPLÔMES', label: 'Diplômes', icon: <Award className="w-3.5 h-3.5"/> },
+                            { id: 'VESTIAIRE', label: 'Vestiaire & Tailles', icon: <Shirt className="w-3.5 h-3.5"/> },
+                            { id: 'MISSIONS', label: 'Missions & Planning', icon: <List className="w-3.5 h-3.5"/> },
+                            { id: 'DÉPANNAGE', label: 'Dépannage Flash', icon: <Activity className="w-3.5 h-3.5 text-amber-500"/> },
+                        ].map((t: any) => (
+                            <button 
+                                key={t.id} 
+                                onClick={() => setMemberModalTab(t.id)} 
+                                className={`flex items-center gap-1.5 py-2 px-3 text-xs font-bold rounded-lg transition-all shrink-0 ${
+                                    memberModalTab === t.id 
+                                        ? 'bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-sm' 
+                                        : 'text-slate-500 dark:text-slate-400 hover:bg-slate-200/60 dark:hover:bg-slate-800/40'
+                                }`}
+                            >
+                                {t.icon}
+                                <span>{t.label}</span>
+                            </button>
+                        ))}
                     </div>
                     
-                    <div className="p-6 overflow-y-auto space-y-6">
-                        {/* 1. INFO PERSO */}
-                        <div className="space-y-3">
-                            <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2"><Users className="w-4 h-4" /> État Civil</h4>
-                            <div className="grid grid-cols-2 gap-3">
-                                <div><label className={labelClass}>Prénom</label><input className={inputClass} value={editingMember.firstName} onChange={e => setEditingMember({...editingMember, firstName: e.target.value})} /></div>
-                                <div><label className={labelClass}>Nom</label><input className={inputClass} value={editingMember.lastName} onChange={e => setEditingMember({...editingMember, lastName: e.target.value})} /></div>
-                            </div>
-                            <div className="grid grid-cols-2 gap-3">
-                                <div><label className={labelClass}>Email</label><input className={inputClass} value={editingMember.email} onChange={e => setEditingMember({...editingMember, email: e.target.value})} /></div>
-                                <div><label className={labelClass}>Téléphone</label><input className={inputClass} value={editingMember.phone || ''} onChange={e => setEditingMember({...editingMember, phone: e.target.value})} /></div>
-                            </div>
-                        </div>
+                    {/* CONTENU DU CORPS DU MODAL */}
+                    <div className="p-5 overflow-y-auto flex-1 space-y-6">
 
-                        {/* 2. RÔLE & COTISATION */}
-                        <div className="space-y-3 bg-blue-50 dark:bg-blue-900/10 p-4 rounded-xl border border-blue-100 dark:border-blue-900/30">
-                            <h4 className="text-xs font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest flex items-center gap-2"><Shield className="w-4 h-4" /> Rôle & Permissions</h4>
-                            
-                            <div className="space-y-2">
-                                <label className={labelClass}>Fonction</label>
-                                <select 
-                                    className="w-full p-3 rounded-lg font-bold bg-white dark:bg-slate-900 border border-blue-200 dark:border-blue-800 text-blue-900 dark:text-blue-200"
-                                    value={editingMember.role}
-                                    onChange={e => setEditingMember({...editingMember, role: e.target.value as UserRole})}
-                                >
-                                    <option value="secouriste">Secouriste</option>
-                                    <option value="infirmier">Infirmier (IDE)</option>
-                                    <option value="medecin">Médecin</option>
-                                    <option value="logisticien">Logisticien</option>
-                                    <option value="snu">SNU (Stagiaire)</option>
-                                    <option value="stagiaire">Stagiaire (Interne)</option>
-                                    <option value="admin">Administrateur</option>
-                                </select>
-                            </div>
+                        {/* ONGLET 1: IDENTITÉ & AUTH */}
+                        {memberModalTab === 'IDENTITÉ' && (
+                            <div className="space-y-4 animate-in fade-in">
+                                <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                                    <Users className="w-4 h-4 text-blue-500" /> Informations Personnelles & Compte
+                                </h4>
 
-                            <div className="space-y-2 mt-2 pt-2 border-t border-blue-200 dark:border-blue-800">
-                                <label className={labelClass}>Cotisation acquittée pour l'année : (Valide jusqu'au 31/12)</label>
-                                <div className="flex items-center gap-2">
-                                    <select
-                                        className="flex-1 p-2 text-sm rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 dark:text-white"
-                                        value={editingMember.membershipExpiry ? editingMember.membershipExpiry.split('-')[0] : ''}
-                                        onChange={(e) => {
-                                            const year = e.target.value;
-                                            setEditingMember({
-                                                ...editingMember,
-                                                membershipExpiry: year ? `${year}-12-31` : undefined
-                                            });
-                                        }}
-                                    >
-                                        <option value="">-- Non à jour --</option>
-                                        <option value={currentYear - 1}>{currentYear - 1} (Expiré)</option>
-                                        <option value={currentYear}>{currentYear} (En cours)</option>
-                                        <option value={currentYear + 1}>{currentYear + 1} (Avance)</option>
-                                    </select>
-                                    <div className={`p-2 rounded-lg ${
-                                        editingMember.membershipExpiry && new Date(editingMember.membershipExpiry) >= new Date()
-                                        ? 'bg-green-100 text-green-700'
-                                        : 'bg-red-100 text-red-700'
-                                    }`}>
-                                        {editingMember.membershipExpiry && new Date(editingMember.membershipExpiry) >= new Date() 
-                                            ? <CheckCircle2 className="w-5 h-5" />
-                                            : <AlertCircle className="w-5 h-5" />
-                                        }
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <div>
+                                        <label className={labelClass}>Prénom</label>
+                                        <input className={inputClass} value={editingMember.firstName || ''} onChange={e => setEditingMember({...editingMember, firstName: e.target.value})} />
+                                    </div>
+                                    <div>
+                                        <label className={labelClass}>Nom</label>
+                                        <input className={inputClass} value={editingMember.lastName || ''} onChange={e => setEditingMember({...editingMember, lastName: e.target.value})} />
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <div>
+                                        <label className={labelClass}>Email (Identifiant de connexion)</label>
+                                        <input className={inputClass} value={editingMember.email || ''} onChange={e => setEditingMember({...editingMember, email: e.target.value})} />
+                                    </div>
+                                    <div>
+                                        <label className={labelClass}>Numéro de Téléphone</label>
+                                        <input className={inputClass} placeholder="06 12 34 56 78" value={editingMember.phone || ''} onChange={e => setEditingMember({...editingMember, phone: e.target.value})} />
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-slate-100 dark:border-slate-700">
+                                    <div>
+                                        <label className={labelClass}>Points de Formation / Gamification</label>
+                                        <input 
+                                            type="number" 
+                                            className={inputClass} 
+                                            value={editingMember.points ?? 0} 
+                                            onChange={e => setEditingMember({...editingMember, points: parseInt(e.target.value) || 0})} 
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className={labelClass}>Modifier le mot de passe (Dépannage local)</label>
+                                        <input 
+                                            type="password" 
+                                            className={inputClass} 
+                                            placeholder="Nouveau mot de passe (Optionnel)"
+                                            value={memberPassword} 
+                                            onChange={e => setMemberPassword(e.target.value)} 
+                                        />
+                                        <span className="text-[10px] text-slate-400 mt-1 block">Laissez vide pour conserver le mot de passe actuel.</span>
                                     </div>
                                 </div>
                             </div>
-                        </div>
+                        )}
 
-                        {/* 3. DIPLÔMES */}
-                        <div className="space-y-3">
-                            <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2"><Award className="w-4 h-4" /> Qualifications</h4>
-                            <div className="bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-100 dark:border-slate-800 overflow-hidden">
-                                {(editingMember.diplomas || []).map(d => (
-                                    <div key={d.id} className="p-2 border-b border-slate-200 dark:border-slate-700 last:border-0 flex justify-between items-center text-sm">
-                                        <div>
-                                            <span className="font-bold block dark:text-white">{d.name}</span>
-                                            <span className="text-[10px] text-slate-500">Obtenu: {new Date(d.dateObtained).getFullYear()}</span>
+                        {/* ONGLET 2: RÔLE & COTISATION */}
+                        {memberModalTab === 'RÔLE' && (
+                            <div className="space-y-5 animate-in fade-in">
+                                <div className="bg-blue-50 dark:bg-blue-900/10 p-4 rounded-xl border border-blue-100 dark:border-blue-900/30 space-y-3">
+                                    <h4 className="text-xs font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest flex items-center gap-2">
+                                        <Shield className="w-4 h-4" /> Fonction & Droits d'Accès
+                                    </h4>
+                                    
+                                    <div className="space-y-2">
+                                        <label className={labelClass}>Rôle attribué</label>
+                                        <select 
+                                            className="w-full p-3 rounded-lg font-bold bg-white dark:bg-slate-900 border border-blue-200 dark:border-blue-800 text-blue-900 dark:text-blue-200"
+                                            value={editingMember.role}
+                                            onChange={e => setEditingMember({...editingMember, role: e.target.value as UserRole})}
+                                        >
+                                            <option value="secouriste">Secouriste (PSE1/PSE2)</option>
+                                            <option value="infirmier">Infirmier (IDE)</option>
+                                            <option value="medecin">Médecin Urgentiste</option>
+                                            <option value="logisticien">Logisticien / Matériel</option>
+                                            <option value="snu">SNU (Stagiaire Service National)</option>
+                                            <option value="stagiaire">Stagiaire (Interne)</option>
+                                            <option value="admin">Administrateur (Accès Total)</option>
+                                            <option value="organisateur">Organisateur Externe</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div className="bg-slate-50 dark:bg-slate-900/50 p-4 rounded-xl border border-slate-200 dark:border-slate-700 space-y-3">
+                                    <div className="flex items-center justify-between">
+                                        <h4 className="text-xs font-black text-slate-600 dark:text-slate-300 uppercase tracking-widest flex items-center gap-2">
+                                            <Building2 className="w-4 h-4 text-emerald-500" /> Cotisation Annuelle Association
+                                        </h4>
+                                        <Button size="sm" variant="outline" onClick={handleQuickRenewMembership} className="text-xs bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100">
+                                            Régler pour {currentYear}
+                                        </Button>
+                                    </div>
+
+                                    <div className="flex items-center gap-3">
+                                        <div className="flex-1">
+                                            <label className={labelClass}>Valide jusqu'au 31 Décembre de l'année :</label>
+                                            <select
+                                                className={inputClass}
+                                                value={editingMember.membershipExpiry ? editingMember.membershipExpiry.split('-')[0] : ''}
+                                                onChange={(e) => {
+                                                    const year = e.target.value;
+                                                    setEditingMember({
+                                                        ...editingMember,
+                                                        membershipExpiry: year ? `${year}-12-31` : undefined
+                                                    });
+                                                }}
+                                            >
+                                                <option value="">-- Non à jour --</option>
+                                                <option value={currentYear - 2}>{currentYear - 2} (Très ancien)</option>
+                                                <option value={currentYear - 1}>{currentYear - 1} (Expiré)</option>
+                                                <option value={currentYear}>{currentYear} (En cours)</option>
+                                                <option value={currentYear + 1}>{currentYear + 1} (Prochaine année)</option>
+                                            </select>
                                         </div>
-                                        <button onClick={() => handleRemoveDiplomaFromMember(d.id)} className="text-red-400 hover:text-red-600 p-1"><Trash2 className="w-4 h-4" /></button>
+                                        <div className={`p-3 rounded-xl flex items-center gap-2 shrink-0 ${
+                                            editingMember.membershipExpiry && new Date(editingMember.membershipExpiry) >= new Date()
+                                            ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300'
+                                            : 'bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-300'
+                                        }`}>
+                                            {editingMember.membershipExpiry && new Date(editingMember.membershipExpiry) >= new Date() ? (
+                                                <>
+                                                    <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                                                    <span className="text-xs font-bold">À jour</span>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <AlertCircle className="w-5 h-5 text-rose-600" />
+                                                    <span className="text-xs font-bold">Non réglée</span>
+                                                </>
+                                            )}
+                                        </div>
                                     </div>
-                                ))}
-                                {(!editingMember.diplomas || editingMember.diplomas.length === 0) && <div className="p-3 text-xs text-slate-400 italic text-center">Aucun diplôme.</div>}
-                            </div>
-                            
-                            <div className="flex gap-2 items-end bg-slate-100 dark:bg-slate-900 p-3 rounded-lg">
-                                <div className="flex-1">
-                                    <label className="text-[9px] font-bold text-slate-500 block mb-1">Nouveau Diplôme</label>
-                                    <input type="text" placeholder="Ex: PSE 2" className="w-full p-2 rounded text-xs border" value={tempDiploma.name || ''} onChange={e => setTempDiploma({...tempDiploma, name: e.target.value})} />
                                 </div>
-                                <div className="w-32">
-                                    <label className="text-[9px] font-bold text-slate-500 block mb-1">Date</label>
-                                    <input type="date" className="w-full p-2 rounded text-xs border" value={tempDiploma.dateObtained || ''} onChange={e => setTempDiploma({...tempDiploma, dateObtained: e.target.value})} />
-                                </div>
-                                <button onClick={handleAddDiplomaToMember} className="bg-slate-800 text-white p-2 rounded hover:bg-black"><Plus className="w-4 h-4" /></button>
                             </div>
-                        </div>
+                        )}
+
+                        {/* ONGLET 3: DIPLÔMES & RECYCLAGES */}
+                        {memberModalTab === 'DIPLÔMES' && (
+                            <div className="space-y-5 animate-in fade-in">
+                                <div>
+                                    <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 mb-2">
+                                        <Award className="w-4 h-4 text-purple-500" /> Diplômes & Qualifications Actuels
+                                    </h4>
+
+                                    <div className="bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-200 dark:border-slate-700 divide-y divide-slate-100 dark:divide-slate-800 max-h-48 overflow-y-auto">
+                                        {(editingMember.diplomas || []).map(d => (
+                                            <div key={d.id} className="p-3 flex justify-between items-center text-xs hover:bg-white dark:hover:bg-slate-800/60 transition-colors">
+                                                <div>
+                                                    <span className="font-bold text-slate-800 dark:text-white block text-sm">{d.name}</span>
+                                                    <div className="flex gap-3 text-[11px] text-slate-500 mt-0.5">
+                                                        <span>Obtenu : {d.dateObtained}</span>
+                                                        {d.expiresAt && (
+                                                            <span className={new Date(d.expiresAt) < new Date() ? 'text-red-500 font-bold' : 'text-emerald-600'}>
+                                                                • Recyclage : {d.expiresAt}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                                <button onClick={() => handleRemoveDiplomaFromMember(d.id)} className="text-red-400 hover:text-red-600 p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20">
+                                                    <Trash2 className="w-4 h-4" />
+                                                </button>
+                                            </div>
+                                        ))}
+                                        {(!editingMember.diplomas || editingMember.diplomas.length === 0) && (
+                                            <div className="p-4 text-xs text-slate-400 italic text-center">Aucune qualification enregistrée.</div>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* AJOUT RAPIDE 1-CLIC */}
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider block">Ajout Rapide en 1 Clic :</label>
+                                    <div className="flex flex-wrap gap-1.5">
+                                        {[
+                                            { name: 'PSE 1', years: 1 },
+                                            { name: 'PSE 2', years: 1 },
+                                            { name: 'BNSSA', years: 5 },
+                                            { name: 'SSA', years: 1 },
+                                            { name: 'Chef de Poste DPS', years: 3 },
+                                            { name: 'Formateur PS', years: 3 },
+                                            { name: 'IDE (Infirmier)', years: 0 },
+                                            { name: 'Médecin Urgentiste', years: 0 },
+                                            { name: 'Permis B (VPSP)', years: 5 },
+                                        ].map(p => (
+                                            <button
+                                                key={p.name}
+                                                onClick={() => handleAddPresetDiploma(p.name, p.years)}
+                                                className="px-2.5 py-1 bg-purple-50 hover:bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:hover:bg-purple-900/50 dark:text-purple-300 text-xs font-bold rounded-lg border border-purple-200 dark:border-purple-800 transition-colors flex items-center gap-1"
+                                            >
+                                                <Plus className="w-3 h-3" /> {p.name}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {/* FORMULAIRE AJOUT PERSONNALISÉ */}
+                                <div className="bg-slate-100 dark:bg-slate-900 p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 space-y-3">
+                                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300 block">Ajouter une qualification personnalisée :</span>
+                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                        <div className="sm:col-span-1">
+                                            <label className="text-[10px] font-bold text-slate-500 block mb-1">Intitulé Diplôme</label>
+                                            <input type="text" placeholder="Ex: PHTLS" className={inputClass} value={tempDiploma.name || ''} onChange={e => setTempDiploma({...tempDiploma, name: e.target.value})} />
+                                        </div>
+                                        <div>
+                                            <label className="text-[10px] font-bold text-slate-500 block mb-1">Date d'obtention</label>
+                                            <input type="date" className={inputClass} value={tempDiploma.dateObtained || ''} onChange={e => setTempDiploma({...tempDiploma, dateObtained: e.target.value})} />
+                                        </div>
+                                        <div>
+                                            <label className="text-[10px] font-bold text-slate-500 block mb-1">Recyclage / Expiration</label>
+                                            <input type="date" className={inputClass} value={tempDiploma.expiresAt || ''} onChange={e => setTempDiploma({...tempDiploma, expiresAt: e.target.value})} />
+                                        </div>
+                                    </div>
+                                    <Button size="sm" fullWidth onClick={handleAddDiplomaToMember} icon={<Plus className="w-4 h-4"/>}>
+                                        Ajouter le diplôme
+                                    </Button>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* ONGLET 4: VESTIAIRE & TAILLES */}
+                        {memberModalTab === 'VESTIAIRE' && memberUniform && (
+                            <div className="space-y-5 animate-in fade-in">
+                                <div>
+                                    <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 mb-3">
+                                        <Shirt className="w-4 h-4 text-indigo-500" /> Tailles de Vêtement du Secouriste
+                                    </h4>
+                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                        <div>
+                                            <label className={labelClass}>Haut (T-Shirt/Polo)</label>
+                                            <select 
+                                                className={inputClass} 
+                                                value={memberUniform.sizes?.top || 'M'}
+                                                onChange={e => setMemberUniform({...memberUniform, sizes: {...memberUniform.sizes, top: e.target.value}})}
+                                            >
+                                                {['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL'].map(s => <option key={s} value={s}>{s}</option>)}
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className={labelClass}>Bas (Pantalon)</label>
+                                            <select 
+                                                className={inputClass} 
+                                                value={memberUniform.sizes?.bottom || '40'}
+                                                onChange={e => setMemberUniform({...memberUniform, sizes: {...memberUniform.sizes, bottom: e.target.value}})}
+                                            >
+                                                {['36', '38', '40', '42', '44', '46', '48', '50', '52'].map(s => <option key={s} value={s}>{s}</option>)}
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className={labelClass}>Pointure Chaussures</label>
+                                            <select 
+                                                className={inputClass} 
+                                                value={memberUniform.sizes?.shoes || '42'}
+                                                onChange={e => setMemberUniform({...memberUniform, sizes: {...memberUniform.sizes, shoes: e.target.value}})}
+                                            >
+                                                {['36', '37', '38', '39', '40', '41', '42', '43', '44', '45', '46', '47'].map(s => <option key={s} value={s}>{s}</option>)}
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className={labelClass}>Casquette / Tête</label>
+                                            <select 
+                                                className={inputClass} 
+                                                value={memberUniform.sizes?.head || 'M'}
+                                                onChange={e => setMemberUniform({...memberUniform, sizes: {...memberUniform.sizes, head: e.target.value}})}
+                                            >
+                                                {['S', 'M', 'L', 'Unique'].map(s => <option key={s} value={s}>{s}</option>)}
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-3">
+                                    <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                                        <Shirt className="w-4 h-4 text-indigo-500" /> Dotations & Quantités Attribuées
+                                    </h4>
+
+                                    <div className="bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-200 dark:border-slate-700 divide-y divide-slate-100 dark:divide-slate-800">
+                                        {(memberUniform.items || []).map((item: any, idx: number) => (
+                                            <div key={item.type || idx} className="p-3 flex items-center justify-between text-xs gap-3">
+                                                <div className="flex items-center gap-2 min-w-0 flex-1">
+                                                    <input 
+                                                        type="checkbox"
+                                                        checked={item.hasItem}
+                                                        onChange={e => {
+                                                            const updatedItems = [...memberUniform.items];
+                                                            updatedItems[idx].hasItem = e.target.checked;
+                                                            setMemberUniform({...memberUniform, items: updatedItems});
+                                                        }}
+                                                        className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500"
+                                                    />
+                                                    <span className={`font-bold truncate ${item.hasItem ? 'text-slate-900 dark:text-white' : 'text-slate-400 line-through'}`}>
+                                                        {item.label}
+                                                    </span>
+                                                </div>
+
+                                                <div className="flex items-center gap-2 shrink-0">
+                                                    <select
+                                                        className="p-1.5 rounded border border-slate-300 dark:border-slate-600 text-xs bg-white dark:bg-slate-800 dark:text-white"
+                                                        value={item.condition || 'NEUF'}
+                                                        onChange={e => {
+                                                            const updatedItems = [...memberUniform.items];
+                                                            updatedItems[idx].condition = e.target.value;
+                                                            setMemberUniform({...memberUniform, items: updatedItems});
+                                                        }}
+                                                    >
+                                                        <option value="NEUF">Neuf</option>
+                                                        <option value="BON">Bon état</option>
+                                                        <option value="USÉ">Usé</option>
+                                                        <option value="HS">À remplacer</option>
+                                                    </select>
+
+                                                    <div className="flex items-center gap-1">
+                                                        <span className="text-[10px] text-slate-400 font-bold">Qté :</span>
+                                                        <input 
+                                                            type="number" 
+                                                            min={0}
+                                                            max={10}
+                                                            className="w-12 p-1.5 rounded border border-slate-300 dark:border-slate-600 text-xs text-center font-bold bg-white dark:bg-slate-800 dark:text-white"
+                                                            value={item.requestedQty || 1}
+                                                            onChange={e => {
+                                                                const updatedItems = [...memberUniform.items];
+                                                                updatedItems[idx].requestedQty = parseInt(e.target.value) || 0;
+                                                                setMemberUniform({...memberUniform, items: updatedItems});
+                                                            }}
+                                                        />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* ONGLET 5: MISSIONS & PLANNING */}
+                        {memberModalTab === 'MISSIONS' && (
+                            <div className="space-y-4 animate-in fade-in">
+                                <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                                    <List className="w-4 h-4 text-blue-500" /> Inscriptions du Membre aux Missions
+                                </h4>
+
+                                <div className="bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-200 dark:border-slate-700 divide-y divide-slate-100 dark:divide-slate-800 max-h-72 overflow-y-auto">
+                                    {missions.map(m => {
+                                        const isPresent = (m.registeredUserIds || []).includes(editingMember.id);
+                                        const isAbsent = (m.absentUserIds || []).includes(editingMember.id);
+                                        const isReservist = (m.reservistUserIds || []).includes(editingMember.id);
+
+                                        return (
+                                            <div key={m.id} className="p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                                                <div>
+                                                    <span className="font-bold text-slate-900 dark:text-white text-sm block">{m.title}</span>
+                                                    <span className="text-slate-500 text-[11px]">{m.date} • {m.location} ({m.type})</span>
+                                                </div>
+
+                                                <div className="flex items-center gap-1.5 self-end sm:self-auto">
+                                                    <button 
+                                                        onClick={() => handleToggleMemberMissionStatus(m.id, 'present')}
+                                                        className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-colors ${
+                                                            isPresent 
+                                                                ? 'bg-emerald-600 text-white shadow-sm' 
+                                                                : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-emerald-100'
+                                                        }`}
+                                                    >
+                                                        Présent
+                                                    </button>
+                                                    <button 
+                                                        onClick={() => handleToggleMemberMissionStatus(m.id, 'reservist')}
+                                                        className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-colors ${
+                                                            isReservist 
+                                                                ? 'bg-amber-600 text-white shadow-sm' 
+                                                                : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-amber-100'
+                                                        }`}
+                                                    >
+                                                        Réserve
+                                                    </button>
+                                                    <button 
+                                                        onClick={() => handleToggleMemberMissionStatus(m.id, 'none')}
+                                                        className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-colors ${
+                                                            !isPresent && !isReservist && !isAbsent 
+                                                                ? 'bg-slate-700 text-white' 
+                                                                : 'bg-slate-100 dark:bg-slate-800 text-slate-400 hover:bg-slate-200'
+                                                        }`}
+                                                    >
+                                                        Retirer
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                    {missions.length === 0 && (
+                                        <div className="p-4 text-xs text-slate-400 italic text-center">Aucune mission enregistrée dans l'application.</div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* ONGLET 6: DÉPANNAGE FLASH */}
+                        {memberModalTab === 'DÉPANNAGE' && (
+                            <div className="space-y-4 animate-in fade-in">
+                                <div className="p-4 bg-amber-50 dark:bg-amber-900/10 rounded-xl border border-amber-200 dark:border-amber-800/40 space-y-3">
+                                    <h4 className="text-xs font-black text-amber-700 dark:text-amber-400 uppercase tracking-widest flex items-center gap-2">
+                                        <Activity className="w-4 h-4 text-amber-500" /> Actions de Télécommandage & Dépannage
+                                    </h4>
+                                    <p className="text-xs text-slate-600 dark:text-slate-300">
+                                        Si le secouriste rencontre un blocage sur son appareil (données non synchronisées, champs verrouillés ou problème de session), vous pouvez forcer la résolution à distance.
+                                    </p>
+                                </div>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <button 
+                                        onClick={handleRemoteSyncMember}
+                                        className="p-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-blue-400 rounded-xl flex items-center gap-3 text-left transition-all shadow-sm"
+                                    >
+                                        <div className="p-2.5 rounded-lg bg-blue-100 text-blue-600 dark:bg-blue-900/30 shrink-0">
+                                            <RefreshCw className="w-5 h-5" />
+                                        </div>
+                                        <div>
+                                            <span className="font-bold text-xs block text-slate-900 dark:text-white">Forcer Synchro Cloud</span>
+                                            <span className="text-[10px] text-slate-500">Pousse immédiatement le profil du membre sur Supabase</span>
+                                        </div>
+                                    </button>
+
+                                    <button 
+                                        onClick={handleUnlockMemberFields}
+                                        className="p-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-emerald-400 rounded-xl flex items-center gap-3 text-left transition-all shadow-sm"
+                                    >
+                                        <div className="p-2.5 rounded-lg bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 shrink-0">
+                                            <Shield className="w-5 h-5" />
+                                        </div>
+                                        <div>
+                                            <span className="font-bold text-xs block text-slate-900 dark:text-white">Déverrouiller le Profil</span>
+                                            <span className="text-[10px] text-slate-500">Efface les champs bloqués (`lockedFields`)</span>
+                                        </div>
+                                    </button>
+
+                                    <button 
+                                        onClick={handleQuickRenewMembership}
+                                        className="p-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-purple-400 rounded-xl flex items-center gap-3 text-left transition-all shadow-sm"
+                                    >
+                                        <div className="p-2.5 rounded-lg bg-purple-100 text-purple-600 dark:bg-purple-900/30 shrink-0">
+                                            <Award className="w-5 h-5" />
+                                        </div>
+                                        <div>
+                                            <span className="font-bold text-xs block text-slate-900 dark:text-white">Valider la Cotisation</span>
+                                            <span className="text-[10px] text-slate-500">Active la cotisation de l'année en cours</span>
+                                        </div>
+                                    </button>
+
+                                </div>
+                            </div>
+                        )}
+
                     </div>
 
-                    <div className="p-4 border-t border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 flex gap-3 sticky bottom-0 z-20">
-                        <Button variant="outline" fullWidth onClick={() => setEditingMember(null)} className="dark:text-slate-200 dark:border-slate-600">Annuler</Button>
-                        <Button fullWidth onClick={handleSaveMember} icon={<Save className="w-4 h-4"/>}>Enregistrer</Button>
+                    {/* PIED DE MODAL AVEC BOUTONS D'ACTION */}
+                    <div className="p-4 border-t border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 flex gap-3 sticky bottom-0 z-20 shrink-0">
+                        <Button variant="outline" fullWidth onClick={() => setEditingMember(null)} className="dark:text-slate-200 dark:border-slate-600">
+                            Annuler
+                        </Button>
+                        <Button fullWidth onClick={handleSaveMember} disabled={isSavingMember} icon={isSavingMember ? <Loader2 className="w-4 h-4 animate-spin"/> : <Save className="w-4 h-4"/>} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold">
+                            {isSavingMember ? "Sauvegarde..." : "Enregistrer les modifications"}
+                        </Button>
                     </div>
                 </div>
             </div>

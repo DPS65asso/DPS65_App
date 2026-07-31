@@ -1,5 +1,4 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { useLocation } from 'react-router-dom';
 import { storageService } from '../services/storageService';
 import { bagService } from '../services/bagService';
 import { syncService } from '../services/syncService';
@@ -7,7 +6,7 @@ import { syncService } from '../services/syncService';
 // Defining our different sections
 export type SectionType = 'events' | 'missions' | 'fleet' | 'material' | 'courses' | 'docs';
 
-interface SeenIdsState {
+export interface SeenIdsState {
     events: string[];
     missions: string[];
     fleet: string[];
@@ -18,8 +17,11 @@ interface SeenIdsState {
 
 interface NewContentContextType {
     badges: Record<SectionType, boolean>;
+    seenIds: SeenIdsState;
     markSectionAsSeen: (section: SectionType) => void;
+    markItemAsSeen: (section: SectionType, itemId: string) => void;
     markSectionAsUpdated: (section: SectionType) => void;
+    isItemNew: (section: SectionType, itemId: string, dateVal?: number | string) => boolean;
     refresh: () => Promise<void>;
 }
 
@@ -38,8 +40,6 @@ const defaultSeenIds: SeenIdsState = {
 };
 
 export const NewContentProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    const location = useLocation();
-    
     // Seen content IDs tracked in localStorage
     const [seenIds, setSeenIds] = useState<SeenIdsState>(() => {
         try {
@@ -98,14 +98,14 @@ export const NewContentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
                 storageService.getDocuments().catch(() => []),
             ]);
 
-            const docIds = [...news, ...docs].map(d => d.id || '');
+            const docIds = [...news, ...docs].map(d => d.id || '').filter(Boolean);
 
             return {
-                events: events.map(e => e.id || ''),
-                missions: missions.map(m => m.id || ''),
-                fleet: fleet.map(v => v.id || ''),
-                material: material.map(b => b.id || ''),
-                courses: courses.map(c => c.id || ''),
+                events: events.map(e => e.id || '').filter(Boolean),
+                missions: missions.map(m => m.id || '').filter(Boolean),
+                fleet: fleet.map(v => v.id || '').filter(Boolean),
+                material: material.map(b => b.id || '').filter(Boolean),
+                courses: courses.map(c => c.id || '').filter(Boolean),
                 docs: docIds,
             };
         } catch (error) {
@@ -120,13 +120,7 @@ export const NewContentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         setCurrentIds(current);
     }, [fetchCurrentIds]);
 
-    // Save state helper
-    const saveSeenIds = (newState: SeenIdsState) => {
-        setSeenIds(newState);
-        localStorage.setItem(SEEN_IDS_KEY, JSON.stringify(newState));
-    };
-
-    // Manual marking
+    // Manual triggers
     const markSectionAsUpdated = useCallback((section: SectionType) => {
         setManualUpdates(prev => {
             const next = { ...prev, [section]: true };
@@ -135,7 +129,22 @@ export const NewContentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         });
     }, []);
 
-    // Individual marking as read
+    // Individual item marking as read
+    const markItemAsSeen = useCallback((section: SectionType, itemId: string) => {
+        if (!itemId) return;
+        setSeenIds(prev => {
+            const currentList = prev[section] || [];
+            if (currentList.includes(itemId)) return prev;
+            const updated = {
+                ...prev,
+                [section]: [...currentList, itemId]
+            };
+            localStorage.setItem(SEEN_IDS_KEY, JSON.stringify(updated));
+            return updated;
+        });
+    }, []);
+
+    // Full section marking as read
     const markSectionAsSeen = useCallback((section: SectionType) => {
         setManualUpdates(prev => {
             if (!prev[section]) return prev;
@@ -144,10 +153,12 @@ export const NewContentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
             return next;
         });
 
-        // Add all current IDs of that section to seen
         setCurrentIds(curr => {
             setSeenIds(prev => {
-                const updated = { ...prev, [section]: [...curr[section]] };
+                const updated = { 
+                    ...prev, 
+                    [section]: Array.from(new Set([...(prev[section] || []), ...(curr[section] || [])])) 
+                };
                 localStorage.setItem(SEEN_IDS_KEY, JSON.stringify(updated));
                 return updated;
             });
@@ -155,7 +166,20 @@ export const NewContentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         });
     }, []);
 
-    // Compute badges based on compared IDs (if a current ID is not in seen list) + manual triggers
+    // Helper to check if a specific item is new/unread
+    const isItemNew = useCallback((section: SectionType, itemId: string, dateVal?: number | string) => {
+        if (!itemId) return false;
+        const isUnread = !(seenIds[section] || []).includes(itemId);
+        if (!dateVal) return isUnread;
+
+        const d = typeof dateVal === 'number' ? dateVal : new Date(dateVal).getTime();
+        if (isNaN(d)) return isUnread;
+        const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+        const isRecent = Math.abs(Date.now() - d) <= SEVEN_DAYS_MS;
+        return isUnread && isRecent;
+    }, [seenIds]);
+
+    // Compute badges based on compared IDs (if any current ID is NOT in seen list)
     useEffect(() => {
         const newBadges: Record<SectionType, boolean> = {
             events: false,
@@ -167,13 +191,10 @@ export const NewContentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         };
 
         (Object.keys(currentIds) as Array<SectionType>).forEach(section => {
-            // Check if there is any ID in current list that is NOT present in seen list
             const currentList = currentIds[section] || [];
             const seenList = seenIds[section] || [];
             
-            // If seenList is empty but we have items, it could be first load.
-            // On first-ever load, if seen is totally clean, let's treat it as read/empty so the user is not flooded.
-            // But if it's already got some content or is subsequent load, identify brand new items.
+            // Badge is visible if there is any item in currentList that has NOT been seen yet
             const hasNewItem = currentList.some(id => id && !seenList.includes(id));
             
             newBadges[section] = hasNewItem || manualUpdates[section] || false;
@@ -186,12 +207,10 @@ export const NewContentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     useEffect(() => {
         refresh();
 
-        // Subscribe to remote sync pulls
         const unsub = syncService.subscribe(() => {
             refresh();
         });
 
-        // Listen on various BroadcastChannels to update on local changes
         const channels = [
             'dps65_comms_channel',
             'dps65_events_channel',
@@ -225,26 +244,16 @@ export const NewContentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         };
     }, [refresh]);
 
-    // Automatic route tracking to clear badges on visit
-    useEffect(() => {
-        const path = location.pathname;
-        if (path === '/events' || path.startsWith('/events/')) {
-            markSectionAsSeen('events');
-        } else if (path === '/management/planning') {
-            markSectionAsSeen('missions');
-        } else if (path === '/management/logistics') {
-            markSectionAsSeen('fleet');
-        } else if (path === '/management/bags') {
-            markSectionAsSeen('material');
-        } else if (path === '/management/hr') {
-            markSectionAsSeen('courses');
-        } else if (path === '/management/life') {
-            markSectionAsSeen('docs');
-        }
-    }, [location.pathname, markSectionAsSeen]);
-
     return (
-        <NewContentContext.Provider value={{ badges, markSectionAsSeen, markSectionAsUpdated, refresh }}>
+        <NewContentContext.Provider value={{ 
+            badges, 
+            seenIds, 
+            markSectionAsSeen, 
+            markItemAsSeen, 
+            markSectionAsUpdated, 
+            isItemNew, 
+            refresh 
+        }}>
             {children}
         </NewContentContext.Provider>
     );

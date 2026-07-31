@@ -8,6 +8,9 @@ import { useAuth } from '../../context/AuthContext';
 import { storageService } from '../../services/storageService';
 import { GoogleGenAI } from "@google/genai";
 import { Button } from '../../components/Button';
+import { useNewContent } from '../../context/NewContentContext';
+
+const SEEN_COURSE_IDS_KEY = 'dps65_seen_course_item_ids_v1';
 
 // BASE DE DONNÉES DE SECOURS (POOL DE QUESTIONS)
 // On pioche 3 questions dedans si l'IA échoue
@@ -96,6 +99,7 @@ const QUESTION_POOL: (QuizQuestion & { role: string, theme: string })[] = [
 
 export const HrPage: React.FC = () => {
     const { profile } = useAuth();
+    const { markItemAsSeen, markSectionAsSeen, isItemNew, badges } = useNewContent();
     const [quiz, setQuiz] = useState<DailyQuiz | null>(null);
     const [courses, setCourses] = useState<TrainingCourse[]>([]);
     const [loading, setLoading] = useState(false);
@@ -114,6 +118,14 @@ export const HrPage: React.FC = () => {
     useEffect(() => {
         loadData();
     }, [profile?.role]);
+
+    const markCourseSeen = (id: string) => {
+        markItemAsSeen('courses', id);
+    };
+
+    const isCourseNew = (c: TrainingCourse) => {
+        return isItemNew('courses', c.id, c.date);
+    };
 
     const loadData = async () => {
         loadDailyQuiz();
@@ -355,6 +367,8 @@ export const HrPage: React.FC = () => {
         );
     };
 
+    const hasNewCourses = (courses || []).some(c => isCourseNew(c));
+
     return (
         <Layout title="Formation" showBack="/management" hideSync={true}>
             <div className="space-y-6 pb-20">
@@ -365,24 +379,68 @@ export const HrPage: React.FC = () => {
                         <div className="flex items-center gap-2">
                             <BookOpen className="w-4 h-4 text-blue-600" />
                             <h3 className="font-bold text-slate-700 dark:text-slate-200 uppercase text-xs">Ressources & E-Learning</h3>
+                            {hasNewCourses && (
+                                <span className="inline-flex items-center gap-1 bg-gradient-to-r from-red-500 to-rose-600 text-white text-[9px] font-black uppercase px-2 py-0.5 rounded-full shadow-xs animate-pulse">
+                                    <Sparkles className="w-2.5 h-2.5" /> Nouveau
+                                </span>
+                            )}
                         </div>
-                        {showResources ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
+                        <div className="flex items-center gap-2">
+                            {badges.courses && (
+                                <span 
+                                    onClick={(e) => { e.stopPropagation(); markSectionAsSeen('courses'); }}
+                                    className="text-[10px] font-bold text-blue-600 dark:text-blue-400 hover:underline bg-blue-50 dark:bg-blue-900/30 px-2 py-1 rounded-lg"
+                                >
+                                    Tout marquer comme vu
+                                </span>
+                            )}
+                            {showResources ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
+                        </div>
                     </button>
                     {showResources && (
-                        <div className="p-4 divide-y dark:divide-slate-700">
+                        <div className="p-4 space-y-3 dark:divide-slate-700">
                             {courses.length === 0 && <p className="text-center text-xs text-slate-400 py-6">Aucun cours disponible.</p>}
-                            {(courses || []).map(c => (
-                                <div key={c.id} className="py-4 flex justify-between items-center group">
-                                    <div className="flex flex-col gap-1">
-                                        <span className="text-sm font-bold text-slate-800 dark:text-white group-hover:text-blue-600 transition-colors">{c.title}</span>
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-[10px] bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 px-1.5 py-0.5 rounded font-bold uppercase">{c.category}</span>
-                                            <span className="text-[10px] bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-1.5 py-0.5 rounded font-bold uppercase">{c.type}</span>
+                            {(courses || []).map(c => {
+                                const isNew = isCourseNew(c);
+                                return (
+                                    <div 
+                                        key={c.id} 
+                                        onClick={() => markCourseSeen(c.id)}
+                                        className={`p-3 rounded-xl border transition-all flex justify-between items-center group cursor-pointer ${
+                                            isNew 
+                                                ? 'bg-blue-50/50 dark:bg-blue-900/10 border-blue-400 dark:border-blue-600 ring-1 ring-blue-400/30' 
+                                                : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-blue-300'
+                                        }`}
+                                    >
+                                        <div className="flex flex-col gap-1 min-w-0 pr-2">
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                                <span className="text-sm font-bold text-slate-800 dark:text-white group-hover:text-blue-600 transition-colors truncate">{c.title}</span>
+                                                {isNew && (
+                                                    <span className="inline-flex items-center gap-1 bg-gradient-to-r from-red-500 to-rose-600 text-white text-[9px] font-black uppercase px-1.5 py-0.5 rounded-full shadow-xs shrink-0 animate-pulse">
+                                                        <Sparkles className="w-2 h-2" /> Nouveau
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-[10px] bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 px-1.5 py-0.5 rounded font-bold uppercase">{c.category}</span>
+                                                <span className="text-[10px] bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-1.5 py-0.5 rounded font-bold uppercase">{c.type}</span>
+                                                {c.duration && <span className="text-[10px] text-slate-400 font-medium">({c.duration})</span>}
+                                            </div>
                                         </div>
+                                        {c.url && (
+                                            <a 
+                                                href={c.url} 
+                                                target="_blank" 
+                                                rel="noopener noreferrer"
+                                                onClick={() => markCourseSeen(c.id)}
+                                                className="p-2 text-blue-500 bg-blue-50 dark:bg-blue-900/30 rounded-full hover:scale-110 transition-transform shrink-0"
+                                            >
+                                                <ExternalLink className="w-5 h-5"/>
+                                            </a>
+                                        )}
                                     </div>
-                                    {c.url && <a href={c.url} target="_blank" className="p-2 text-blue-500 bg-blue-50 dark:bg-blue-900/30 rounded-full hover:scale-110 transition-transform"><ExternalLink className="w-5 h-5"/></a>}
-                                </div>
-                            ))}
+                                );
+                            })}
                         </div>
                     )}
                 </div>

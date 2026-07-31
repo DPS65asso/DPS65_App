@@ -189,6 +189,7 @@ export interface AppConfig {
   medications?: string[];
   solutes?: string[];
   forcedUpdateAt?: string;
+  clothingOrderInProgress?: boolean; // Display badge on Vestiaire card
 }
 
 export interface Mission {

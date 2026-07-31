@@ -1,15 +1,19 @@
 
 import React, { useEffect, useState } from 'react';
 import { Layout } from '../../components/Layout';
-import { CalendarDays, MapPin, Clock, CheckCircle2, UserPlus, UserX, ChevronDown, ChevronUp, FileText, Loader2, Syringe, Stethoscope, ArrowRight, Lock, Users, Archive, History, Pencil } from 'lucide-react';
+import { CalendarDays, MapPin, Clock, CheckCircle2, UserPlus, UserX, ChevronDown, ChevronUp, FileText, Loader2, Syringe, Stethoscope, ArrowRight, Lock, Users, Archive, History, Pencil, Sparkles } from 'lucide-react';
 import { authService } from '../../services/authService';
 import { storageService } from '../../services/storageService';
 import { Mission, UserProfile } from '../../types';
 import { safeDateFormat, getLocalDateString } from '../../utils/security';
 import { useAuth } from '../../context/AuthContext';
+import { useNewContent } from '../../context/NewContentContext';
+
+const SEEN_MISSION_IDS_KEY = 'dps65_seen_mission_item_ids_v1';
 
 export const PlanningPage: React.FC = () => {
     const { user, isAdmin, profile } = useAuth();
+    const { markItemAsSeen, markSectionAsSeen, isItemNew, badges } = useNewContent();
     const [missions, setMissions] = useState<Mission[]>([]);
     const [profiles, setProfiles] = useState<UserProfile[]>([]);
     const [expandedMissionId, setExpandedMissionId] = useState<string | null>(null);
@@ -25,6 +29,15 @@ export const PlanningPage: React.FC = () => {
         };
         return () => bc.close();
     }, []);
+
+    const markMissionSeen = (id: string) => {
+        markItemAsSeen('missions', id);
+    };
+
+    const isMissionNew = (m: Mission) => {
+        if (m.date < getLocalDateString()) return false;
+        return isItemNew('missions', m.id, m.date);
+    };
 
     const loadData = async () => {
         await loadMissions();
@@ -146,9 +159,19 @@ export const PlanningPage: React.FC = () => {
         const isExpanded = expandedMissionId === m.id;
         const dateObj = new Date(m.date);
         const isPast = m.date < today;
+        const isNew = isMissionNew(m);
 
         return (
-            <div className={`bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden transition-all group mb-4 ${isPast ? 'opacity-80' : ''}`}>
+            <div 
+                onClick={() => markMissionSeen(m.id)}
+                className={`relative bg-white dark:bg-slate-800 rounded-2xl shadow-sm border overflow-hidden transition-all group mb-4 ${
+                    isPast 
+                        ? 'opacity-80 border-slate-200 dark:border-slate-700' 
+                        : isNew 
+                            ? 'border-blue-400 dark:border-blue-600 ring-1 ring-blue-400/30' 
+                            : 'border-slate-200 dark:border-slate-700'
+                }`}
+            >
                 <div className="flex">
                     <div className={`w-20 flex flex-col items-center justify-center border-r border-dashed border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900/50 p-2 shrink-0 ${isRegistered ? 'bg-blue-50 dark:bg-blue-900/10 border-blue-200' : ''}`}>
                         <span className="text-xs font-bold text-slate-400 uppercase">{dateObj.toLocaleDateString('fr-FR', { month: 'short' })}</span>
@@ -158,11 +181,18 @@ export const PlanningPage: React.FC = () => {
                     <div className="flex-1 p-3 flex flex-col gap-2 min-w-0">
                         <div className="flex justify-between items-start">
                             <div>
-                                <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider mb-1 inline-block ${m.type === 'DPS' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>{m.type}</span>
+                                <div className="flex items-center gap-1.5 flex-wrap mb-1">
+                                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider inline-block ${m.type === 'DPS' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>{m.type}</span>
+                                    {isNew && !isPast && (
+                                        <span className="inline-flex items-center gap-1 bg-gradient-to-r from-red-500 to-rose-600 text-white text-[9px] font-black uppercase px-2 py-0.5 rounded-full shadow-xs shadow-red-500/30 animate-pulse">
+                                            <Sparkles className="w-2.5 h-2.5" /> Nouveau
+                                        </span>
+                                    )}
+                                </div>
                                 <h3 className="font-bold text-slate-800 dark:text-white leading-tight truncate">{m.title}</h3>
                             </div>
                             {isAdmin && (
-                                <button onClick={(e) => { e.stopPropagation(); setEditingMission(m); }} className="p-2 text-slate-400 hover:text-blue-600">
+                                <button onClick={(e) => { e.stopPropagation(); markMissionSeen(m.id); setEditingMission(m); }} className="p-2 text-slate-400 hover:text-blue-600">
                                     <Pencil className="w-4 h-4" />
                                 </button>
                             )}
@@ -275,9 +305,19 @@ export const PlanningPage: React.FC = () => {
                 
                 {/* 1. MISSIONS ACTIVES */}
                 <div>
-                    <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-2">
-                        <CalendarDays className="w-4 h-4" /> Prochaines Missions
-                    </h3>
+                    <div className="flex justify-between items-center mb-3">
+                        <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                            <CalendarDays className="w-4 h-4" /> Prochaines Missions
+                        </h3>
+                        {badges.missions && (
+                            <button 
+                                onClick={() => markSectionAsSeen('missions')}
+                                className="text-[10px] font-bold text-blue-600 dark:text-blue-400 hover:underline bg-blue-50 dark:bg-blue-900/30 px-2 py-1 rounded-lg"
+                            >
+                                Tout marquer comme vu
+                            </button>
+                        )}
+                    </div>
                     {activeMissions.length === 0 ? (
                         <div className="flex flex-col items-center justify-center py-10 text-slate-400 bg-slate-50 dark:bg-slate-900 rounded-xl border border-slate-100 dark:border-slate-800">
                             <CalendarDays className="w-10 h-10 mb-3 opacity-20" />
