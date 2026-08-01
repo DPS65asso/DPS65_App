@@ -232,6 +232,12 @@ class SyncService {
             requireInteraction = true;
             renotify = true;
         }
+        else if (table === 'logbook' && (data.category === 'PUSH_NOTIF' || data.category === 'ALERTE')) {
+            title = data.title || (data.category === 'ALERTE' ? "⚠️ DPS65 Alerte Push" : "📢 DPS65 Notification Push");
+            body = data.message;
+            tag = `push-${data.id}`;
+            renotify = true;
+        }
         else if (table === 'vehicle_checks' && isManager) {
             if (data.alerts && data.alerts.length > 0) {
                 const alertText = data.alerts[0] as string;

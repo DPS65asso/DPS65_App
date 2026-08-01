@@ -115,8 +115,10 @@ CREATE TABLE IF NOT EXISTS public.logbook (
     event_id UUID REFERENCES public.events(id) ON DELETE CASCADE,
     timestamp BIGINT NOT NULL DEFAULT (extract(epoch from now()) * 1000)::bigint,
     message TEXT NOT NULL,
-    category TEXT NOT NULL CHECK (category IN ('INFO', 'RADIO', 'ALERTE', 'MOUVEMENT', 'AUTORITE', 'ALERTE_GEN')),
-    author TEXT
+    category TEXT NOT NULL CHECK (category IN ('INFO', 'RADIO', 'ALERTE', 'MOUVEMENT', 'AUTORITE', 'ALERTE_GEN', 'PUSH_NOTIF')),
+    author TEXT,
+    title TEXT,
+    "targetTeam" TEXT
 );
 
 -- TABLE: team_locations
