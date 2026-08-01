@@ -253,7 +253,7 @@ export const EventListPage: React.FC = () => {
         return { label: 'Archivé', className: 'text-slate-500 bg-slate-100 border-slate-200 dark:bg-slate-700 dark:text-slate-300 dark:border-slate-600' };
     }
     if (eventDate === today) {
-      return { label: 'Ouvert', className: 'text-green-700 bg-green-50 border-green-200 dark:bg-green-900/30 dark:text-green-400 dark:border-green-800' };
+      return { label: 'En cours', className: 'text-green-700 bg-green-50 border-green-200 dark:bg-green-900/30 dark:text-green-400 dark:border-green-800' };
     } else if (eventDate < today) {
       return { label: 'Terminé', className: 'text-red-700 bg-red-50 border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800' };
     } else {

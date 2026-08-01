@@ -2,6 +2,7 @@
 import React, { useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { authService } from '../services/authService';
+import { sendNativeNotification, requestNotificationPermission } from '../services/notificationService';
 
 export const DiplomaExpiryNotifier: React.FC = () => {
     const { profile, isAdmin } = useAuth();
@@ -22,12 +23,11 @@ export const DiplomaExpiryNotifier: React.FC = () => {
             const today = new Date();
             
             // 1. NOTIFICATION PERSONNELLE (J-30)
-            // Avertit l'utilisateur si ses propres diplômes expirent dans moins d'un mois
             const personalLimit = new Date();
             personalLimit.setDate(today.getDate() + 30);
             
             if (profile.diplomas) {
-                profile.diplomas.forEach(d => {
+                for (const d of profile.diplomas) {
                     if (d.expiresAt) {
                         const exp = new Date(d.expiresAt);
                         if (exp <= personalLimit) {
@@ -36,46 +36,38 @@ export const DiplomaExpiryNotifier: React.FC = () => {
                                 ? `Votre diplôme ${d.name} est expiré !` 
                                 : `Votre diplôme ${d.name} expire dans ${daysLeft} jours.`;
 
-                            // Anti-spam journalier pour notif perso (basé sur la date du jour)
                             const key = `notif_perso_${d.id}_${today.toDateString()}`;
                             if (!localStorage.getItem(key)) {
                                 try {
-                                    if ("Notification" in window && Notification.permission === "granted") {
-                                        new Notification("📅 Recyclage Diplôme", {
-                                            body: msg,
-                                            icon: "/pwa-192x192.png",
-                                            tag: `diploma-expiry-${d.id}`
-                                        });
-                                        localStorage.setItem(key, 'true');
-                                    }
+                                    await sendNativeNotification("📅 Recyclage Diplôme", {
+                                        body: msg,
+                                        tag: `diploma-expiry-${d.id}`
+                                    });
+                                    localStorage.setItem(key, 'true');
                                 } catch (e) {
                                     console.error("Notif error", e);
                                 }
                             }
                         }
                     }
-                });
+                }
             }
 
-            // 2. NOTIFICATION ADMIN (J-60 pour les membres)
-            // Avertit l'admin si un membre a un diplôme expirant dans moins de 2 mois
+            // 2. NOTIFICATION ADMIN (J-60)
             if (isAdmin) {
                 const adminLimit = new Date();
-                adminLimit.setDate(today.getDate() + 60); // 2 mois
+                adminLimit.setDate(today.getDate() + 60);
                 
                 const allProfiles = await authService.getProfiles();
                 
-                allProfiles.forEach(member => {
-                    if (member.id === profile.id) return; // Déjà traité par le check perso
+                for (const member of allProfiles) {
+                    if (member.id === profile.id) continue;
                     
-                    (member.diplomas || []).forEach(d => {
+                    for (const d of (member.diplomas || [])) {
                         if (d.expiresAt) {
                             const exp = new Date(d.expiresAt);
                             if (exp <= adminLimit) {
                                 const daysLeft = Math.ceil((exp.getTime() - today.getTime()) / (1000 * 3600 * 24));
-                                
-                                // Anti-spam persistant pour admin
-                                // La clé contient la date d'expiration : si le diplôme est renouvelé (nouvelle date), la notif reviendra l'année suivante.
                                 const key = `notif_admin_${member.id}_${d.id}_${d.expiresAt}`;
                                 
                                 if (!localStorage.getItem(key)) {
@@ -83,34 +75,25 @@ export const DiplomaExpiryNotifier: React.FC = () => {
                                     const body = `${member.lastName} ${member.firstName} : ${d.name} (${status}). Pensez à planifier une formation.`;
                                     
                                     try {
-                                        if ("Notification" in window && Notification.permission === "granted") {
-                                            new Notification("⚠️ Gestion Formation", {
-                                                body: body,
-                                                icon: "/pwa-192x192.png",
-                                                tag: `admin-dip-${member.id}-${d.id}`
-                                            });
-                                            localStorage.setItem(key, 'true');
-                                        }
+                                        await sendNativeNotification("⚠️ Gestion Formation", {
+                                            body: body,
+                                            tag: `admin-dip-${member.id}-${d.id}`
+                                        });
+                                        localStorage.setItem(key, 'true');
                                     } catch (e) {
                                         console.error("Notif error", e);
                                     }
                                 }
                             }
                         }
-                    });
-                });
+                    }
+                }
             }
         };
 
-        if ("Notification" in window) {
-            if (Notification.permission === "default") {
-                Notification.requestPermission().then(perm => {
-                    if (perm === "granted") checkAll();
-                });
-            } else if (Notification.permission === "granted") {
-                checkAll();
-            }
-        }
+        requestNotificationPermission().then(perm => {
+            if (perm === 'granted') checkAll();
+        });
     }, [profile, isAdmin]);
 
     return null;

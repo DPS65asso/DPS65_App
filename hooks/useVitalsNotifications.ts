@@ -1,42 +1,38 @@
 import { useEffect } from 'react';
 import { Victim } from '../types';
 import { useAuth } from '../context/AuthContext';
+import { sendNativeNotification, requestNotificationPermission } from '../services/notificationService';
 
 export const useVitalsNotifications = (victims: Victim[]) => {
   const { currentTeam } = useAuth();
 
   useEffect(() => {
-    if (!('Notification' in window)) return;
-
-    const checkVitals = () => {
+    const checkVitals = async () => {
       const now = Date.now();
-      victims.forEach(victim => {
+      for (const victim of victims) {
         if (victim.responderTeam === currentTeam && victim.vitals) {
-          victim.vitals.forEach(vital => {
+          for (const vital of victim.vitals) {
             if (vital.expiryTime && vital.expiryTime < now) {
-              // Check if notification already shown (maybe store in sessionStorage?)
               const notificationId = `vital-expired-${victim.id}-${vital.id}`;
               if (!sessionStorage.getItem(notificationId)) {
-                new Notification(`Constantes périmées pour ${victim.fullName}`, {
+                await sendNativeNotification(`Constantes périmées pour ${victim.fullName}`, {
                   body: `Les constantes de ${victim.fullName} sont périmées depuis ${new Date(vital.expiryTime).toLocaleTimeString()}`,
-                  icon: '/favicon.ico' // Ensure this exists
+                  tag: notificationId
                 });
                 sessionStorage.setItem(notificationId, 'true');
               }
             }
-          });
+          }
         }
-      });
+      }
     };
 
-    const interval = setInterval(checkVitals, 60000); // Check every minute
+    const interval = setInterval(checkVitals, 60000);
     return () => clearInterval(interval);
   }, [victims, currentTeam]);
 
   const requestPermission = () => {
-    if ('Notification' in window && Notification.permission === 'default') {
-      Notification.requestPermission();
-    }
+    requestNotificationPermission();
   };
 
   return { requestPermission };

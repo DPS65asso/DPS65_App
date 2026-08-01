@@ -5,6 +5,7 @@ import { syncService } from '../services/syncService';
 import { useAuth } from '../context/AuthContext';
 import { generateUUID } from '../utils/security';
 import { AppConfig } from '../types';
+import { sendNativeNotification, requestNotificationPermission } from '../services/notificationService';
 
 interface PushNotificationModalProps {
   isOpen: boolean;
@@ -47,9 +48,7 @@ export const PushNotificationModal: React.FC<PushNotificationModalProps> = ({
         }
       });
       // Vérifier permission notification navigateur
-      if ('Notification' in window && Notification.permission === 'default') {
-        Notification.requestPermission();
-      }
+      requestNotificationPermission();
     }
   }, [isOpen]);
 
@@ -99,17 +98,15 @@ export const PushNotificationModal: React.FC<PushNotificationModalProps> = ({
       syncService.processQueue();
 
       // 4. Déclencher aussi une notification native sur le terminal local pour confirmation
-      if ('Notification' in window && Notification.permission === 'granted') {
-        try {
-          new Notification(title || 'DPS65 Notification Push', {
-            body: fullMessage,
-            icon: '/pwa-192x192.png',
-            tag: `push-${entryId}`,
-            requireInteraction: category === 'ALERTE_GEN'
-          });
-        } catch (err) {
-          console.error("Erreur notification native:", err);
-        }
+      try {
+        await sendNativeNotification(title || 'DPS65 Notification Push', {
+          body: fullMessage,
+          tag: `push-${entryId}`,
+          requireInteraction: category === 'ALERTE_GEN',
+          vibrate: category === 'ALERTE_GEN' ? [500, 100, 500, 100, 500] : [200, 100, 200]
+        });
+      } catch (err) {
+        console.error("Erreur notification native:", err);
       }
 
       setSuccessMessage("Notification Push envoyée à toutes les équipes connectées !");

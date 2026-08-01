@@ -15,11 +15,14 @@ export default defineConfig(({ mode }) => {
     plugins: [
       react(),
       VitePWA({
+        strategies: 'injectManifest',
+        srcDir: 'src',
+        filename: 'sw.ts',
         registerType: 'autoUpdate',
         injectRegister: 'inline',
         devOptions: {
-          enabled: true, // IMPORTANT: Active le SW en mode dev/preview pour éviter les crashs
-          type: 'module',
+          enabled: false,
+          suppressWarnings: true
         },
         includeAssets: ['icon.svg', 'pwa-192x192.png', 'pwa-512x512.png'],
         manifest: {
@@ -51,85 +54,9 @@ export default defineConfig(({ mode }) => {
             }
           ]
         },
-        workbox: {
+        injectManifest: {
           globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2,webmanifest,json}'],
-          cleanupOutdatedCaches: true,
-          navigateFallback: 'index.html',
-          navigateFallbackDenylist: [/^\/api/],
-          maximumFileSizeToCacheInBytes: 4 * 1024 * 1024, // Augmente la limite pour les gros modules (PDF, MapLibre)
-          runtimeCaching: [
-              // Cache pour les tuiles de cartes (OSM & OpenTopoMap)
-              {
-                urlPattern: /^https:\/\/[a-c]\.tile\.openstreetmap\.org\/.*/i,
-                handler: 'StaleWhileRevalidate',
-                options: {
-                  cacheName: 'osm-tiles',
-                  expiration: {
-                    maxEntries: 1000,
-                    maxAgeSeconds: 60 * 60 * 24 * 30 // 30 jours
-                  }
-                }
-              },
-              {
-                urlPattern: /^https:\/\/[a-c]\.tile\.opentopomap\.org\/.*/i,
-                handler: 'StaleWhileRevalidate',
-                options: {
-                  cacheName: 'opentopo-tiles',
-                  expiration: {
-                    maxEntries: 1000,
-                    maxAgeSeconds: 60 * 60 * 24 * 30 // 30 jours
-                  }
-                }
-              },
-              // Cache pour CDN de scripts ESM (esm.sh) sauvegarde
-              {
-                urlPattern: /^https:\/\/esm\.sh\/.*/i,
-                handler: 'StaleWhileRevalidate',
-                options: {
-                  cacheName: 'esm-sh-cache',
-                  expiration: { maxEntries: 100, maxAgeSeconds: 60 * 60 * 24 * 30 },
-                  cacheableResponse: { statuses: [0, 200] }
-                }
-              },
-              // Cache pour CDN de style unpkg.com (Leaflet)
-              {
-                urlPattern: /^https:\/\/unpkg\.com\/.*/i,
-                handler: 'CacheFirst',
-                options: {
-                  cacheName: 'unpkg-cache',
-                  expiration: { maxEntries: 50, maxAgeSeconds: 60 * 60 * 24 * 365 },
-                  cacheableResponse: { statuses: [0, 200] }
-                }
-              },
-              // Cache pour CDN fonts/styles
-              {
-                  urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
-                  handler: 'CacheFirst',
-                  options: {
-                    cacheName: 'google-fonts-cache',
-                    expiration: { maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 * 365 },
-                    cacheableResponse: { statuses: [0, 200] }
-                  }
-              },
-              {
-                  urlPattern: /^https:\/\/fonts\.gstatic\.com\/.*/i,
-                  handler: 'CacheFirst',
-                  options: {
-                    cacheName: 'gstatic-fonts-cache',
-                    expiration: { maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 * 365 },
-                    cacheableResponse: { statuses: [0, 200] }
-                  }
-              },
-              {
-                  urlPattern: /^https:\/\/cdn\.tailwindcss\.com\/.*/i,
-                  handler: 'CacheFirst',
-                  options: {
-                    cacheName: 'tailwind-cdn-cache',
-                    expiration: { maxAgeSeconds: 60 * 60 * 24 * 30 },
-                    cacheableResponse: { statuses: [0, 200] }
-                  }
-              }
-          ]
+          maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
         }
       })
     ],

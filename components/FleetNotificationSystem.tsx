@@ -2,6 +2,7 @@
 import React, { useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { storageService } from '../services/storageService';
+import { sendNativeNotification, requestNotificationPermission } from '../services/notificationService';
 
 export const FleetNotificationSystem: React.FC = () => {
     const { profile } = useAuth();
@@ -19,23 +20,21 @@ export const FleetNotificationSystem: React.FC = () => {
             } catch (e) {}
         }
 
-        if ("Notification" in window && Notification.permission === "default") {
-            Notification.requestPermission();
-        }
+        requestNotificationPermission();
 
         const checkDates = async () => {
             const fleet = await storageService.getFleet();
             const today = new Date();
             today.setHours(0, 0, 0, 0);
 
-            fleet.forEach(vehicle => {
+            fleet.forEach(async vehicle => {
                 const checks = [
                     { label: 'Contrôle Technique', date: vehicle.nextTechControl },
                     { label: 'Entretien/Vidange', date: vehicle.nextService },
                     ...(vehicle.customTracking || []).map(t => ({ label: t.label, date: t.date }))
                 ];
 
-                checks.forEach(check => {
+                for (const check of checks) {
                     if (check.date) {
                         const targetDate = new Date(check.date);
                         targetDate.setHours(0, 0, 0, 0);
@@ -48,18 +47,15 @@ export const FleetNotificationSystem: React.FC = () => {
                             
                             if (!localStorage.getItem(storageKey)) {
                                 const status = diffDays < 0 ? `RETARD (${Math.abs(diffDays)}j)` : `J-${diffDays}`;
-                                if ("Notification" in window && Notification.permission === "granted") {
-                                    new Notification(`📅 Flotte : ${vehicle.name}`, { 
-                                        body: `${check.label} : ${status}`,
-                                        icon: "/pwa-192x192.png",
-                                        tag: `fleet-${vehicle.id}-${check.label}`
-                                    });
-                                    localStorage.setItem(storageKey, 'true');
-                                }
+                                await sendNativeNotification(`📅 Flotte : ${vehicle.name}`, { 
+                                    body: `${check.label} : ${status}`,
+                                    tag: `fleet-${vehicle.id}-${check.label}`
+                                });
+                                localStorage.setItem(storageKey, 'true');
                             }
                         }
                     }
-                });
+                }
             });
         };
 

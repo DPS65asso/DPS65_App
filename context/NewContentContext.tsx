@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { storageService } from '../services/storageService';
 import { bagService } from '../services/bagService';
 import { syncService } from '../services/syncService';
+import { getLocalDateString } from '../utils/security';
 
 // Defining our different sections
 export type SectionType = 'events' | 'missions' | 'fleet' | 'material' | 'courses' | 'docs';
@@ -99,9 +100,11 @@ export const NewContentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
             ]);
 
             const docIds = [...news, ...docs].map(d => d.id || '').filter(Boolean);
+            const today = getLocalDateString();
+            const activeTodayEvents = events.filter(e => !e.isArchived && e.date === today);
 
             return {
-                events: events.map(e => e.id || '').filter(Boolean),
+                events: activeTodayEvents.map(e => e.id || '').filter(Boolean),
                 missions: missions.map(m => m.id || '').filter(Boolean),
                 fleet: fleet.map(v => v.id || '').filter(Boolean),
                 material: material.map(b => b.id || '').filter(Boolean),
@@ -194,10 +197,15 @@ export const NewContentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
             const currentList = currentIds[section] || [];
             const seenList = seenIds[section] || [];
             
-            // Badge is visible if there is any item in currentList that has NOT been seen yet
-            const hasNewItem = currentList.some(id => id && !seenList.includes(id));
-            
-            newBadges[section] = hasNewItem || manualUpdates[section] || false;
+            if (section === 'events') {
+                // Le point rouge pulsant de la section "Events" ne doit s'afficher
+                // que lorsqu'un événement a lieu à la date du jour (statut en cours)
+                newBadges.events = currentList.length > 0;
+            } else {
+                // Badge is visible if there is any item in currentList that has NOT been seen yet
+                const hasNewItem = currentList.some(id => id && !seenList.includes(id));
+                newBadges[section] = hasNewItem || manualUpdates[section] || false;
+            }
         });
 
         setBadges(newBadges);

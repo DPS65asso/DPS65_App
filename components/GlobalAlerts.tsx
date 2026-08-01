@@ -3,6 +3,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { Siren, X, AlertTriangle } from 'lucide-react';
 import { LogbookEntry } from '../types';
 import { useAuth } from '../context/AuthContext';
+import { sendNativeNotification, requestNotificationPermission } from '../services/notificationService';
 
 export const GlobalAlerts: React.FC = () => {
   const { currentTeam } = useAuth();
@@ -20,9 +21,7 @@ export const GlobalAlerts: React.FC = () => {
   }, [currentTeam]);
 
   useEffect(() => {
-    if ("Notification" in window && Notification.permission === "default") {
-        Notification.requestPermission();
-    }
+    requestNotificationPermission();
 
     const bc = new BroadcastChannel('dps65_comms_channel');
     bc.onmessage = (event) => {
@@ -61,28 +60,21 @@ export const GlobalAlerts: React.FC = () => {
         navigator.vibrate([500, 100, 500, 100, 500, 500, 1000, 500, 1000, 500, 1000, 500, 500, 100, 500, 100, 500]);
     }
 
-    // Notification Native Système (Redondance avec SyncService pour assurer la réception locale instantanée)
-    if ("Notification" in window && Notification.permission === "granted") {
-        try {
-            const teamMatch = entry.message.match(/\(([^)]+)\)/);
-            const teamName = teamMatch ? teamMatch[1] : "";
-            
-            const title = `🚨 URGENCE VITALE ${teamName ? `[${teamName.toUpperCase()}]` : ''}`;
-            
-            // On utilise le même tag que SyncService pour éviter les doublons sur l'écran
-            const notif = new Notification(title, {
-                body: `${entry.message}\nCLIQUEZ POUR AFFICHER.`, 
-                icon: "/pwa-192x192.png",
-                tag: "emergency-alert",
-                requireInteraction: true,
-                renotify: true,
-                silent: false // Le son est géré par startSiren, mais on laisse le son système aussi
-            } as any);
-            
-            notif.onclick = () => { window.focus(); notif.close(); };
-        } catch(e) {
-            console.error("Erreur Notification Native", e);
-        }
+    // Notification Native Système
+    try {
+        const teamMatch = entry.message.match(/\(([^)]+)\)/);
+        const teamName = teamMatch ? teamMatch[1] : "";
+        const title = `🚨 URGENCE VITALE ${teamName ? `[${teamName.toUpperCase()}]` : ''}`;
+        
+        sendNativeNotification(title, {
+            body: `${entry.message}\nCLIQUEZ POUR AFFICHER.`, 
+            tag: "emergency-alert",
+            requireInteraction: true,
+            renotify: true,
+            vibrate: [500, 100, 500, 100, 500, 500, 1000, 500, 1000, 500, 1000, 500]
+        });
+    } catch(e) {
+        console.error("Erreur Notification Native", e);
     }
   };
 

@@ -3,16 +3,14 @@ import { storageService } from '../services/storageService';
 import { syncService } from '../services/syncService';
 import { Outcome, Victim } from '../types';
 import { useAuth } from '../context/AuthContext';
+import { sendNativeNotification, requestNotificationPermission } from '../services/notificationService';
 
 export const VitalsExpiryNotifier: React.FC = () => {
   const { currentTeam } = useAuth();
   const notifiedSetRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
-    // Demander la permission notification au premier montage si disponible
-    if ('Notification' in window && Notification.permission === 'default') {
-      Notification.requestPermission();
-    }
+    requestNotificationPermission();
 
     const checkVitals = async () => {
       try {
@@ -83,30 +81,20 @@ export const VitalsExpiryNotifier: React.FC = () => {
       }
     };
 
-    const sendVitalsPushNotification = (victim: Victim, timeStale: boolean, explicitExpired: boolean) => {
-      if (!('Notification' in window) || Notification.permission !== 'granted') return;
-
+    const sendVitalsPushNotification = async (victim: Victim, timeStale: boolean, explicitExpired: boolean) => {
       const title = `🩺 DPS65 : Re-bilan constantes requis`;
       const bodyMessage = explicitExpired
         ? `Les constantes de ${victim.fullName} sont arrivées à expiration.`
         : `Les constantes de ${victim.fullName} datent de plus de 15 min. Merci de réaliser un nouveau bilan.`;
 
       try {
-        const notif = new Notification(title, {
+        await sendNativeNotification(title, {
           body: bodyMessage,
-          icon: '/pwa-192x192.png',
           tag: `vitals-stale-${victim.id}`,
           requireInteraction: false,
-          renotify: true
-        } as any);
-
-        notif.onclick = () => {
-          window.focus();
-          if (victim.eventId) {
-            window.location.hash = `#/events/${victim.eventId}`;
-          }
-          notif.close();
-        };
+          renotify: true,
+          url: victim.eventId ? `#/events/${victim.eventId}` : '/'
+        });
       } catch (e) {
         console.error("Impossible d'afficher la notification push des constantes", e);
       }

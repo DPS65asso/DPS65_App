@@ -2,6 +2,7 @@
 import React, { useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { storageService } from '../services/storageService';
+import { sendNativeNotification, requestNotificationPermission } from '../services/notificationService';
 
 export const MissionReminder: React.FC = () => {
     const { user } = useAuth();
@@ -18,9 +19,7 @@ export const MissionReminder: React.FC = () => {
             } catch (e) {}
         }
 
-        if ("Notification" in window && Notification.permission === "default") {
-            Notification.requestPermission();
-        }
+        requestNotificationPermission();
 
         const checkMissions = async () => {
             const missions = await storageService.getMissions();
@@ -30,23 +29,20 @@ export const MissionReminder: React.FC = () => {
             tomorrow.setDate(tomorrow.getDate() + 1);
             const tomorrowStr = tomorrow.toISOString().split('T')[0];
 
-            myMissions.forEach(m => {
+            for (const m of myMissions) {
                 if (m.date === tomorrowStr) {
                     // Clé unique pour ne pas spammer (ID mission + date check)
                     const key = `notif_remind_${m.id}`;
                     
                     if (!localStorage.getItem(key)) {
-                        if ("Notification" in window && Notification.permission === "granted") {
-                            new Notification(`📅 Mission Demain : ${m.title}`, {
-                                body: `Rappel : Début à ${m.timeStart} - Lieu : ${m.location}`,
-                                icon: "/pwa-192x192.png",
-                                tag: `mission-remind-${m.id}`
-                            });
-                            localStorage.setItem(key, 'true');
-                        }
+                        await sendNativeNotification(`📅 Mission Demain : ${m.title}`, {
+                            body: `Rappel : Début à ${m.timeStart} - Lieu : ${m.location}`,
+                            tag: `mission-remind-${m.id}`
+                        });
+                        localStorage.setItem(key, 'true');
                     }
                 }
-            });
+            }
         };
 
         checkMissions();

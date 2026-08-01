@@ -4,6 +4,7 @@ import { supabase, isLive } from './supabaseClient';
 import { generateUUID } from '../utils/security';
 import { auditService } from './auditService';
 import { authService } from './authService';
+import { sendNativeNotification } from './notificationService';
 
 const getNormalizedTime = (val: any): number => {
     if (!val) return 0;
@@ -265,15 +266,13 @@ class SyncService {
         }
 
         try {
-            new Notification(title, { 
+            await sendNativeNotification(title, { 
                 body, 
-                icon: "/pwa-192x192.png", 
                 tag,
                 requireInteraction,
                 renotify,
-                // @ts-ignore
-                vibrate: [200, 100, 200, 100, 200, 100, 200]
-            } as any);
+                vibrate: requireInteraction ? [500, 100, 500, 100, 500, 500, 1000] : [200, 100, 200, 100, 200, 100, 400]
+            });
         } catch (e) {
             console.error("Erreur notification", e);
         }

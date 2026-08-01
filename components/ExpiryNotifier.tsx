@@ -2,6 +2,7 @@
 import React, { useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { bagService } from '../services/bagService';
+import { sendNativeNotification, requestNotificationPermission } from '../services/notificationService';
 
 export const ExpiryNotifier: React.FC = () => {
     const { isAdmin } = useAuth();
@@ -25,26 +26,21 @@ export const ExpiryNotifier: React.FC = () => {
             const alerts = await bagService.checkExpiringItems();
             
             if (alerts.length > 0) {
-                if ("Notification" in window && Notification.permission === "default") {
-                    await Notification.requestPermission();
-                }
+                await requestNotificationPermission();
 
-                if ("Notification" in window && Notification.permission === "granted") {
-                    alerts.forEach(alert => {
-                        const count = alert.items.length;
-                        const text = `${count} produit(s) périmé(s) ou à péremption proche dans ${alert.bagName}.`;
-                        
-                        // Anti-spam quotidien
-                        const key = `notif_expiry_${alert.bagName}_${todayStr}`;
-                        if (!localStorage.getItem(key)) {
-                            new Notification("DPS65 - Alerte Péremption", {
-                                body: text,
-                                icon: "/pwa-192x192.png",
-                                tag: `expiry-${alert.bagName}` 
-                            });
-                            localStorage.setItem(key, 'true');
-                        }
-                    });
+                for (const alert of alerts) {
+                    const count = alert.items.length;
+                    const text = `${count} produit(s) périmé(s) ou à péremption proche dans ${alert.bagName}.`;
+                    
+                    // Anti-spam quotidien
+                    const key = `notif_expiry_${alert.bagName}_${todayStr}`;
+                    if (!localStorage.getItem(key)) {
+                        await sendNativeNotification("DPS65 - Alerte Péremption", {
+                            body: text,
+                            tag: `expiry-${alert.bagName}` 
+                        });
+                        localStorage.setItem(key, 'true');
+                    }
                 }
             }
 
@@ -58,14 +54,11 @@ export const ExpiryNotifier: React.FC = () => {
                 if (criticalItems.length > 0) {
                     const key = `notif_stock_${bag.id}_${todayStr}`;
                     if (!localStorage.getItem(key)) {
-                        if ("Notification" in window && Notification.permission === "granted") {
-                            new Notification(`📦 Stock Critique : ${bag.name}`, {
-                                body: `${criticalItems.length} article(s) presque épuisé(s). Vérifiez le sac.`,
-                                icon: "/pwa-192x192.png",
-                                tag: `stock-${bag.id}`
-                            });
-                            localStorage.setItem(key, 'true');
-                        }
+                        await sendNativeNotification(`📦 Stock Critique : ${bag.name}`, {
+                            body: `${criticalItems.length} article(s) presque épuisé(s). Vérifiez le sac.`,
+                            tag: `stock-${bag.id}`
+                        });
+                        localStorage.setItem(key, 'true');
                     }
                 }
             }
