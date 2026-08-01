@@ -13,6 +13,7 @@ export interface Event {
   location: string;
   createdAt: number;
   updatedAt?: number; // Delta Sync
+  isArchived?: boolean; // Événement archivé
   resourceConfig?: {
     totalStretchers: number;
     totalChairs: number;
@@ -369,7 +370,7 @@ export interface TrainingCourse {
     url?: string;
 }
 
-export type AuditAction = 'LOGIN' | 'CREATE_EVENT' | 'DELETE_EVENT' | 'ARCHIVE_EVENT' | 'CREATE_VICTIM' | 'UPDATE_VICTIM' | 'DELETE_VICTIM' | 'EXPORT_PDF' | 'EXPORT_GLOBAL' | 'WIPE_DATA' | 'FACTORY_RESET' | 'BACKUP_EXPORT' | 'BACKUP_IMPORT' | 'CONFIG_UPDATE' | 'LOGBOOK_ADD' | 'REMOTE_WIPE_TRIGGERED' | 'EXPORT_CSV' | 'AI_QUERY' | 'CHAT_MSG' | 'VEHICLE_CHECK' | 'MISSION_SIGNUP' | 'BAG_ASSIGN' | 'BAG_CONSUME' | 'UNIFORM_UPDATE' | 'SYNC_ERROR';
+export type AuditAction = 'LOGIN' | 'CREATE_EVENT' | 'DELETE_EVENT' | 'ARCHIVE_EVENT' | 'UNARCHIVE_EVENT' | 'CREATE_VICTIM' | 'UPDATE_VICTIM' | 'DELETE_VICTIM' | 'EXPORT_PDF' | 'EXPORT_GLOBAL' | 'WIPE_DATA' | 'FACTORY_RESET' | 'BACKUP_EXPORT' | 'BACKUP_IMPORT' | 'CONFIG_UPDATE' | 'LOGBOOK_ADD' | 'REMOTE_WIPE_TRIGGERED' | 'EXPORT_CSV' | 'AI_QUERY' | 'CHAT_MSG' | 'VEHICLE_CHECK' | 'MISSION_SIGNUP' | 'BAG_ASSIGN' | 'BAG_CONSUME' | 'UNIFORM_UPDATE' | 'SYNC_ERROR';
 
 export interface AuditLog {
   id: string;

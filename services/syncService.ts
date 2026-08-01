@@ -326,6 +326,25 @@ class SyncService {
                             if (localData.event_id && !localData.eventId) {
                                 localData.eventId = localData.event_id;
                             }
+                            if (tableName === 'config') {
+                                if (localData.clothing_order_in_progress !== undefined && localData.clothingOrderInProgress === undefined) {
+                                    localData.clothingOrderInProgress = !!localData.clothing_order_in_progress;
+                                }
+                            }
+                            if (tableName === 'events') {
+                                if (localData.is_archived !== undefined && localData.isArchived === undefined) {
+                                    localData.isArchived = !!localData.is_archived;
+                                }
+                                if (localData.isArchived) {
+                                    try {
+                                        const archTx = db.transaction('events_archive', 'readwrite');
+                                        await archTx.store.put(localData);
+                                        await archTx.done;
+                                    } catch (e) {
+                                        console.warn("Could not save to events_archive during pull", e);
+                                    }
+                                }
+                            }
 
                             if (dbStoreName !== 'config') {
                                 const localExisting = await tx.store.get(remote.id);
@@ -700,7 +719,20 @@ class SyncService {
                 }
 
                 if (table === 'config') {
+                    if (localData.clothing_order_in_progress !== undefined && localData.clothingOrderInProgress === undefined) {
+                        localData.clothingOrderInProgress = !!localData.clothing_order_in_progress;
+                    }
                     await db.put(table as any, localData, 'main');
+                } else if (table === 'events') {
+                    if (localData.is_archived !== undefined && localData.isArchived === undefined) {
+                        localData.isArchived = !!localData.is_archived;
+                    }
+                    if (localData.isArchived) {
+                        await db.put('events_archive', localData);
+                    } else {
+                        await db.delete('events_archive', localData.id);
+                    }
+                    await db.put('events', localData);
                 } else {
                     await db.put(table as any, localData);
                 }

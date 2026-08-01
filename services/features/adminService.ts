@@ -22,7 +22,11 @@ export const adminService = {
         try {
           const db = await initDB();
           const conf = await db.get('config', 'main');
-          return { ...DEFAULT_CONFIG, ...conf } as AppConfig;
+          if (!conf) return DEFAULT_CONFIG;
+          const clothingOrderInProgress = conf.clothingOrderInProgress !== undefined 
+              ? !!conf.clothingOrderInProgress 
+              : !!(conf as any).clothing_order_in_progress;
+          return { ...DEFAULT_CONFIG, ...conf, clothingOrderInProgress } as AppConfig;
         } catch { return DEFAULT_CONFIG; }
     },
     
@@ -30,11 +34,16 @@ export const adminService = {
         try {
           const db = await initDB();
           
+          const normalizedConfig: AppConfig = {
+              ...config,
+              clothingOrderInProgress: !!config.clothingOrderInProgress
+          };
+
           // Mise à jour locale
-          await db.put('config', config, 'main');
+          await db.put('config', normalizedConfig, 'main');
           
-          // Préparation d'un objet propre pour Supabase (évite les undefined qui causent des erreurs JSONB/SQL)
-          const cleanConfig: AppConfig = {
+          // Préparation d'un objet propre pour Supabase (compatible snake_case et camelCase)
+          const cleanConfig: any = {
               id: 'main', // ID fixe pour la ligne de configuration unique
               hospitals: Array.isArray(config.hospitals) ? config.hospitals : [],
               teams: Array.isArray(config.teams) ? config.teams : [],
@@ -44,12 +53,13 @@ export const adminService = {
               medications: Array.isArray(config.medications) ? config.medications : [],
               solutes: Array.isArray(config.solutes) ? config.solutes : [],
               forcedUpdateAt: config.forcedUpdateAt || '',
-              clothingOrderInProgress: !!config.clothingOrderInProgress
+              clothingOrderInProgress: !!config.clothingOrderInProgress,
+              clothing_order_in_progress: !!config.clothingOrderInProgress
           };
 
-          // Sync Cloud (Important pour le Kill Switch)
+          // Sync Cloud
           const tx = db.transaction(['config', 'sync_queue'], 'readwrite');
-          await tx.objectStore('config').put(config, 'main');
+          await tx.objectStore('config').put(normalizedConfig, 'main');
           await tx.objectStore('sync_queue').put({
               id: generateUUID(),
               table: 'config', 
@@ -61,7 +71,7 @@ export const adminService = {
           });
           await tx.done;
           
-          // Broadcast local pour mise à jour immédiate des composants (SecurityMonitor, HomePage)
+          // Broadcast local pour mise à jour immédiate des composants
           const localBc = new BroadcastChannel('dps65_config_channel');
           localBc.postMessage({ type: 'UPDATE_CONFIG' });
           localBc.close();

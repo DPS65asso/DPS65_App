@@ -5,9 +5,11 @@ import { useAuth } from '../../context/AuthContext';
 import { storageService } from '../../services/storageService';
 import { authService } from '../../services/authService';
 import { exportService } from '../../services/exportService';
-import { UserUniformData, UniformSizes, UniformItem } from '../../types';
+import { adminService } from '../../services/features/adminService';
+import { syncService } from '../../services/syncService';
+import { UserUniformData, UniformSizes, UniformItem, AppConfig } from '../../types';
 import { Button } from '../../components/Button';
-import { Ruler, ShoppingBag, CheckCircle2, Save, Download, Loader2, FileText } from 'lucide-react';
+import { Ruler, ShoppingBag, CheckCircle2, Save, Download, Loader2, FileText, Shirt } from 'lucide-react';
 
 const DEFAULT_SIZES: UniformSizes = { top: '', bottom: '', shoes: '', head: '' };
 
@@ -24,6 +26,7 @@ const DEFAULT_ITEMS: UniformItem[] = [
 export const UniformPage: React.FC = () => {
     const { user, isAdmin } = useAuth();
     const [data, setData] = useState<UserUniformData | null>(null);
+    const [appConfig, setAppConfig] = useState<AppConfig | null>(null);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [exporting, setExporting] = useState(false);
@@ -31,6 +34,23 @@ export const UniformPage: React.FC = () => {
 
     useEffect(() => {
         loadData();
+
+        const handleConfigUpdate = () => {
+            adminService.getConfig().then(setAppConfig);
+        };
+        handleConfigUpdate();
+
+        const bcConfig = new BroadcastChannel('dps65_config_channel');
+        bcConfig.onmessage = handleConfigUpdate;
+
+        const unsubscribeSync = syncService.subscribe(() => {
+            handleConfigUpdate();
+        });
+
+        return () => {
+            bcConfig.close();
+            unsubscribeSync();
+        };
     }, [user]);
 
     const loadData = async () => {
@@ -148,6 +168,21 @@ export const UniformPage: React.FC = () => {
                         </button>
                     )}
                 </div>
+
+                {/* BANNIÈRE COMMANDE EN COURS */}
+                {appConfig?.clothingOrderInProgress && (
+                    <div className="bg-gradient-to-r from-emerald-500 to-teal-600 text-white p-3.5 rounded-xl shadow-md flex items-center justify-between gap-3 animate-in fade-in slide-in-from-top-2">
+                        <div className="flex items-center gap-3">
+                            <div className="p-2 bg-white/20 rounded-lg shrink-0">
+                                <Shirt className="w-5 h-5 text-white" />
+                            </div>
+                            <div>
+                                <p className="font-black text-xs uppercase tracking-wider">Commande en cours !</p>
+                                <p className="text-[11px] text-emerald-100 font-medium">Les logisticiens ont ouvert une session de commande d'équipements. Vérifiez vos demandes.</p>
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 {/* 1. TAILLES */}
                 {activeTab === 'SIZES' && (
@@ -292,14 +327,42 @@ export const UniformPage: React.FC = () => {
 
                 {/* 4. ADMIN */}
                 {activeTab === 'ADMIN' && isAdmin && (
-                    <div className="bg-white dark:bg-slate-800 p-5 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 animate-in slide-in-from-right">
-                        <h3 className="font-bold text-purple-600 dark:text-purple-400 mb-4 flex items-center gap-2"><Download className="w-5 h-5"/> Espace Logistique</h3>
-                        <p className="text-sm text-slate-600 dark:text-slate-300 mb-6">
-                            Générez un rapport PDF contenant l'ensemble des besoins, tailles et demandes de tous les membres pour préparer les commandes groupées.
-                        </p>
-                        <Button onClick={handleAdminExport} variant="primary" fullWidth disabled={exporting} icon={exporting ? <Loader2 className="w-4 h-4 animate-spin"/> : <FileText className="w-4 h-4"/>}>
-                            {exporting ? 'Génération...' : 'Exporter Commandes (PDF)'}
-                        </Button>
+                    <div className="bg-white dark:bg-slate-800 p-5 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 space-y-6 animate-in slide-in-from-right">
+                        <div>
+                            <h3 className="font-bold text-purple-600 dark:text-purple-400 mb-2 flex items-center gap-2"><Shirt className="w-5 h-5"/> Session de Commande</h3>
+                            <div className="bg-slate-50 dark:bg-slate-900/50 p-4 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center justify-between gap-4">
+                                <div>
+                                    <p className="text-xs font-bold text-slate-800 dark:text-white">Badge & Alerte "Commande en cours"</p>
+                                    <p className="text-[11px] text-slate-500 dark:text-slate-400">Notifie tous les membres et affiche la pastille sur leur tableau de bord.</p>
+                                </div>
+                                <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                                    <input 
+                                        type="checkbox" 
+                                        className="sr-only peer"
+                                        checked={!!appConfig?.clothingOrderInProgress}
+                                        onChange={async (e) => {
+                                            const current = appConfig || {
+                                                hospitals: [], teams: [], voiceUri: '', yaplaLink: '', signupCode: '', medications: [], solutes: []
+                                            };
+                                            const updated = { ...current, clothingOrderInProgress: e.target.checked };
+                                            setAppConfig(updated);
+                                            await adminService.saveConfig(updated);
+                                        }}
+                                    />
+                                    <div className="w-11 h-6 bg-slate-300 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:after:border-slate-600 peer-checked:bg-emerald-500"></div>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div>
+                            <h3 className="font-bold text-purple-600 dark:text-purple-400 mb-2 flex items-center gap-2"><Download className="w-5 h-5"/> Espace Logistique</h3>
+                            <p className="text-sm text-slate-600 dark:text-slate-300 mb-4">
+                                Générez un rapport PDF contenant l'ensemble des besoins, tailles et demandes de tous les membres pour préparer les commandes groupées.
+                            </p>
+                            <Button onClick={handleAdminExport} variant="primary" fullWidth disabled={exporting} icon={exporting ? <Loader2 className="w-4 h-4 animate-spin"/> : <FileText className="w-4 h-4"/>}>
+                                {exporting ? 'Génération...' : 'Exporter Commandes (PDF)'}
+                            </Button>
+                        </div>
                     </div>
                 )}
 

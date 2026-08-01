@@ -54,7 +54,8 @@ CREATE TABLE IF NOT EXISTS public.events (
     tracks JSONB DEFAULT '[]'::jsonb,
     organizer_code TEXT,
     "mapPdfUrl" TEXT,
-    "mapPdfs" JSONB DEFAULT '[]'::jsonb
+    "mapPdfs" JSONB DEFAULT '[]'::jsonb,
+    is_archived BOOLEAN DEFAULT FALSE
 );
 
 -- TABLE: victims
@@ -257,7 +258,8 @@ CREATE TABLE IF NOT EXISTS public.config (
     "signupCode" TEXT DEFAULT 'DPS65-2025',
     medications TEXT[] DEFAULT '{}'::text[],
     solutes TEXT[] DEFAULT '{}'::text[],
-    "forcedUpdateAt" TEXT DEFAULT ''
+    "forcedUpdateAt" TEXT DEFAULT '',
+    clothing_order_in_progress BOOLEAN DEFAULT FALSE
 );
 
 -- Insertion de la configuration par défaut si elle n'existe pas encore

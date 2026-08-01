@@ -32,7 +32,7 @@ export const HomePage: React.FC = () => {
   const navigate = useNavigate();
   const { profile, currentTeam, setSessionTeam, isAdmin, refreshProfile } = useAuth();
   const { badges } = useNewContent();
-  const hasPortalBadges = badges.missions || badges.fleet || badges.material || badges.courses || badges.docs;
+  const hasPortalBadges = badges.missions || badges.courses || badges.docs;
 
   // Redirection automatique pour les organisateurs
   useEffect(() => {

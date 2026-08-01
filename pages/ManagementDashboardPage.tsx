@@ -6,6 +6,7 @@ import { Calendar, Truck, GraduationCap, ArrowRight, MessageSquare, Briefcase, S
 import { useAuth } from '../context/AuthContext';
 import { storageService } from '../services/storageService';
 import { adminService } from '../services/features/adminService';
+import { syncService } from '../services/syncService';
 import { AppConfig } from '../types';
 import { useNewContent } from '../context/NewContentContext';
 import { NewContentBadge } from '../components/NewContentBadge';
@@ -103,11 +104,18 @@ export const ManagementDashboardPage: React.FC = () => {
         loadCounts();
 
         const bcConfig = new BroadcastChannel('dps65_config_channel');
-        bcConfig.onmessage = () => {
+        const handleConfigUpdate = () => {
             adminService.getConfig().then(setAppConfig);
         };
+        bcConfig.onmessage = handleConfigUpdate;
+
+        const unsubscribeSync = syncService.subscribe(() => {
+            handleConfigUpdate();
+        });
+
         return () => {
             bcConfig.close();
+            unsubscribeSync();
         };
     }, []);
 
@@ -191,7 +199,6 @@ export const ManagementDashboardPage: React.FC = () => {
                             desc="Stocks & Sacs."
                             icon={<Briefcase />}
                             color="cyan"
-                            badge={badges.material}
                             onClick={() => navigate('/management/bags')}
                             className="h-full"
                         />

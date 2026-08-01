@@ -211,6 +211,16 @@ export const EventListPage: React.FC = () => {
     }
   };
 
+  const handleUnarchiveClick = async (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    try {
+      await storageService.unarchiveEvent(id);
+      setEvents(prev => prev.filter(e => e.id !== id));
+    } catch (error) {
+      console.error("Failed to unarchive event", error);
+    }
+  };
+
   const clearFilters = () => {
     setSearchQuery('');
     setDateFilter('');
@@ -456,7 +466,7 @@ export const EventListPage: React.FC = () => {
                     <Download className="w-5 h-5" />
                 </button>
 
-                {/* ARCHIVE BUTTON - ADMIN ONLY, ACTIVE EVENTS ONLY */}
+                {/* ARCHIVE / UNARCHIVE BUTTON - ADMIN ONLY */}
                 {isAdmin && !showArchived && (
                     <button
                         onClick={(e) => handleArchiveClick(e, event.id)}
@@ -464,6 +474,15 @@ export const EventListPage: React.FC = () => {
                         title="Archiver l'événement"
                     >
                         <Archive className="w-5 h-5" />
+                    </button>
+                )}
+                {isAdmin && showArchived && (
+                    <button
+                        onClick={(e) => handleUnarchiveClick(e, event.id)}
+                        className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 rounded-full transition-colors z-10"
+                        title="Désarchiver l'événement"
+                    >
+                        <ArchiveRestore className="w-5 h-5" />
                     </button>
                 )}
 
