@@ -10,6 +10,17 @@ declare const self: ServiceWorkerGlobalScope;
 cleanupOutdatedCaches();
 precacheAndRoute(self.__WB_MANIFEST);
 
+// Écouter le message SKIP_WAITING du client pour forcer l'activation immédiate
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
+});
+
+self.addEventListener('activate', (event) => {
+  event.waitUntil(self.clients.claim());
+});
+
 // 1. GESTION DES CLICS SUR LES NOTIFICATIONS (Crucial pour Android PWA)
 self.addEventListener('notificationclick', (event: NotificationEvent) => {
   console.log('[SW] Notification cliquée:', event.notification);

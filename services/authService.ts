@@ -471,10 +471,20 @@ export const authService = {
   },
 
   logout: async () => {
-      if (isLive) await supabase.auth.signOut();
-      localStorage.removeItem(SESSION_KEY);
-      localStorage.removeItem(SESSION_TIMESTAMP_KEY);
-      localStorage.removeItem('dps65_organizer_code');
+      try {
+          if (isLive) {
+              await Promise.race([
+                  supabase.auth.signOut(),
+                  new Promise((resolve) => setTimeout(resolve, 1500))
+              ]);
+          }
+      } catch (err) {
+          console.warn("Supabase auth signOut error/timeout during logout:", err);
+      } finally {
+          localStorage.removeItem(SESSION_KEY);
+          localStorage.removeItem(SESSION_TIMESTAMP_KEY);
+          localStorage.removeItem('dps65_organizer_code');
+      }
   },
 
   deleteAccount: async (userId: string) => { 

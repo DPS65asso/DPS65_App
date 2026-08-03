@@ -68,6 +68,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, title, showBack = fals
   const isMobile = window.innerWidth < 1024;
   const isNoviMode = location.pathname.includes('/novi'); // Assuming Novi mode is a path or state
   const isSettingsMode = location.pathname.includes('/settings'); // Assuming Settings mode is a path or state
+  const isAiPage = location.pathname.startsWith('/ai');
   const shouldHideMenu = isMobile && (isNoviMode || isSettingsMode);
 
   return (
@@ -99,7 +100,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, title, showBack = fals
           )}
 
           <div className="flex-1 overflow-y-auto w-full overflow-x-hidden scroll-smooth" style={{ WebkitOverflowScrolling: 'touch' }}>
-              <main className="container mx-auto max-w-7xl p-4 lg:p-8 flex flex-col pb-32 min-h-full relative">
+              <main className="container mx-auto max-w-7xl p-4 lg:p-8 flex flex-col pb-32 min-h-full relative w-full min-w-0">
                 {!isCustomHeaderPage && (
                   <div className="flex items-center justify-between mb-6 pt-2">
                     <div className="flex items-center gap-2 overflow-hidden flex-1">
@@ -162,14 +163,14 @@ export const Layout: React.FC<LayoutProps> = ({ children, title, showBack = fals
                                   <span className="hidden sm:inline">Déconnexion</span>
                                 </button>
                               )}
-                              {!isOrganizer && (
+                              {!isOrganizer && !isAiPage && (
                                 <button
                                   onClick={() => setIsPushModalOpen(true)}
                                   title="Diffusion Notification Push"
-                                  className="p-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/30 dark:hover:bg-blue-900/50 text-blue-600 dark:text-blue-400 font-bold text-xs transition-colors border border-blue-200 dark:border-blue-800 flex items-center gap-1.5 cursor-pointer shadow-xs"
+                                  className="px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-extrabold text-xs transition-all border border-blue-400/30 flex items-center gap-1.5 cursor-pointer shadow-md shadow-blue-500/25 active:scale-95 ring-2 ring-blue-500/20"
                                 >
-                                  <Bell className="w-4 h-4" />
-                                  <span className="hidden md:inline">Notif Push</span>
+                                  <Bell className="w-4 h-4 text-amber-300 animate-pulse shrink-0" />
+                                  <span className="inline-block font-extrabold tracking-tight">Notif Push</span>
                                 </button>
                               )}
                               {/* Sync Indicator dans la navbar classique */}

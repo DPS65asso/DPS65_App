@@ -130,7 +130,7 @@ export const AdminPage: React.FC = () => {
   // Forms
   const [missionForm, setMissionForm] = useState({ title: '', date: '', timeStart: '', timeEnd: '', location: '', type: 'DPS' as any, req1: 2, req2: 1, reqIde: 0, reqMed: 0 });
   const [editingMissionId, setEditingMissionId] = useState<string | null>(null);
-  const [newsForm, setNewsForm] = useState({ title: '', content: '', isUrgent: false });
+  const [newsForm, setNewsForm] = useState({ title: '', content: '', url: '', linkTitle: '', isUrgent: false });
   const [docForm, setDocForm] = useState({ title: '', category: 'Procédure', url: '', adminOnly: false });
   const [courseForm, setCourseForm] = useState({ title: '', description: '', url: '', category: 'PSE1', type: 'PDF' });
   const [vehicleForm, setVehicleForm] = useState({ name: '', type: 'VPSP', nextTechControl: '', nextService: '' });
@@ -534,8 +534,17 @@ export const AdminPage: React.FC = () => {
 
   const handleAddNews = async () => {
       if(!newsForm.title) return;
-      await adminService.saveNews({ id: generateUUID(), date: Date.now(), title: newsForm.title, content: newsForm.content, author: 'Admin', isUrgent: newsForm.isUrgent });
-      setNewsForm({ title: '', content: '', isUrgent: false }); loadData(true);
+      await adminService.saveNews({ 
+          id: generateUUID(), 
+          date: Date.now(), 
+          title: newsForm.title, 
+          content: newsForm.content, 
+          url: newsForm.url ? newsForm.url.trim() : undefined,
+          linkTitle: newsForm.linkTitle ? newsForm.linkTitle.trim() : undefined,
+          author: 'Admin', 
+          isUrgent: newsForm.isUrgent 
+      });
+      setNewsForm({ title: '', content: '', url: '', linkTitle: '', isUrgent: false }); loadData(true);
   };
 
   const handleDeleteNews = async (id: string) => {
@@ -808,15 +817,34 @@ export const AdminPage: React.FC = () => {
                 
                 {resourceTab === 'ACTUALITÉ' && (
                     <div className="space-y-4">
-                        <input type="text" className={inputClass} placeholder="Titre Actu" value={newsForm.title} onChange={e => setNewsForm({...newsForm, title: e.target.value})} />
+                        <input type="text" className={inputClass} placeholder="Titre Actu *" value={newsForm.title} onChange={e => setNewsForm({...newsForm, title: e.target.value})} />
                         <textarea className={inputClass} rows={2} placeholder="Message..." value={newsForm.content} onChange={e => setNewsForm({...newsForm, content: e.target.value})} />
-                        <label className="flex items-center gap-2 text-xs font-bold text-red-500"><input type="checkbox" checked={newsForm.isUrgent} onChange={e => setNewsForm({...newsForm, isUrgent: e.target.checked})} /> Urgent / Important</label>
+                        
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-slate-50 dark:bg-slate-900/50 p-3 rounded-lg border border-slate-200 dark:border-slate-800">
+                            <div>
+                                <label className="block text-[11px] font-bold text-slate-500 mb-1">Lien externe (optionnel)</label>
+                                <input type="url" className={inputClass} placeholder="https://..." value={newsForm.url} onChange={e => setNewsForm({...newsForm, url: e.target.value})} />
+                            </div>
+                            <div>
+                                <label className="block text-[11px] font-bold text-slate-500 mb-1">Texte du bouton lien (optionnel)</label>
+                                <input type="text" className={inputClass} placeholder="Ex: Consulter le document" value={newsForm.linkTitle} onChange={e => setNewsForm({...newsForm, linkTitle: e.target.value})} />
+                            </div>
+                        </div>
+
+                        <label className="flex items-center gap-2 text-xs font-bold text-red-500 cursor-pointer"><input type="checkbox" checked={newsForm.isUrgent} onChange={e => setNewsForm({...newsForm, isUrgent: e.target.checked})} /> Urgent / Important</label>
                         <Button fullWidth size="sm" onClick={handleAddNews}>Publier l'actualité</Button>
                         
                         <CollapsibleList title="Historique Actualités" count={news.length} icon={<List className="w-4 h-4"/>}>
                             {news.map(n => (
                                 <div key={n.id} className="flex justify-between items-center p-2 border-b last:border-0 border-slate-100 dark:border-slate-700 text-xs hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                                    <div className="truncate"><span className="font-bold dark:text-white">{n.title}</span></div>
+                                    <div className="truncate flex-1 pr-2">
+                                        <span className="font-bold dark:text-white block">{n.title}</span>
+                                        {n.url && (
+                                            <a href={n.url} target="_blank" rel="noopener noreferrer" className="text-[10px] text-blue-500 hover:underline inline-flex items-center gap-1 truncate">
+                                                🔗 {n.linkTitle || n.url}
+                                            </a>
+                                        )}
+                                    </div>
                                     <button onClick={() => handleDeleteNews(n.id)} className="text-red-500 p-1 hover:bg-red-50 dark:hover:bg-red-900/20 rounded"><Trash2 className="w-4 h-4"/></button>
                                 </div>
                             ))}

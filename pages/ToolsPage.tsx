@@ -613,45 +613,142 @@ const EmergencyTranslator = () => {
     );
 };
 
-const FlashlightTool = () => {
-    const [mode, setMode] = useState<'OFF' | 'WHITE' | 'RED' | 'SOS'>('OFF');
-    const [sosState, setSosState] = useState(false);
+const MORSE_SOS_SEQUENCE = [
+    // S : 3 flashs courts (dots)
+    { light: true, duration: 200, symbol: "•", letter: "S" },
+    { light: false, duration: 200, symbol: "", letter: "S" },
+    { light: true, duration: 200, symbol: "• •", letter: "S" },
+    { light: false, duration: 200, symbol: "", letter: "S" },
+    { light: true, duration: 200, symbol: "• • •", letter: "S" },
+    { light: false, duration: 600, symbol: "", letter: " " },
+
+    // O : 3 flashs longs (dashes)
+    { light: true, duration: 600, symbol: "—", letter: "O" },
+    { light: false, duration: 200, symbol: "", letter: "O" },
+    { light: true, duration: 600, symbol: "— —", letter: "O" },
+    { light: false, duration: 200, symbol: "", letter: "O" },
+    { light: true, duration: 600, symbol: "— — —", letter: "O" },
+    { light: false, duration: 600, symbol: "", letter: " " },
+
+    // S : 3 flashs courts (dots)
+    { light: true, duration: 200, symbol: "•", letter: "S" },
+    { light: false, duration: 200, symbol: "", letter: "S" },
+    { light: true, duration: 200, symbol: "• •", letter: "S" },
+    { light: false, duration: 200, symbol: "", letter: "S" },
+    { light: true, duration: 200, symbol: "• • •", letter: "S" },
+    { light: false, duration: 1800, symbol: "", letter: " " },
+];
+
+const SosMorseTool = () => {
+    const [isActive, setIsActive] = useState(false);
+    const [stepIndex, setStepIndex] = useState(0);
+    const [colorMode, setColorMode] = useState<'WHITE' | 'RED'>('WHITE');
 
     useEffect(() => {
-        let interval: any;
-        if (mode === 'SOS') {
-            interval = setInterval(() => setSosState(s => !s), 500);
+        if (!isActive) {
+            setStepIndex(0);
+            return;
         }
-        return () => clearInterval(interval);
-    }, [mode]);
 
-    if (mode !== 'OFF') {
+        const currentStep = MORSE_SOS_SEQUENCE[stepIndex];
+        const timer = setTimeout(() => {
+            setStepIndex((prev) => (prev + 1) % MORSE_SOS_SEQUENCE.length);
+        }, currentStep.duration);
+
+        return () => clearTimeout(timer);
+    }, [isActive, stepIndex]);
+
+    const currentStep = MORSE_SOS_SEQUENCE[stepIndex];
+
+    if (isActive) {
+        const isLightOn = currentStep.light;
+        const activeBg = colorMode === 'WHITE' ? 'bg-white' : 'bg-red-600';
+
         return (
-            <div className={`fixed inset-0 z-[9999] flex flex-col items-center justify-center cursor-pointer ${
-                mode === 'WHITE' ? 'bg-white' : 
-                mode === 'RED' ? 'bg-red-600' : 
-                (sosState ? 'bg-white' : 'bg-black')
-            }`} onClick={() => setMode('OFF')}>
-                <div className="bg-black/50 px-6 py-3 rounded-full text-white font-bold backdrop-blur-md flex items-center gap-2 animate-pulse">
-                    <X className="w-5 h-5" /> Tapper pour éteindre
+            <div 
+                className={`fixed inset-0 z-[9999] flex flex-col items-center justify-between p-6 cursor-pointer transition-colors duration-75 select-none ${
+                    isLightOn ? activeBg : 'bg-black'
+                }`} 
+                onClick={() => setIsActive(false)}
+            >
+                <div className="pt-6">
+                    <div className="bg-black/80 text-white px-5 py-2.5 rounded-full font-black text-sm backdrop-blur-md flex items-center gap-2 shadow-2xl border border-white/20 animate-pulse">
+                        <AlertTriangle className="w-5 h-5 text-amber-400" />
+                        <span>SIGNAL SOS MORSE EN COURS</span>
+                    </div>
+                </div>
+
+                <div className="flex flex-col items-center justify-center text-center space-y-4 my-auto">
+                    <div className={`text-6xl sm:text-8xl font-black tracking-widest ${
+                        isLightOn ? (colorMode === 'WHITE' ? 'text-black' : 'text-white') : 'text-slate-600'
+                    }`}>
+                        {currentStep.letter.trim() || "S O S"}
+                    </div>
+                    <div className={`text-2xl sm:text-4xl font-mono font-bold tracking-widest ${
+                        isLightOn ? (colorMode === 'WHITE' ? 'text-slate-900' : 'text-white') : 'text-slate-500'
+                    }`}>
+                        {currentStep.symbol || "• • •   — — —   • • •"}
+                    </div>
+                    <div className="text-xs uppercase font-bold tracking-wider px-3 py-1 rounded bg-black/40 text-slate-200 backdrop-blur-sm">
+                        {isLightOn ? `FLASH ${colorMode === 'WHITE' ? 'BLANC' : 'ROUGE'}` : 'PAUSE'} ({currentStep.duration}ms)
+                    </div>
+                </div>
+
+                <div className="pb-8 flex flex-col items-center gap-3">
+                    <div className="bg-black/80 text-white px-6 py-3 rounded-full font-bold text-xs sm:text-sm backdrop-blur-md flex items-center gap-2 border border-slate-700 shadow-xl">
+                        <X className="w-4 h-4 text-red-400" /> Touchez l'écran n'importe où pour arrêter
+                    </div>
                 </div>
             </div>
         );
     }
 
     return (
-        <div className="grid grid-cols-3 gap-3">
-            <button onClick={() => setMode('WHITE')} className="p-4 bg-white border-2 border-slate-200 rounded-xl flex flex-col items-center gap-2 hover:bg-slate-50 transition-colors">
-                <Lightbulb className="w-6 h-6 text-slate-400" />
-                <span className="text-xs font-bold text-slate-600">Torche</span>
-            </button>
-            <button onClick={() => setMode('RED')} className="p-4 bg-red-600 border-2 border-red-700 rounded-xl flex flex-col items-center gap-2 hover:bg-red-700 transition-colors text-white">
-                <Lightbulb className="w-6 h-6" />
-                <span className="text-xs font-bold">Nuit</span>
-            </button>
-            <button onClick={() => setMode('SOS')} className="p-4 bg-slate-900 border-2 border-slate-700 rounded-xl flex flex-col items-center gap-2 hover:bg-black transition-colors text-white">
-                <AlertTriangle className="w-6 h-6 animate-pulse" />
-                <span className="text-xs font-bold">S.O.S</span>
+        <div className="space-y-4">
+            <div className="bg-slate-900 text-white p-4 rounded-xl border border-slate-800 space-y-3">
+                <div className="flex items-center gap-2 text-amber-400 font-extrabold text-sm uppercase">
+                    <AlertTriangle className="w-5 h-5" />
+                    <span>Mode Signal SOS Morse</span>
+                </div>
+                <p className="text-xs text-slate-300 leading-relaxed">
+                    Fait clignoter l'écran complet selon le code Morse international de détresse : <br />
+                    <span className="font-mono font-bold text-amber-300 text-sm">S.O.S ( • • •   — — —   • • • )</span>
+                </p>
+
+                <div className="flex items-center gap-2 pt-1 flex-wrap">
+                    <span className="text-xs text-slate-400 font-bold">Couleur d'éclat :</span>
+                    <button
+                        type="button"
+                        onClick={() => setColorMode('WHITE')}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                            colorMode === 'WHITE'
+                                ? 'bg-white text-slate-950 font-black shadow-md'
+                                : 'bg-slate-800 text-slate-400 border border-slate-700 hover:text-white'
+                        }`}
+                    >
+                        Blanc Haute Visibilité
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setColorMode('RED')}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                            colorMode === 'RED'
+                                ? 'bg-red-600 text-white font-black shadow-md'
+                                : 'bg-slate-800 text-slate-400 border border-slate-700 hover:text-white'
+                        }`}
+                    >
+                        Rouge Détresse Nuit
+                    </button>
+                </div>
+            </div>
+
+            <button
+                type="button"
+                onClick={() => setIsActive(true)}
+                className="w-full py-3.5 px-4 bg-gradient-to-r from-red-600 via-rose-600 to-amber-600 hover:from-red-500 hover:to-amber-500 text-white font-black text-sm uppercase tracking-wider rounded-xl shadow-lg shadow-red-600/30 flex items-center justify-center gap-2 transition-all active:scale-98"
+            >
+                <AlertTriangle className="w-5 h-5 animate-pulse" />
+                <span>Activer Signal SOS Morse</span>
             </button>
         </div>
     );
@@ -762,6 +859,538 @@ const DripCalculator = () => {
     );
 };
 
+// --- COMPOSANT TRANSCRIPTEUR MORSE ---
+const MORSE_CODE_MAP: Record<string, string> = {
+    'A': '.-', 'B': '-...', 'C': '-.-.', 'D': '-..', 'E': '.', 'F': '..-.', 'G': '--.', 'H': '....',
+    'I': '..', 'J': '.---', 'K': '-.-', 'L': '.-..', 'M': '--', 'N': '-.', 'O': '---', 'P': '.--.',
+    'Q': '--.-', 'R': '.-.', 'S': '...', 'T': '-', 'U': '..-', 'V': '...-', 'W': '.--', 'X': '-..-',
+    'Y': '-.--', 'Z': '--..',
+    '0': '-----', '1': '.----', '2': '..---', '3': '...--', '4': '....--', '5': '.....',
+    '6': '-....', '7': '--...', '8': '---..', '9': '----.',
+    '.': '.-.-.-', ',': '--..--', '?': '..--..', "'": '.----.', '!': '-.-.--', '/': '-..-.',
+    '(': '-.--.', ')': '-.--.-', '&': '.-...', ':': '---...', ';': '-.-.-.', '=': '-...-',
+    '+': '.-.-.', '-': '-....-', '_': '..--.-', '"': '.-..-.', '$': '...-..-', '@': '.--.-.'
+};
+
+const REVERSE_MORSE_MAP: Record<string, string> = Object.fromEntries(
+    Object.entries(MORSE_CODE_MAP).map(([k, v]) => [v, k])
+);
+
+const textToMorseString = (text: string): string => {
+    return text
+        .toUpperCase()
+        .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+        .split('')
+        .map(char => {
+            if (char === ' ' || char === '\n') return '/';
+            return MORSE_CODE_MAP[char] || '';
+        })
+        .filter(Boolean)
+        .join(' ');
+};
+
+const morseStringToText = (morse: string): string => {
+    return morse
+        .trim()
+        .split(/\s+/)
+        .map(code => {
+            if (code === '/' || code === '|') return ' ';
+            return REVERSE_MORSE_MAP[code] || '?';
+        })
+        .join('');
+};
+
+const MorseTranscriber: React.FC = () => {
+    const [mode, setMode] = useState<'TEXT_TO_MORSE' | 'MORSE_TO_TEXT'>('TEXT_TO_MORSE');
+    const [input, setInput] = useState('BESOIN RENFORT DPS65');
+    const [isPlaying, setIsPlaying] = useState(false);
+    const [activeCharIndex, setActiveCharIndex] = useState<number | null>(null);
+    const [copied, setCopied] = useState(false);
+    const [showCheatSheet, setShowCheatSheet] = useState(false);
+    
+    // États pour le signal lumineux par l'écran
+    const [isLightModalOpen, setIsLightModalOpen] = useState(false);
+    const [isLightFlashing, setIsLightFlashing] = useState(false);
+    const [flashBgOn, setFlashBgOn] = useState(false);
+    const [flashActiveIndex, setFlashActiveIndex] = useState<number | null>(null);
+    const [flashActiveSymbol, setFlashActiveSymbol] = useState<string>('');
+    const [flashSpeed, setFlashSpeed] = useState<'NORMAL' | 'FAST' | 'SLOW'>('NORMAL');
+    const [flashAudioSync, setFlashAudioSync] = useState(true);
+
+    const stopPlaybackRef = useRef<boolean>(false);
+    const stopLightRef = useRef<boolean>(false);
+
+    const result = mode === 'TEXT_TO_MORSE' ? textToMorseString(input) : morseStringToText(input);
+
+    const handleCopy = () => {
+        navigator.clipboard.writeText(result);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+    };
+
+    const playMorseSound = async () => {
+        if (isPlaying) {
+            stopPlaybackRef.current = true;
+            setIsPlaying(false);
+            setActiveCharIndex(null);
+            return;
+        }
+
+        stopPlaybackRef.current = false;
+        setIsPlaying(true);
+
+        const morseSequence = mode === 'TEXT_TO_MORSE' ? result : input;
+        const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+        if (!AudioCtx) {
+            alert("L'API Web Audio n'est pas supportée sur cet appareil.");
+            setIsPlaying(false);
+            return;
+        }
+
+        try {
+            const ctx = new AudioCtx();
+            const dotMs = 90;
+            const dashMs = dotMs * 3;
+            const symbolPauseMs = dotMs;
+            const letterPauseMs = dotMs * 3;
+            const wordPauseMs = dotMs * 7;
+
+            const sleep = (ms: number) => new Promise(res => setTimeout(res, ms));
+
+            const playTone = (durationMs: number) => {
+                return new Promise<void>((resolve) => {
+                    if (stopPlaybackRef.current || ctx.state === 'closed') {
+                        resolve();
+                        return;
+                    }
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(650, ctx.currentTime);
+                    gain.gain.setValueAtTime(0, ctx.currentTime);
+                    gain.gain.linearRampToValueAtTime(0.3, ctx.currentTime + 0.005);
+                    gain.gain.linearRampToValueAtTime(0, ctx.currentTime + (durationMs / 1000) - 0.005);
+
+                    osc.connect(gain);
+                    gain.connect(ctx.destination);
+
+                    osc.start();
+                    osc.stop(ctx.currentTime + (durationMs / 1000));
+
+                    setTimeout(resolve, durationMs);
+                });
+            };
+
+            const symbols = morseSequence.split('');
+            for (let i = 0; i < symbols.length; i++) {
+                if (stopPlaybackRef.current) break;
+                setActiveCharIndex(i);
+                const symbol = symbols[i];
+
+                if (symbol === '.') {
+                    await playTone(dotMs);
+                    await sleep(symbolPauseMs);
+                } else if (symbol === '-' || symbol === '—') {
+                    await playTone(dashMs);
+                    await sleep(symbolPauseMs);
+                } else if (symbol === ' ') {
+                    await sleep(letterPauseMs);
+                } else if (symbol === '/' || symbol === '|') {
+                    await sleep(wordPauseMs);
+                }
+            }
+
+            if (ctx.state !== 'closed') {
+                await ctx.close();
+            }
+        } catch (err) {
+            console.error("Erreur audio Morse:", err);
+        } finally {
+            setIsPlaying(false);
+            setActiveCharIndex(null);
+        }
+    };
+
+    // Transmission par flash écran
+    const startLightSignal = async () => {
+        if (isLightFlashing) {
+            stopLightRef.current = true;
+            setIsLightFlashing(false);
+            setFlashBgOn(false);
+            setFlashActiveIndex(null);
+            setFlashActiveSymbol('');
+            return;
+        }
+
+        stopLightRef.current = false;
+        setIsLightFlashing(true);
+
+        // Maintien de l'écran allumé si supporté
+        let wakeLockObj: any = null;
+        try {
+            if ('wakeLock' in navigator) {
+                wakeLockObj = await (navigator as any).wakeLock.request('screen');
+            }
+        } catch (e) {
+            // Ignorer si refusé
+        }
+
+        const morseSequence = mode === 'TEXT_TO_MORSE' ? result : input;
+        const speedMultiplier = flashSpeed === 'FAST' ? 0.7 : (flashSpeed === 'SLOW' ? 1.6 : 1.0);
+        const dotMs = Math.round(110 * speedMultiplier);
+        const dashMs = dotMs * 3;
+        const symbolPauseMs = dotMs;
+        const letterPauseMs = dotMs * 3;
+        const wordPauseMs = dotMs * 7;
+
+        const sleep = (ms: number) => new Promise(res => setTimeout(res, ms));
+
+        let ctx: AudioContext | null = null;
+        if (flashAudioSync) {
+            const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+            if (AudioCtx) {
+                try { ctx = new AudioCtx(); } catch (e) {}
+            }
+        }
+
+        const playTone = (durationMs: number) => {
+            if (!ctx || ctx.state === 'closed') return;
+            try {
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(650, ctx.currentTime);
+                gain.gain.setValueAtTime(0, ctx.currentTime);
+                gain.gain.linearRampToValueAtTime(0.3, ctx.currentTime + 0.005);
+                gain.gain.linearRampToValueAtTime(0, ctx.currentTime + (durationMs / 1000) - 0.005);
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.start();
+                osc.stop(ctx.currentTime + (durationMs / 1000));
+            } catch (e) {}
+        };
+
+        const symbols = morseSequence.split('');
+        for (let i = 0; i < symbols.length; i++) {
+            if (stopLightRef.current) break;
+            setFlashActiveIndex(i);
+            const symbol = symbols[i];
+            setFlashActiveSymbol(symbol);
+
+            if (symbol === '.') {
+                setFlashBgOn(true);
+                if (flashAudioSync) playTone(dotMs);
+                await sleep(dotMs);
+                setFlashBgOn(false);
+                await sleep(symbolPauseMs);
+            } else if (symbol === '-' || symbol === '—') {
+                setFlashBgOn(true);
+                if (flashAudioSync) playTone(dashMs);
+                await sleep(dashMs);
+                setFlashBgOn(false);
+                await sleep(symbolPauseMs);
+            } else if (symbol === ' ') {
+                setFlashBgOn(false);
+                await sleep(letterPauseMs);
+            } else if (symbol === '/' || symbol === '|') {
+                setFlashBgOn(false);
+                await sleep(wordPauseMs);
+            }
+        }
+
+        if (ctx && ctx.state !== 'closed') {
+            try { await ctx.close(); } catch(e) {}
+        }
+        if (wakeLockObj) {
+            try { await wakeLockObj.release(); } catch(e) {}
+        }
+
+        setIsLightFlashing(false);
+        setFlashBgOn(false);
+        setFlashActiveIndex(null);
+        setFlashActiveSymbol('');
+    };
+
+    const stopLightSignal = () => {
+        stopLightRef.current = true;
+        setIsLightFlashing(false);
+        setFlashBgOn(false);
+        setFlashActiveIndex(null);
+        setFlashActiveSymbol('');
+    };
+
+    const openLightModal = () => {
+        setIsLightModalOpen(true);
+    };
+
+    const closeLightModal = () => {
+        stopLightSignal();
+        setIsLightModalOpen(false);
+    };
+
+    const QUICK_PRESETS = [
+        "SOS",
+        "BESOIN RENFORT",
+        "EVASAN",
+        "SITUATION STABLE",
+        "MAYDAY",
+        "PMA PRÊT"
+    ];
+
+    return (
+        <div className="space-y-4">
+            <div className="flex bg-slate-100 dark:bg-slate-900 p-1 rounded-xl">
+                <button
+                    type="button"
+                    onClick={() => { setMode('TEXT_TO_MORSE'); setInput('BESOIN RENFORT DPS65'); }}
+                    className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                        mode === 'TEXT_TO_MORSE' ? 'bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-slate-500'
+                    }`}
+                >
+                    Texte ➔ Code Morse
+                </button>
+                <button
+                    type="button"
+                    onClick={() => { setMode('MORSE_TO_TEXT'); setInput('... --- ... / ... . -.-. --- ..- ...'); }}
+                    className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                        mode === 'MORSE_TO_TEXT' ? 'bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-slate-500'
+                    }`}
+                >
+                    Code Morse ➔ Texte
+                </button>
+            </div>
+
+            {mode === 'TEXT_TO_MORSE' && (
+                <div className="flex flex-wrap gap-1.5">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase self-center mr-1">Raccourcis:</span>
+                    {QUICK_PRESETS.map((preset) => (
+                        <button
+                            key={preset}
+                            type="button"
+                            onClick={() => setInput(preset)}
+                            className="px-2.5 py-1 text-[11px] font-semibold bg-slate-100 dark:bg-slate-800 hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg border border-slate-200 dark:border-slate-700 transition-colors cursor-pointer"
+                        >
+                            {preset}
+                        </button>
+                    ))}
+                </div>
+            )}
+
+            <div>
+                <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">
+                    {mode === 'TEXT_TO_MORSE' ? 'Phrase à transcrire' : 'Code Morse (Espace entre lettres, / entre mots)'}
+                </label>
+                <textarea
+                    rows={2}
+                    className="w-full p-3 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-800 dark:text-white font-mono text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none"
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    placeholder={mode === 'TEXT_TO_MORSE' ? 'Saisissez votre phrase ici...' : 'Ex: ... --- ... / ... . -.-. --- ..- ...'}
+                />
+            </div>
+
+            <div className="bg-slate-900 text-white p-4 rounded-xl border border-slate-700 space-y-3 relative overflow-hidden shadow-sm">
+                <div className="flex flex-wrap justify-between items-center gap-2">
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                        {mode === 'TEXT_TO_MORSE' ? 'Transcription Code Morse' : 'Texte Décodé'}
+                    </span>
+                    <div className="flex items-center gap-2">
+                        <button
+                            type="button"
+                            onClick={openLightModal}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-amber-500 hover:bg-amber-400 text-slate-950 transition-colors cursor-pointer shadow-sm"
+                            title="Transmettre par flash écran"
+                        >
+                            <Lightbulb className="w-4 h-4 fill-current" />
+                            <span>Signal Lumineux (Écran)</span>
+                        </button>
+
+                        <button
+                            type="button"
+                            onClick={playMorseSound}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
+                                isPlaying
+                                    ? 'bg-red-500 hover:bg-red-600 text-white animate-pulse'
+                                    : 'bg-blue-600 hover:bg-blue-500 text-white'
+                            }`}
+                        >
+                            <Volume2 className="w-4 h-4" />
+                            <span>{isPlaying ? 'Arrêter Bips' : 'Écouter (Bips)'}</span>
+                        </button>
+
+                        <button
+                            type="button"
+                            onClick={handleCopy}
+                            className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 transition-colors cursor-pointer"
+                            title="Copier le résultat"
+                        >
+                            {copied ? <CheckCircle className="w-4 h-4 text-green-400" /> : <ClipboardList className="w-4 h-4" />}
+                        </button>
+                    </div>
+                </div>
+
+                <div className="bg-slate-950 p-3 rounded-lg border border-slate-800 font-mono text-base tracking-widest break-all min-h-[60px] flex flex-wrap items-center gap-x-1 select-all">
+                    {mode === 'TEXT_TO_MORSE' ? (
+                        result ? (
+                            result.split('').map((char, i) => (
+                                <span
+                                    key={i}
+                                    className={`transition-all duration-100 ${
+                                        activeCharIndex === i
+                                            ? 'bg-yellow-400 text-slate-900 font-extrabold px-1 rounded shadow-lg scale-125'
+                                            : char === '/'
+                                            ? 'text-amber-400 font-bold mx-1'
+                                            : 'text-amber-300 font-bold'
+                                    }`}
+                                >
+                                    {char === ' ' ? ' ' : char}
+                                </span>
+                            ))
+                        ) : (
+                            <span className="text-slate-500 italic text-xs">Aperçu du code Morse...</span>
+                        )
+                    ) : (
+                        <span className="text-emerald-400 font-bold">{result || '...'}</span>
+                    )}
+                </div>
+            </div>
+
+            <div>
+                <button
+                    type="button"
+                    onClick={() => setShowCheatSheet(!showCheatSheet)}
+                    className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 cursor-pointer"
+                >
+                    <Radio className="w-3.5 h-3.5" />
+                    <span>{showCheatSheet ? "Masquer la table Morse" : "Afficher l'alphabet & chiffres Morse"}</span>
+                </button>
+
+                {showCheatSheet && (
+                    <div className="mt-3 p-3 bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-200 dark:border-slate-700 grid grid-cols-3 sm:grid-cols-6 gap-2 text-xs font-mono text-slate-700 dark:text-slate-300 animate-in fade-in">
+                        {Object.entries(MORSE_CODE_MAP).slice(0, 36).map(([char, code]) => (
+                            <div key={char} className="bg-white dark:bg-slate-800 p-1.5 rounded border dark:border-slate-700 text-center flex justify-between px-2">
+                                <span className="font-bold text-slate-900 dark:text-white">{char}</span>
+                                <span className="text-amber-600 dark:text-amber-400 font-bold">{code}</span>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+
+            {/* MODAL / ÉCRAN FLASH PLEIN ÉCRAN */}
+            {isLightModalOpen && (
+                <div className={`fixed inset-0 z-50 transition-colors duration-75 flex flex-col justify-between p-6 select-none ${
+                    flashBgOn 
+                        ? 'bg-white text-slate-950' 
+                        : 'bg-slate-950 text-white'
+                }`}>
+                    {/* EN-TÊTE CONTRÔLES */}
+                    <div className="flex justify-between items-center bg-black/40 backdrop-blur-md p-3 rounded-2xl text-white border border-white/10 z-10">
+                        <div className="flex items-center gap-2">
+                            <Lightbulb className={`w-5 h-5 ${flashBgOn ? 'text-yellow-400 animate-bounce' : 'text-amber-400'}`} />
+                            <span className="font-black text-sm uppercase tracking-wider">Signal Lumineux Morse</span>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={closeLightModal}
+                            className="p-2 bg-white/10 hover:bg-white/20 rounded-xl text-white transition-colors cursor-pointer"
+                            title="Quitter le mode flash"
+                        >
+                            <X className="w-6 h-6" />
+                        </button>
+                    </div>
+
+                    {/* ZONE CENTRALE AFFICHAGE DU SIGNAL */}
+                    <div className="flex-1 flex flex-col items-center justify-center text-center p-4">
+                        <div className={`transition-transform duration-75 ${flashBgOn ? 'scale-125' : 'scale-100'}`}>
+                            <div className={`w-32 h-32 sm:w-44 sm:h-44 rounded-full flex items-center justify-center transition-all ${
+                                flashBgOn 
+                                    ? 'bg-yellow-400 text-slate-950 shadow-[0_0_90px_rgba(250,204,21,1)] scale-110' 
+                                    : 'bg-slate-900 text-slate-600 border-2 border-slate-800'
+                            }`}>
+                                {flashActiveSymbol ? (
+                                    <span className="text-7xl sm:text-8xl font-black font-mono">
+                                        {flashActiveSymbol === '.' ? '•' : (flashActiveSymbol === '-' || flashActiveSymbol === '—' ? '—' : '')}
+                                    </span>
+                                ) : (
+                                    <Lightbulb className="w-16 h-16 opacity-40" />
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="mt-8 space-y-2">
+                            <span className={`text-xs font-bold uppercase tracking-widest block ${flashBgOn ? 'text-slate-800' : 'text-slate-400'}`}>
+                                {isLightFlashing ? 'Transmission en cours...' : 'Prêt à transmettre'}
+                            </span>
+                            <div className="font-mono text-2xl sm:text-3xl font-black tracking-widest break-all max-w-lg mx-auto">
+                                {result.split('').map((char, idx) => (
+                                    <span
+                                        key={idx}
+                                        className={`transition-all px-0.5 ${
+                                            flashActiveIndex === idx
+                                                ? 'bg-amber-400 text-slate-950 font-extrabold rounded px-1 scale-125 shadow-lg'
+                                                : (flashBgOn ? 'text-slate-900' : 'text-amber-300')
+                                        }`}
+                                    >
+                                        {char}
+                                    </span>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* BARRE DE CONTRÔLE BAS */}
+                    <div className="bg-black/80 backdrop-blur-md p-4 rounded-2xl text-white border border-white/10 space-y-3 z-10 max-w-lg mx-auto w-full">
+                        <div className="flex justify-between items-center gap-2">
+                            <button
+                                type="button"
+                                onClick={startLightSignal}
+                                className={`flex-1 py-3 px-4 rounded-xl font-black text-sm uppercase tracking-wider flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg ${
+                                    isLightFlashing 
+                                        ? 'bg-red-600 hover:bg-red-500 text-white animate-pulse' 
+                                        : 'bg-amber-500 hover:bg-amber-400 text-slate-950'
+                                }`}
+                            >
+                                <Zap className="w-5 h-5 fill-current" />
+                                <span>{isLightFlashing ? 'Arrêter Flash' : 'Lancer le Flash'}</span>
+                            </button>
+                        </div>
+
+                        <div className="flex justify-between items-center gap-2 pt-1 border-t border-white/10 text-xs">
+                            <div className="flex items-center gap-1">
+                                <span className="text-slate-400 font-bold mr-1">Vitesse:</span>
+                                {(['SLOW', 'NORMAL', 'FAST'] as const).map((s) => (
+                                    <button
+                                        key={s}
+                                        type="button"
+                                        onClick={() => setFlashSpeed(s)}
+                                        className={`px-2 py-1 rounded-md font-bold cursor-pointer transition-colors ${
+                                            flashSpeed === s ? 'bg-amber-500 text-slate-950' : 'bg-white/10 text-slate-300'
+                                        }`}
+                                    >
+                                        {s === 'SLOW' ? 'Lente' : (s === 'NORMAL' ? 'Normale' : 'Rapide')}
+                                    </button>
+                                ))}
+                            </div>
+
+                            <button
+                                type="button"
+                                onClick={() => setFlashAudioSync(!flashAudioSync)}
+                                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md font-bold cursor-pointer transition-colors ${
+                                    flashAudioSync ? 'bg-blue-600 text-white' : 'bg-white/10 text-slate-400'
+                                }`}
+                            >
+                                <Volume2 className="w-3.5 h-3.5" />
+                                <span>Son {flashAudioSync ? 'Oui' : 'Non'}</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
 // --- DATA STRUCTURE DES OUTILS ---
 
 const TOOLS_DATA = [
@@ -803,9 +1432,10 @@ const TOOLS_DATA = [
     {
         id: 'logistique', title: "5. Opérationnel & Logistique", color: "bg-slate-500",
         tools: [
+            { title: "Transcripteur & Traducteur Morse", icon: <Languages className="w-5 h-5 text-indigo-500" />, component: <MorseTranscriber /> },
             { title: "Bilan Flash Radio (MSP)", icon: <Radio className="w-5 h-5 text-slate-500" />, component: <RadioMemo /> },
             { title: "Calcul Zone Hélicoptère (DZ)", icon: <Plane className="w-5 h-5 text-blue-500" />, component: <DzCalculator /> },
-            { title: "Lampe Torche / SOS", icon: <Lightbulb className="w-5 h-5 text-yellow-500" />, component: <FlashlightTool /> }
+            { title: "Signal SOS Morse (Écran)", icon: <AlertTriangle className="w-5 h-5 text-red-500 animate-pulse" />, component: <SosMorseTool /> }
         ]
     }
 ];

@@ -118,24 +118,36 @@ export const UpdatePrompt = () => {
             localStorage.setItem('dps65_last_forced_update_at', forcedUpdateTimestamp);
         }
 
-        // Forcer la déconnexion de l'utilisateur (Exigence de sécurité et rafraîchissement propre des tokens)
+        // Forcer la déconnexion de l'utilisateur avec timeout de sécurité (max 1.5s)
         try {
-            await signOut();
+            await Promise.race([
+                signOut(),
+                new Promise((resolve) => setTimeout(resolve, 1500))
+            ]);
         } catch (logoutError) {
             console.error("Erreur déconnexion pendant la mise à jour:", logoutError);
         }
 
-        // Activer le Service Worker en attente ou recharger
+        // Nettoyage impératif des clés de session
+        localStorage.removeItem('dps65_session_user_id');
+        localStorage.removeItem('dps65_session_timestamp');
+        localStorage.removeItem('dps65_organizer_code');
+
+        // Prévoir un rechargement garanti si controllerchange ne se déclenche pas sous 1s
+        const reloadTimer = setTimeout(() => {
+            window.location.reload();
+        }, 1000);
+
+        // Activer le Service Worker en attente si disponible
         if (registration && registration.waiting) {
             registration.waiting.postMessage({ type: 'SKIP_WAITING' });
         } else {
+            clearTimeout(reloadTimer);
             window.location.reload();
         }
     } catch (err) {
         console.error("Échec de la procédure de mise à jour:", err);
         window.location.reload(); // Fallback ultime
-    } finally {
-        setIsUpdating(false);
     }
   };
 

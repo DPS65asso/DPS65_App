@@ -2,43 +2,48 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Languages, Volume2, Mic, MicOff, Loader2, ArrowRightLeft, MessageSquare, BookOpen, X } from 'lucide-react';
 import { GoogleGenAI } from "@google/genai";
+import { SpeechRecognitionHandler } from '../services/speechRecognitionService';
 
 const LANGUAGES = [
     { code: 'EN', name: 'Anglais', flag: '🇬🇧', langCode: 'en-US' },
     { code: 'ES', name: 'Espagnol', flag: '🇪🇸', langCode: 'es-ES' },
     { code: 'DE', name: 'Allemand', flag: '🇩🇪', langCode: 'de-DE' },
     { code: 'RU', name: 'Russe', flag: '🇷🇺', langCode: 'ru-RU' },
+    { code: 'UK', name: 'Ukrainien', flag: '🇺🇦', langCode: 'uk-UA' },
     { code: 'AR', name: 'Arabe', flag: '🇸🇦', langCode: 'ar-SA' },
     { code: 'IT', name: 'Italien', flag: '🇮🇹', langCode: 'it-IT' },
+    { code: 'PT', name: 'Portugais', flag: '🇵🇹', langCode: 'pt-PT' },
+    { code: 'ZH', name: 'Chinois', flag: '🇨🇳', langCode: 'zh-CN' },
+    { code: 'JA', name: 'Japonais', flag: '🇯🇵', langCode: 'ja-JP' },
 ];
 
 const FLASHCARDS = [
     // 1. Contact & Rassurance
-    { fr: "Écoutez-moi", tr: { EN: "Listen to me", ES: "Escúcheme", DE: "Hören Sie mir zu", RU: "Послушайте меня", AR: "استمع إلي", IT: "Mi ascolti", PT: "Ouça-me" } },
-    { fr: "Calmez-vous", tr: { EN: "Calm down", ES: "Cálmese", DE: "Beruhigen Sie sich", RU: "Успокойтесь", AR: "اهدأ", IT: "Si calmi", PT: "Acalme-se" } },
-    { fr: "Je vais vous aider", tr: { EN: "I am going to help you", ES: "Le voy a ayudar", DE: "Ich werde Ihnen helfen", RU: "Я вам помогу", AR: "سأساعدك", IT: "La aiuterò", PT: "Vou ajudá-lo" } },
+    { fr: "Écoutez-moi", tr: { EN: "Listen to me", ES: "Escúcheme", DE: "Hören Sie mir zu", RU: "Послушайте меня", UK: "Послухайте мене", AR: "استمع إلي", IT: "Mi ascolti", PT: "Ouça-me", ZH: "听我说", JA: "私のお話を聞いてください" } },
+    { fr: "Calmez-vous", tr: { EN: "Calm down", ES: "Cálmese", DE: "Beruhigen Sie sich", RU: "Успокойтесь", UK: "Заспокойтеся", AR: "اهدأ", IT: "Si calmi", PT: "Acalme-se", ZH: "请冷静", JA: "落ち着いてください" } },
+    { fr: "Je vais vous aider", tr: { EN: "I am going to help you", ES: "Le voy a ayudar", DE: "Ich werde Ihnen helfen", RU: "Я вам помогу", UK: "Я допоможу вам", AR: "سأساعدك", IT: "La aiuterò", PT: "Vou ajudá-lo", ZH: "我会帮助你的", JA: "助けますからね" } },
     
     // 2. Identité & Conscience
-    { fr: "Comment vous appelez-vous ?", tr: { EN: "What is your name?", ES: "¿Cómo se llama?", DE: "Wie heißen Sie?", RU: "Как вас зовут?", AR: "ما اسمك؟", IT: "Come si chiama?", PT: "Como se chama?" } },
-    { fr: "Quel âge avez-vous ?", tr: { EN: "How old are you?", ES: "¿Cuántos años tiene?", DE: "Wie alt sind Sie?", RU: "Сколько вам лет?", AR: "كم عمرك؟", IT: "Quanti anni ha?", PT: "Quantos anos tem?" } },
-    { fr: "Ouvrez les yeux", tr: { EN: "Open your eyes", ES: "Abre los ojos", DE: "Öffnen Sie die Augen", RU: "Откройте глаза", AR: "افتح عينيك", IT: "Apra gli occhi", PT: "Abra os olhos" } },
-    { fr: "Serrez ma main", tr: { EN: "Squeeze my hand", ES: "Aprieta mi mano", DE: "Drücken Sie meine Hand", RU: "Сожмите мою руку", AR: "اضغط على يدي", IT: "Mi stringa la mano", PT: "Aperte a minha mão" } },
+    { fr: "Comment vous appelez-vous ?", tr: { EN: "What is your name?", ES: "¿Cómo se llama?", DE: "Wie heißen Sie?", RU: "Как вас зовут?", UK: "Як вас звати?", AR: "ما اسمك؟", IT: "Come si chiama?", PT: "Como se chama?", ZH: "你叫什么名字？", JA: "お名前は何ですか？" } },
+    { fr: "Quel âge avez-vous ?", tr: { EN: "How old are you?", ES: "¿Cuántos años tiene?", DE: "Wie alt sind Sie?", RU: "Сколько вам лет?", UK: "Скільки вам років?", AR: "كم عمرك؟", IT: "Quanti anni ha?", PT: "Quantos anos tem?", ZH: "你多大年纪？", JA: "おいくつですか？" } },
+    { fr: "Ouvrez les yeux", tr: { EN: "Open your eyes", ES: "Abre los ojos", DE: "Öffnen Sie die Augen", RU: "Откройте глаза", UK: "Відкрийте очі", AR: "افتح عينيك", IT: "Apra gli occhi", PT: "Abra os olhos", ZH: "睁开眼睛", JA: "目を開けてください" } },
+    { fr: "Serrez ma main", tr: { EN: "Squeeze my hand", ES: "Aprieta mi mano", DE: "Drücken Sie meine Hand", RU: "Сожмите мою руку", UK: "Потисніть мою руку", AR: "اضغط على يدي", IT: "Mi stringa la mano", PT: "Aperte a minha mão", ZH: "握紧我的手", JA: "私の手を握ってください" } },
     
     // 3. Douleur & État
-    { fr: "Avez-vous mal ?", tr: { EN: "Are you in pain?", ES: "¿Le duele?", DE: "Haben Sie Schmerzen?", RU: "Вам больно?", AR: "هل تشعر بالألم؟", IT: "Ha dolore?", PT: "Sente dor?" } },
-    { fr: "Où avez-vous mal ?", tr: { EN: "Where does it hurt?", ES: "¿Dónde le duele?", DE: "Wo haben Sie Schmerzen?", RU: "Где у вас болит?", AR: "أين تشعر بالألم؟", IT: "Dove le fa male?", PT: "Onde lhe dói?" } },
-    { fr: "Avez-vous froid ?", tr: { EN: "Are you cold?", ES: "¿Tiene frío?", DE: "Ist Ihnen kalt?", RU: "Вам холодно?", AR: "هل تشعر بالبرد؟", IT: "Ha freddo?", PT: "Tem frio?" } },
+    { fr: "Avez-vous mal ?", tr: { EN: "Are you in pain?", ES: "¿Le duele?", DE: "Haben Sie Schmerzen?", RU: "Вам больно?", UK: "Вам болить?", AR: "هل تشعر بالألم؟", IT: "Ha dolore?", PT: "Sente dor?", ZH: "你疼吗？", JA: "痛いですか？" } },
+    { fr: "Où avez-vous mal ?", tr: { EN: "Where does it hurt?", ES: "¿Dónde le duele?", DE: "Wo haben Sie Schmerzen?", RU: "Где у вас болит?", UK: "Де болить?", AR: "أين تشعر بالألم؟", IT: "Dove le fa male?", PT: "Onde lhe dói?", ZH: "哪里疼？", JA: "どこが痛いですか？" } },
+    { fr: "Avez-vous froid ?", tr: { EN: "Are you cold?", ES: "¿Tiene frío?", DE: "Ist Ihnen kalt?", RU: "Вам холодно?", UK: "Вам холодно?", AR: "هل تشعر بالبرد؟", IT: "Ha freddo?", PT: "Tem frio?", ZH: "你冷吗？", JA: "寒いですか？" } },
     
     // 4. Instructions & Mobilité
-    { fr: "Respirez lentement", tr: { EN: "Breathe slowly", ES: "Respire lentamente", DE: "Atmen Sie langsam", RU: "Дышите медленно", AR: "تنفس ببطء", IT: "Respiri lentamente", PT: "Respire lentamente" } },
-    { fr: "Ne bougez pas", tr: { EN: "Don't move", ES: "No se mueva", DE: "Bewegen Sie sich nicht", RU: "Не двигайтесь", AR: "لا تتحرك", IT: "Non si muova", PT: "Não se mova" } },
-    { fr: "Pouvez-vous vous lever ?", tr: { EN: "Can you stand up?", ES: "¿Puede levantarse?", DE: "Können Sie aufstehen?", RU: "Вы можете встать?", AR: "هل يمكنك الوقوف؟", IT: "Può alzarsi?", PT: "Pode levantar-se?" } },
-    { fr: "Pouvez-vous marcher ?", tr: { EN: "Can you walk?", ES: "¿Puede caminar?", DE: "Können Sie gehen?", RU: "Вы можете идти?", AR: "هل يمكنك المشي؟", IT: "Può camminare?", PT: "Pode caminhar?" } },
+    { fr: "Respirez lentement", tr: { EN: "Breathe slowly", ES: "Respire lentamente", DE: "Atmen Sie langsam", RU: "Дышите медленно", UK: "Повільно дихайте", AR: "تنفس ببطء", IT: "Respiri lentamente", PT: "Respire lentamente", ZH: "缓慢呼吸", JA: "ゆっくり息をしてください" } },
+    { fr: "Ne bougez pas", tr: { EN: "Don't move", ES: "No se mueva", DE: "Bewegen Sie sich nicht", RU: "Не двигайтесь", UK: "Не рухайтеся", AR: "لا تتحرك", IT: "Non si muova", PT: "Não se mova", ZH: "不要动", JA: "動かないでください" } },
+    { fr: "Pouvez-vous vous lever ?", tr: { EN: "Can you stand up?", ES: "¿Puede levantarse?", DE: "Können Sie aufstehen?", RU: "Вы можете встать?", UK: "Ви можете встати?", AR: "هل يمكنك الوقوف؟", IT: "Può alzarsi?", PT: "Pode levantar-se?", ZH: "你能站起来吗？", JA: "立ち上がれますか？" } },
+    { fr: "Pouvez-vous marcher ?", tr: { EN: "Can you walk?", ES: "¿Puede caminar?", DE: "Können Sie gehen?", RU: "Вы можете идти?", UK: "Ви можете ходити?", AR: "هل يمكنك المشي؟", IT: "Può camminare?", PT: "Pode caminhar?", ZH: "你能走路吗？", JA: "歩けますか？" } },
     
     // 5. Antécédents
-    { fr: "Allergie ?", tr: { EN: "Any allergies?", ES: "¿Tienes alergias?", DE: "Haben Sie Allergien?", RU: "Есть ли аллергия?", AR: "هل لديك حساسية؟", IT: "Ha allergie?", PT: "Tem alergias?" } },
-    { fr: "Médicaments ?", tr: { EN: "Medication?", ES: "¿Medicamentos?", DE: "Medikamente?", RU: "Принимаете лекарства?", AR: "هل تأخذ أدوية؟", IT: "Prende farmaci?", PT: "Toma medicamentos?" } },
-    { fr: "Enceinte ?", tr: { EN: "Pregnant?", ES: "¿Embarazada?", DE: "Schwanger?", RU: "Вы беременны?", AR: "هل أنتِ حامل؟", IT: "È incinta?", PT: "Está grávida?" } }
+    { fr: "Allergie ?", tr: { EN: "Any allergies?", ES: "¿Tienes alergias?", DE: "Haben Sie Allergien?", RU: "Есть ли аллергия?", UK: "Є алергія?", AR: "هل لديك حساسية؟", IT: "Ha allergie?", PT: "Tem alergias?", ZH: "有过敏吗？", JA: "アレルギーはありますか？" } },
+    { fr: "Médicaments ?", tr: { EN: "Medication?", ES: "¿Medicamentos?", DE: "Medikamente?", RU: "Принимаете лекарства?", UK: "Приймаєте ліки?", AR: "هل تأخذ أدوية؟", IT: "Prende farmaci?", PT: "Toma medicamentos?", ZH: "在吃药吗？", JA: "お薬を飲んでいますか？" } },
+    { fr: "Enceinte ?", tr: { EN: "Pregnant?", ES: "¿Embarazada?", DE: "Schwanger?", RU: "Вы беременны?", UK: "Вагітні?", AR: "هل أنتِ حامل؟", IT: "È incinta?", PT: "Está grávida?", ZH: "怀孕了吗？", JA: "妊娠していますか？" } }
 ];
 
 export const TranslationModule: React.FC = () => {
@@ -87,44 +92,40 @@ export const TranslationModule: React.FC = () => {
     };
 
     const startListening = (mode: 'fr' | 'target') => {
-        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        if (!SpeechRecognition) {
-            alert("Votre navigateur ne supporte pas la reconnaissance vocale.");
-            return;
-        }
-
         if (isListening) {
             recognitionRef.current?.stop();
             setIsListening(null);
             return;
         }
 
-        const recognition = new SpeechRecognition();
-        recognition.lang = mode === 'fr' ? 'fr-FR' : selectedLang.langCode;
-        recognition.continuous = false;
-        recognition.interimResults = false;
+        const langCode = mode === 'fr' ? 'fr-FR' : selectedLang.langCode;
 
-        recognition.onstart = () => setIsListening(mode);
-        recognition.onend = () => setIsListening(null);
-        
-        recognition.onresult = async (event: any) => {
-            const transcript = event.results[0][0].transcript;
-            if (!transcript) return;
+        const handler = new SpeechRecognitionHandler({
+            lang: langCode,
+            onStart: () => setIsListening(mode),
+            onEnd: () => setIsListening(null),
+            onResult: async (transcript) => {
+                if (!transcript) return;
 
-            const fromLang = mode === 'fr' ? 'Français' : selectedLang.name;
-            const toLang = mode === 'fr' ? selectedLang.name : 'Français';
-            const toCode = mode === 'fr' ? selectedLang.langCode : 'fr-FR';
+                const fromLang = mode === 'fr' ? 'Français' : selectedLang.name;
+                const toLang = mode === 'fr' ? selectedLang.name : 'Français';
+                const toCode = mode === 'fr' ? selectedLang.langCode : 'fr-FR';
 
-            const translated = await translateWithAI(transcript, fromLang, toLang);
-            setLastTranslation({ original: transcript, translated });
-            
-            if (translated) {
-                speak(translated, toCode);
+                const translated = await translateWithAI(transcript, fromLang, toLang);
+                setLastTranslation({ original: transcript, translated });
+                
+                if (translated) {
+                    speak(translated, toCode);
+                }
+            },
+            onError: (err) => {
+                console.error("Listening error:", err);
+                setIsListening(null);
             }
-        };
+        });
 
-        recognitionRef.current = recognition;
-        recognition.start();
+        recognitionRef.current = handler;
+        handler.start();
     };
 
     return (
@@ -159,7 +160,7 @@ export const TranslationModule: React.FC = () => {
 
             <div className="p-4">
                 {/* Language Selector */}
-                <div className="grid grid-cols-2 gap-2 pb-4">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 pb-4">
                     {LANGUAGES.map(lang => (
                         <button 
                             key={lang.code}
@@ -233,9 +234,7 @@ export const TranslationModule: React.FC = () => {
                             </div>
                         )}
 
-                        <div className="p-3 bg-amber-50 dark:bg-amber-900/20 border-l-4 border-amber-500 rounded text-[11px] text-amber-800 dark:text-amber-300">
-                            <strong>Note :</strong> Parlez distinctement. L'IA traduit en tenant compte du contexte médical d'urgence.
-                        </div>
+
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 animate-in fade-in duration-300">

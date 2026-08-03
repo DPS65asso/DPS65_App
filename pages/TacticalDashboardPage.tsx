@@ -154,17 +154,44 @@ export const TacticalDashboardPage: React.FC = () => {
                             {events.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
                         </select>
                     </div>
-                    <div className="flex flex-wrap gap-2 w-full md:w-auto">
-                        <Button onClick={refreshData} className="bg-slate-800 hover:bg-slate-700 border border-slate-600 flex-1 min-w-[120px] whitespace-nowrap" icon={<RefreshCw className="w-5 h-5" />} disabled={!selectedEventId}>Rafraîchir</Button>
-                        <Button onClick={() => setShowMap(!showMap)} className={`flex-1 min-w-[120px] whitespace-nowrap ${showMap ? 'bg-slate-700' : 'bg-blue-600 hover:bg-blue-500'}`} icon={showMap ? <X className="w-5 h-5" /> : <MapIcon className="w-5 h-5" />} disabled={!selectedEventId}>
+                    <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2 w-full md:w-auto items-center">
+                        <Button 
+                            size="sm"
+                            onClick={refreshData} 
+                            className="bg-slate-800 hover:bg-slate-700 border border-slate-600 flex-1 min-w-[100px] text-xs sm:text-sm font-bold py-2.5 px-3 whitespace-nowrap" 
+                            icon={<RefreshCw className="w-4 h-4 shrink-0" />} 
+                            disabled={!selectedEventId}
+                        >
+                            Rafraîchir
+                        </Button>
+                        <Button 
+                            size="sm"
+                            onClick={() => setShowMap(!showMap)} 
+                            className={`flex-1 min-w-[110px] text-xs sm:text-sm font-bold py-2.5 px-3 whitespace-nowrap ${showMap ? 'bg-slate-700 text-white' : 'bg-blue-600 hover:bg-blue-500 text-white shadow-md shadow-blue-600/30'}`} 
+                            icon={showMap ? <X className="w-4 h-4 shrink-0" /> : <MapIcon className="w-4 h-4 shrink-0" />} 
+                            disabled={!selectedEventId}
+                        >
                             {showMap ? "Masquer Carte" : "Afficher Carte"}
                         </Button>
                         {allPdfs.length > 0 && (
-                            <Button onClick={() => setShowPdf(!showPdf)} className={`flex-1 min-w-[120px] whitespace-nowrap ${showPdf ? 'bg-slate-700' : 'bg-red-600 hover:bg-red-500'}`} icon={showPdf ? <X className="w-5 h-5" /> : <FileText className="w-5 h-5" />}>
+                            <Button 
+                                size="sm"
+                                onClick={() => setShowPdf(!showPdf)} 
+                                className={`flex-1 min-w-[100px] text-xs sm:text-sm font-bold py-2.5 px-3 whitespace-nowrap ${showPdf ? 'bg-slate-700 text-white' : 'bg-red-600 hover:bg-red-500 text-white shadow-md shadow-red-600/30'}`} 
+                                icon={showPdf ? <X className="w-4 h-4 shrink-0" /> : <FileText className="w-4 h-4 shrink-0" />}
+                            >
                                 {showPdf ? "Masquer Plan" : `Plan PDF (${allPdfs.length})`}
                             </Button>
                         )}
-                        <Button onClick={handleOpenMapWindow} className="hidden md:flex bg-slate-800 hover:bg-slate-700 border border-slate-600 flex-1 min-w-[80px] whitespace-nowrap" icon={<Monitor className="w-5 h-5" />} disabled={!selectedEventId}>TV</Button>
+                        <Button 
+                            size="sm"
+                            onClick={handleOpenMapWindow} 
+                            className="hidden md:flex bg-slate-800 hover:bg-slate-700 border border-slate-600 min-w-[70px] text-xs sm:text-sm font-bold py-2.5 px-3 whitespace-nowrap" 
+                            icon={<Monitor className="w-4 h-4 shrink-0" />} 
+                            disabled={!selectedEventId}
+                        >
+                            TV
+                        </Button>
                     </div>
                 </div>
                 <div className="mt-4">

@@ -334,6 +334,8 @@ export interface NewsPost {
     content: string;
     author: string;
     isUrgent?: boolean;
+    url?: string;
+    linkTitle?: string;
 }
 
 export interface AssociationDocument {

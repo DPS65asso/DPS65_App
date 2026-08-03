@@ -26,6 +26,7 @@ export const LogisticsPage: React.FC = () => {
     // Formulaire de Signalement / Entretien
     const [reportForm, setReportForm] = useState({ 
         vehicle: '', 
+        date: new Date().toISOString().split('T')[0],
         km: '', 
         type: 'PANNE', 
         description: '' 
@@ -95,7 +96,13 @@ export const LogisticsPage: React.FC = () => {
     };
 
     const handleReportClick = (vehicleId?: string) => {
-        if (vehicleId) setReportForm(prev => ({ ...prev, vehicle: vehicleId }));
+        setReportForm({
+            vehicle: vehicleId || (fleet[0]?.id || ''),
+            date: new Date().toISOString().split('T')[0],
+            km: '',
+            type: 'PANNE',
+            description: ''
+        });
         setEditingCheck(null);
         setView('REPORT');
     };
@@ -115,8 +122,13 @@ export const LogisticsPage: React.FC = () => {
             }
         }
 
+        const formattedDate = check.date 
+            ? new Date(check.date).toISOString().split('T')[0] 
+            : new Date().toISOString().split('T')[0];
+
         setReportForm({
             vehicle: check.vehicleId,
+            date: formattedDate,
             km: check.km.toString(),
             type,
             description
@@ -144,10 +156,19 @@ export const LogisticsPage: React.FC = () => {
         // On formate le message d'alerte pour inclure le type
         const formattedAlert = `${reportForm.type} : ${reportForm.description}`;
 
+        // Calcul du timestamp à partir de la date sélectionnée
+        let reportTimestamp = Date.now();
+        if (reportForm.date) {
+            const parsedDate = new Date(reportForm.date + 'T12:00:00');
+            if (!isNaN(parsedDate.getTime())) {
+                reportTimestamp = parsedDate.getTime();
+            }
+        }
+
         const checkData: VehicleCheck = {
             id: editingCheck?.id || generateUUID(),
             vehicleId: reportForm.vehicle,
-            date: editingCheck?.date || Date.now(),
+            date: reportTimestamp,
             user: editingCheck?.user || (profile ? `${profile.firstName} ${profile.lastName}` : 'Utilisateur'),
             km: parseInt(reportForm.km) || 0,
             fuelLevel: 0,
@@ -163,7 +184,13 @@ export const LogisticsPage: React.FC = () => {
         if (selectedVehicleId) loadHistory(selectedVehicleId);
         setView(editingCheck ? 'HISTORY' : 'LIST');
         setEditingCheck(null);
-        setReportForm({ vehicle: fleet[0]?.id || '', km: '', type: 'PANNE', description: '' });
+        setReportForm({ 
+            vehicle: fleet[0]?.id || '', 
+            date: new Date().toISOString().split('T')[0], 
+            km: '', 
+            type: 'PANNE', 
+            description: '' 
+        });
     };
 
     const openEditVehicle = (v: VehicleDefinition) => {
@@ -412,6 +439,16 @@ export const LogisticsPage: React.FC = () => {
                     </div>
 
                     <div>
+                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Date du signalement / intervention</label>
+                        <input 
+                            type="date" 
+                            className="w-full p-3 bg-slate-50 dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700 font-mono text-sm font-semibold text-slate-800 dark:text-white" 
+                            value={reportForm.date} 
+                            onChange={e => setReportForm({...reportForm, date: e.target.value})} 
+                        />
+                    </div>
+
+                    <div>
                         <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Type d'intervention</label>
                         <div className="grid grid-cols-2 gap-2">
                             {['PANNE', 'ENTRETIEN', 'PNEUS', 'DISTRIBUTION', 'AUTRE'].map(type => (
@@ -479,7 +516,14 @@ export const LogisticsPage: React.FC = () => {
             {view === 'HISTORY' && (
                 <div className="animate-in slide-in-from-right space-y-4">
                     <div className="flex justify-between items-center mb-2">
-                        <button onClick={() => setView('LIST')} className="flex items-center gap-2 text-sm font-bold text-slate-500 hover:text-blue-600 transition-colors"><ArrowLeft className="w-4 h-4" /> Retour Liste</button>
+                        <div>
+                            <button onClick={() => setView('LIST')} className="flex items-center gap-2 text-sm font-bold text-slate-500 hover:text-blue-600 transition-colors">
+                                <ArrowLeft className="w-4 h-4" /> Retour Liste
+                            </button>
+                            <span className="text-[11px] font-semibold text-slate-400 block mt-0.5">
+                                Historique classé par date d'intervention
+                            </span>
+                        </div>
                         
                         {/* EXPORT PDF - ACCESSIBLE ADMIN/LOGISTICIEN */}
                         {isManager && vehicleHistory.length > 0 && (
@@ -501,13 +545,17 @@ export const LogisticsPage: React.FC = () => {
                                 const details = check.alerts && check.alerts.length > 0 ? check.alerts[0] : 'RAS';
                                 const isPanne = details.startsWith('PANNE');
                                 const isEntretien = details.startsWith('ENTRETIEN') || details.startsWith('DISTRIBUTION') || details.startsWith('PNEUS');
+                                const formattedDateDisplay = safeDateFormat(check.date);
 
                                 return (
                                     <div key={check.id} className={`bg-white dark:bg-slate-800 p-4 rounded-xl border shadow-sm relative overflow-hidden ${isPanne ? 'border-red-200 dark:border-red-900' : (isEntretien ? 'border-blue-200 dark:border-blue-900' : 'border-slate-200 dark:border-slate-700')}`}>
                                         <div className="flex justify-between items-start mb-2">
                                             <div>
-                                                <span className="text-xs font-bold text-slate-400 uppercase block mb-0.5">{new Date(check.date).toLocaleDateString()}</span>
-                                                <span className="font-bold text-slate-700 dark:text-slate-200 text-sm">Par {check.user}</span>
+                                                <div className="flex items-center gap-2 mb-0.5">
+                                                    <Calendar className="w-3.5 h-3.5 text-blue-500" />
+                                                    <span className="text-xs font-black text-slate-700 dark:text-slate-200 uppercase tracking-wide">{formattedDateDisplay}</span>
+                                                </div>
+                                                <span className="text-xs text-slate-500 dark:text-slate-400">Par {check.user}</span>
                                             </div>
                                             <div className="flex flex-col items-end gap-2">
                                                 <span className="font-mono font-bold bg-slate-100 dark:bg-slate-900 px-2 py-1 rounded text-sm">{check.km} km</span>

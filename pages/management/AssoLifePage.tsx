@@ -103,6 +103,22 @@ export const AssoLifePage: React.FC = () => {
                                     </div>
 
                                     <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">{post.content}</p>
+
+                                    {post.url && (
+                                        <div className="mt-3">
+                                            <a 
+                                                href={post.url} 
+                                                target="_blank" 
+                                                rel="noopener noreferrer"
+                                                onClick={(e) => e.stopPropagation()} 
+                                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-blue-50 dark:bg-blue-900/40 text-blue-600 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/70 transition-colors border border-blue-200 dark:border-blue-800"
+                                            >
+                                                <ExternalLink className="w-3.5 h-3.5" />
+                                                <span>{post.linkTitle || 'Ouvrir le lien'}</span>
+                                            </a>
+                                        </div>
+                                    )}
+
                                     <div className="mt-3 text-xs text-slate-400 font-medium italic flex justify-between items-center">
                                         <span>Par : {post.author}</span>
                                     </div>

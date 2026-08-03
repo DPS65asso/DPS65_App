@@ -39,7 +39,7 @@ export const Button: React.FC<ButtonProps> = ({
       {...props}
     >
       {icon && (
-        <span className="inline-flex items-center justify-center w-5 h-5 shrink-0 [&>svg]:w-full [&>svg]:h-full">
+        <span className={`inline-flex items-center justify-center ${size === 'sm' ? 'w-4 h-4' : size === 'lg' ? 'w-6 h-6' : 'w-5 h-5'} shrink-0 [&>svg]:w-full [&>svg]:h-full`}>
           {icon}
         </span>
       )}
