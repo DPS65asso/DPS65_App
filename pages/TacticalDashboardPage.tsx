@@ -5,10 +5,11 @@ import { Layout } from '../components/Layout';
 import { storageService } from '../services/storageService';
 import { syncService } from '../services/syncService';
 import { Event, Victim, TriageColor, Outcome } from '../types';
-import { Loader2, AlertCircle, Users, Activity, Bed, Monitor, ExternalLink, Map as MapIcon, X, RefreshCw, FileText } from 'lucide-react';
+import { Loader2, AlertCircle, Users, Activity, Bed, Monitor, ExternalLink, Map as MapIcon, X, RefreshCw, FileText, Bell } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../components/Button';
 import { useAuth } from '../context/AuthContext';
+import { PushNotificationModal } from '../components/PushNotificationModal';
 
 const EventMap = lazy(() => import('../components/EventMap').then(module => ({ default: module.EventMap })));
 
@@ -23,6 +24,7 @@ export const TacticalDashboardPage: React.FC = () => {
     const [showMap, setShowMap] = useState(false);
     const [showPdf, setShowPdf] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
+    const [isPushModalOpen, setIsPushModalOpen] = useState(false);
     
     useVitalsNotifications(victims);
 
@@ -166,6 +168,14 @@ export const TacticalDashboardPage: React.FC = () => {
                         </Button>
                         <Button 
                             size="sm"
+                            onClick={() => setIsPushModalOpen(true)} 
+                            className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white flex-1 min-w-[110px] text-xs sm:text-sm font-bold py-2.5 px-3 whitespace-nowrap border border-blue-400/30 shadow-md shadow-blue-500/20" 
+                            icon={<Bell className="w-4 h-4 text-amber-300 animate-pulse shrink-0" />} 
+                        >
+                            Notif Push
+                        </Button>
+                        <Button 
+                            size="sm"
                             onClick={() => setShowMap(!showMap)} 
                             className={`flex-1 min-w-[110px] text-xs sm:text-sm font-bold py-2.5 px-3 whitespace-nowrap ${showMap ? 'bg-slate-700 text-white' : 'bg-blue-600 hover:bg-blue-500 text-white shadow-md shadow-blue-600/30'}`} 
                             icon={showMap ? <X className="w-4 h-4 shrink-0" /> : <MapIcon className="w-4 h-4 shrink-0" />} 
@@ -296,6 +306,11 @@ export const TacticalDashboardPage: React.FC = () => {
                     </div>
                 ))}
             </div>
+
+            <PushNotificationModal
+                isOpen={isPushModalOpen}
+                onClose={() => setIsPushModalOpen(false)}
+            />
         </Layout>
     );
 };

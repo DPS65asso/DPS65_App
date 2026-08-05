@@ -1,7 +1,7 @@
 
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { Event, Victim, Outcome, Solute, LogbookEntry, Mission, UserProfile } from '../types';
+import { Event, Victim, Outcome, TriageColor, Solute, LogbookEntry, Mission, UserProfile } from '../types';
 import { safeDateFormat, safeTimeFormat } from '../utils/security';
 import { auditService } from './auditService';
 import { storageService } from './storageService';
@@ -14,10 +14,11 @@ const getVictimRows = (victims: Victim[]) => {
     let outcomeText: string = victim.outcome;
     if (victim.outcome === Outcome.EVACUATED_HOSPITAL && victim.hospitalName) outcomeText += `\nvers ${victim.hospitalName}`;
     if (victim.outcome === Outcome.DECEASED) {
+       if (victim.deceasedDoctorName) outcomeText += `\nMéd. : Dr. ${victim.deceasedDoctorName}`;
        if (victim.deceasedDate || victim.deceasedTime) {
            const dateStr = safeDateFormat(victim.deceasedDate);
            const timeStr = victim.deceasedTime || '';
-           outcomeText += `\nDécès: ${dateStr} ${timeStr}`.trim();
+           outcomeText += `\nConstaté: ${dateStr} ${timeStr}`.trim();
        }
        if (victim.deceasedDetails) outcomeText += `\n(${victim.deceasedDetails})`;
     }
@@ -505,11 +506,23 @@ export const generateSingleVictimReport = async (event: Event, victim: Victim) =
     doc.setFont('Helvetica', 'bold');
     doc.setFontSize(7);
     doc.setTextColor(30, 41, 59);
-    doc.text("ORIENTATION / VÉHICULE / HÔPITAL :", 110, y + 10);
+    doc.text(victim.outcome === Outcome.DECEASED ? "CONSTAT DE DÉCÈS (RÉGLEMENTAIRE) :" : "ORIENTATION / VÉHICULE / HÔPITAL :", 110, y + 10);
     doc.setFont('Helvetica', 'normal');
-    doc.setFontSize(8.5);
+    doc.setFontSize(8);
     doc.setTextColor(51, 65, 85);
-    doc.text(victim.hospitalName || 'Laissée sur place / Non évacuée', 110, y + 14);
+
+    if (victim.outcome === Outcome.DECEASED) {
+        let deathInfo = `Dr. ${victim.deceasedDoctorName || 'Médecin non renseigné'}`;
+        if (victim.deceasedDate || victim.deceasedTime) {
+            deathInfo += ` | ${safeDateFormat(victim.deceasedDate)} à ${victim.deceasedTime || 'N/C'}`;
+        }
+        if (victim.deceasedDetails) {
+            deathInfo += ` (${victim.deceasedDetails})`;
+        }
+        doc.text(deathInfo, 110, y + 14);
+    } else {
+        doc.text(victim.hospitalName || 'Laissée sur place / Non évacuée', 110, y + 14);
+    }
 
     doc.setFont('Helvetica', 'bold');
     doc.setFontSize(7);
@@ -529,7 +542,7 @@ export const generateSingleVictimReport = async (event: Event, victim: Victim) =
     // Dessiner 2 zones d'émargement / de signature côte à côte (y: y + 42)
     const sigY = y + 41;
     
-    // Cadre signature 1: Secouriste / Team Leader
+    // Cadre signature 1: Chef d'Équipe / Responsable / Valideur
     doc.rect(12, sigY, 90, 26);
     doc.setFillColor(241, 245, 249);
     doc.rect(12, sigY, 90, 4.5, 'F');
@@ -540,45 +553,92 @@ export const generateSingleVictimReport = async (event: Event, victim: Victim) =
     
     doc.setFont('Helvetica', 'normal');
     doc.setFontSize(7.5);
-    doc.text(`Nom: ${respName}`, 14, sigY + 9);
-    doc.text(`Heure: ${victim.departureTime ? safeTimeFormat(victim.departureTime) : new Date().toLocaleTimeString('fr-FR', {hour: '2-digit', minute: '2-digit'})}`, 14, sigY + 13);
-    doc.text("Signature Électronique Certifiée", 14, sigY + 22);
+    const chefName = victim.validatedBy || respName;
+    doc.text(`Nom: ${chefName}`, 14, sigY + 9);
+    const validTime = victim.validatedAt 
+      ? new Date(victim.validatedAt).toLocaleTimeString('fr-FR', {hour: '2-digit', minute: '2-digit'})
+      : (victim.departureTime ? safeTimeFormat(victim.departureTime) : new Date().toLocaleTimeString('fr-FR', {hour: '2-digit', minute: '2-digit'}));
+    doc.text(`Heure: ${validTime}`, 14, sigY + 13);
+    
+    // Signature Chef d'équipe / Valideur dans le Cadre 1
+    const chefSigToDraw = (victim.outcome !== Outcome.REFUSED_CARE && victim.outcome !== Outcome.DECEASED) ? victim.signatureData : null;
+    if (chefSigToDraw) {
+        try {
+            doc.addImage(chefSigToDraw, 'PNG', 48, sigY + 5, 52, 18);
+            doc.setFontSize(6.5);
+            doc.setFont('Helvetica', 'bold');
+            doc.setTextColor(16, 185, 129);
+            doc.text("✓ Signature Numérique Chef", 14, sigY + 22);
+        } catch(e) {
+            doc.setFontSize(6.5);
+            doc.text("Signature Certifiée", 14, sigY + 22);
+        }
+    } else {
+        doc.setFontSize(6.5);
+        doc.setTextColor(100);
+        doc.text("Signature Certifiée", 14, sigY + 22);
+    }
 
-    // Cadre signature 2: Decharge Victime, Medecin, Temoin
+    // Cadre signature 2: Décharge Victime (Refus de soins) OU Constat de Décès (Médecin)
     doc.rect(108, sigY, 90, 26);
     doc.setFillColor(241, 245, 249);
     doc.rect(108, sigY, 90, 4.5, 'F');
     doc.setFont('Helvetica', 'bold');
     doc.setTextColor(30, 41, 59);
-    doc.text("SIGNATURE POUR DÉCHARGE / MÉDECIN", 110, sigY + 3);
 
-    // Rendre l'image de la signature si présente
-    let signatureToDraw = null;
-    let signatureLabel = "";
-    if (victim.outcome === Outcome.REFUSED_CARE && victim.signatureData) {
-        signatureToDraw = victim.signatureData;
-        signatureLabel = "[Refus de soins / Témoin]";
-    } else if (victim.outcome === Outcome.DECEASED && victim.doctorSignatureData) {
-        signatureToDraw = victim.doctorSignatureData;
-        signatureLabel = "[Constat de Décès - Médecin]";
-    } else {
+    if (victim.outcome === Outcome.DECEASED) {
+        doc.setFontSize(6.5);
+        doc.text("CONSTAT DE DÉCÈS - SIGNATURE MÉDECIN", 110, sigY + 3);
         doc.setFont('Helvetica', 'normal');
         doc.setFontSize(7);
-        doc.setTextColor(100);
-        doc.text("Émargement en cas de refus de soins :", 110, sigY + 11);
-    }
+        doc.setTextColor(30, 41, 59);
+        const docName = victim.deceasedDoctorName ? `Dr. ${victim.deceasedDoctorName}` : 'Dr. Non renseigné';
+        const docDate = victim.deceasedDate ? safeDateFormat(victim.deceasedDate) : 'N/C';
+        const docTime = victim.deceasedTime || 'N/C';
+        doc.text(`${docName} - ${docDate} à ${docTime}`, 110, sigY + 9);
 
-    if (signatureToDraw) {
-        try {
-            // Dessiner la signature vectorielle dans la boîte
-            doc.addImage(signatureToDraw, 'PNG', 110, sigY + 6, 85, 14);
-            doc.setFontSize(6.5);
+        if (victim.doctorSignatureData) {
+            try {
+                doc.addImage(victim.doctorSignatureData, 'PNG', 110, sigY + 10, 85, 12);
+                doc.setFontSize(6);
+                doc.setFont('Helvetica', 'bold');
+                doc.setTextColor(220, 38, 38);
+                doc.text("✓ Constat de Décès Signé par le Médecin", 110, sigY + 23);
+            } catch(e) {
+                console.error("Erreur d'insertion signature médecin décès :", e);
+            }
+        } else {
             doc.setFont('Helvetica', 'bold');
-            doc.setTextColor(194, 24, 7);
-            doc.text(signatureLabel, 110, sigY + 23);
-        } catch(e) {
-            console.error("Erreur d'insertion signature PDF :", e);
+            doc.setFontSize(6.5);
+            doc.setTextColor(220, 38, 38);
+            doc.text("Constat de décès non signé numériquement", 110, sigY + 23);
         }
+    } else if (victim.outcome === Outcome.REFUSED_CARE) {
+        doc.setFontSize(6.5);
+        doc.text("SIGNATURE POUR DÉCHARGE (REFUS DE SOINS)", 110, sigY + 3);
+        if (victim.signatureData) {
+            try {
+                doc.addImage(victim.signatureData, 'PNG', 110, sigY + 5, 85, 16);
+                doc.setFontSize(6.5);
+                doc.setFont('Helvetica', 'bold');
+                doc.setTextColor(220, 38, 38);
+                doc.text("[Signature Victime - Refus de soins]", 110, sigY + 23);
+            } catch(e) {
+                console.error("Erreur d'insertion signature décharge PDF :", e);
+            }
+        } else {
+            doc.setFont('Helvetica', 'bold');
+            doc.setFontSize(7);
+            doc.setTextColor(220, 38, 38);
+            doc.text("Refus de soins notifié (Non signé)", 110, sigY + 13);
+        }
+    } else {
+        doc.setFontSize(6.5);
+        doc.text("SIGNATURE POUR DÉCHARGE / ÉMARGEMENT", 110, sigY + 3);
+        doc.setFont('Helvetica', 'normal');
+        doc.setFontSize(7);
+        doc.setTextColor(140);
+        doc.text("Émargement en cas de refus de soins : (N/A)", 110, sigY + 13);
     }
 
     // Bas de page (Mention légale de confidentialité)
@@ -795,3 +855,129 @@ export const generateMissionOrder = async (mission: Mission, participants: UserP
   const safeName = mission.title.replace(/[^a-z0-9]/gi, '_').toLowerCase();
   doc.save(`Ordre_Mission_${mission.date}_${safeName}.pdf`);
 };
+
+export const generateSynopticMissionReport = async (event: Event, victims: Victim[], logbook: LogbookEntry[] = []) => {
+  const doc = new jsPDF();
+  await addHeaderLogo(doc);
+
+  // Titre
+  doc.setFontSize(20);
+  doc.setTextColor(220, 38, 38);
+  doc.text('BILAN SYNOPTIQUE DE FIN DE DISPOSITIF', 105, 22, { align: 'center' });
+
+  doc.setFontSize(10);
+  doc.setTextColor(100);
+  doc.text('DISPOSITIF DE PREMIERS SECOURS 65 - RAPPORT OFFICIEL', 105, 28, { align: 'center' });
+
+  // Encadré Résumé Événement
+  doc.setDrawColor(200);
+  doc.setFillColor(248, 250, 252);
+  doc.roundedRect(14, 35, 182, 38, 3, 3, 'FD');
+
+  doc.setFontSize(13);
+  doc.setTextColor(15, 23, 42);
+  doc.text(`Dispositif : ${event.name}`, 20, 44);
+
+  doc.setFontSize(10);
+  doc.setTextColor(71, 85, 105);
+  doc.text(`Date : ${safeDateFormat(event.date)}`, 20, 52);
+  doc.text(`Lieu : ${event.location || 'Non précisé'}`, 20, 59);
+  doc.text(`Total Victimes Traitées : ${victims.length}`, 120, 52);
+
+  // Statistiques de Triage & Devenir
+  const countUA = victims.filter(v => v.triageColor === TriageColor.UA).length;
+  const countUR = victims.filter(v => v.triageColor === TriageColor.UR).length;
+  const countUPL = victims.filter(v => v.triageColor === TriageColor.UIP || !v.triageColor).length;
+  const countEvac = victims.filter(v => v.outcome === Outcome.EVACUATED_HOSPITAL).length;
+  const countRefused = victims.filter(v => v.outcome === Outcome.REFUSED_CARE).length;
+  const countLeft = victims.filter(v => v.outcome === Outcome.RELEASED).length;
+  const countInProg = victims.filter(v => v.outcome === Outcome.TREATMENT_IN_PROGRESS).length;
+
+  autoTable(doc, {
+    startY: 78,
+    head: [['Urgence Vitale (UA)', 'Urgence Relative (UR)', 'Imliqués / UPL', 'Évacués Hôpital', 'Refus Soins', 'Laissés sur place', 'En cours']],
+    body: [
+      [`${countUA}`, `${countUR}`, `${countUPL}`, `${countEvac}`, `${countRefused}`, `${countLeft}`, `${countInProg}`]
+    ],
+    theme: 'grid',
+    headStyles: { fillColor: [30, 41, 59], halign: 'center', fontSize: 8 },
+    bodyStyles: { halign: 'center', fontSize: 11, fontStyle: 'bold' }
+  });
+
+  // Répartition par Hôpital / Destination
+  const hospitalMap: Record<string, number> = {};
+  victims.forEach(v => {
+    if (v.outcome === Outcome.EVACUATED_HOSPITAL) {
+      const hName = v.hospitalName || 'Hôpital Non Précisé';
+      hospitalMap[hName] = (hospitalMap[hName] || 0) + 1;
+    }
+  });
+
+  const hospitalRows = Object.entries(hospitalMap).map(([h, count]) => [h, `${count} victime(s)`]);
+
+  if (hospitalRows.length > 0) {
+    doc.setFontSize(11);
+    doc.setTextColor(30, 41, 59);
+    const nextY = (doc as any).lastAutoTable.finalY + 10;
+    doc.text('Répartition des Évacuations Hospitalières :', 14, nextY);
+
+    autoTable(doc, {
+      startY: nextY + 4,
+      head: [['Établissement Hospitalier / Destination', 'Nombre d\'Évacuations']],
+      body: hospitalRows,
+      theme: 'striped',
+      headStyles: { fillColor: [185, 28, 28], fontSize: 9 }
+    });
+  }
+
+  // Extrait de la Main Courante (Top évènements)
+  if (logbook.length > 0) {
+    const logY = (doc as any).lastAutoTable.finalY + 10;
+    doc.setFontSize(11);
+    doc.setTextColor(30, 41, 59);
+    doc.text('Aperçu de la Main Courante / Chronologie du Dispositif :', 14, logY);
+
+    const logRows = logbook.slice(0, 15).map(l => [
+      new Date(l.timestamp).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+      l.category || 'INFO',
+      l.author || 'P.C.',
+      l.message
+    ]);
+
+    autoTable(doc, {
+      startY: logY + 4,
+      head: [['Heure', 'Catégorie', 'Auteur', 'Événement / Message']],
+      body: logRows,
+      theme: 'grid',
+      headStyles: { fillColor: [51, 65, 85], fontSize: 8 },
+      columnStyles: { 0: { cellWidth: 20 }, 1: { cellWidth: 30 }, 2: { cellWidth: 35 }, 3: { cellWidth: 'auto' } },
+      styles: { fontSize: 8 }
+    });
+  }
+
+  // Zone de Signature
+  const finalY = (doc as any).lastAutoTable.finalY + 15;
+  const pageHeight = doc.internal.pageSize.height;
+
+  if (finalY < pageHeight - 45) {
+    doc.setFontSize(10);
+    doc.setTextColor(0);
+    doc.text("Le Chef de Dispositif / Chef de Poste :", 15, finalY);
+    doc.rect(15, finalY + 4, 75, 25);
+
+    doc.text("Le Médecin / Régulateur :", 115, finalY);
+    doc.rect(115, finalY + 4, 75, 25);
+  }
+
+  const pageCount = (doc as any).internal.getNumberOfPages();
+  for (let i = 1; i <= pageCount; i++) {
+    doc.setPage(i);
+    doc.setFontSize(8);
+    doc.setTextColor(150);
+    doc.text(`Page ${i} sur ${pageCount} - Rapport Synoptique DPS65`, 195, pageHeight - 8, { align: 'right' });
+  }
+
+  const safeEventName = event.name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+  doc.save(`Bilan_Synoptique_${safeEventName}_${safeDateFormat(event.date)}.pdf`);
+};
+

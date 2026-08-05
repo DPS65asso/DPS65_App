@@ -451,10 +451,20 @@ class GeoService {
             // 1. Sauvegarde Locale
             await tx.objectStore('team_locations').put(loc);
             
-            // 2. Mise en file d'attente Synchro
+            // 2. Mise en file d'attente Synchro (Position Actuelle & Historique Tracé GPS)
             await tx.objectStore('sync_queue').put({
                 id: generateUUID(),
                 table: 'team_locations',
+                action: 'UPSERT',
+                data: loc,
+                timestamp: Date.now(),
+                status: 'PENDING',
+                retries: 0
+            });
+
+            await tx.objectStore('sync_queue').put({
+                id: generateUUID(),
+                table: 'team_location_history',
                 action: 'UPSERT',
                 data: loc,
                 timestamp: Date.now(),

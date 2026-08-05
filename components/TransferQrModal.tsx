@@ -79,41 +79,49 @@ export const TransferQrModal: React.FC<Props> = ({ isOpen, onClose, victim }) =>
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/90 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-sm w-full p-6 border border-slate-200 dark:border-slate-700 relative flex flex-col">
-        <button 
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-sm w-full border border-slate-200 dark:border-slate-800 overflow-hidden animate-in zoom-in-95 my-auto">
+        <div className="p-3.5 bg-gradient-to-r from-blue-900 via-indigo-950 to-blue-900 text-white flex items-center justify-between border-b border-blue-800/80">
+          <div className="flex items-center gap-2 font-bold text-sm">
+            <Share2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            <span>Transfert Rapide par QR Code</span>
+          </div>
+          <button 
             type="button"
             onClick={onClose}
-            className="absolute top-4 right-4 p-2 bg-slate-100 dark:bg-slate-700 rounded-full text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white transition-colors z-10"
-        >
-            <X className="w-5 h-5" />
-        </button>
-
-        <div className="flex flex-col items-center text-center mb-6">
-            <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-full mb-3">
-                <Share2 className="w-8 h-8 text-blue-600 dark:text-blue-400" />
-            </div>
-            <h3 className="text-xl font-bold text-slate-800 dark:text-white">Transfert Rapide (V3)</h3>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-                Format optimisé pour lecture instantanée sur tous appareils.
-            </p>
+            className="p-1 text-slate-300 hover:text-white rounded-lg transition-colors"
+          >
+            <X className="w-4 h-4" />
+          </button>
         </div>
 
-        <div className="flex-1 flex flex-col items-center justify-center bg-white p-4 rounded-xl border-2 border-slate-100 dark:border-slate-600 relative overflow-hidden min-h-[280px]">
+        <div className="p-4 space-y-3">
+          <div className="flex flex-col items-center justify-center bg-white p-3 rounded-xl border border-slate-200 dark:border-slate-700 relative overflow-hidden min-h-[250px]">
             {qrSrc ? (
-                <img src={qrSrc} alt="QR Code" className="w-full h-full object-contain mix-blend-multiply" />
+                <img src={qrSrc} alt="QR Code" className="w-64 h-64 object-contain mix-blend-multiply" />
             ) : (
                 <div className="animate-pulse text-slate-400 text-xs">Génération...</div>
             )}
             
             <div className="absolute bottom-0 inset-x-0 bg-slate-100/90 p-1 text-[10px] text-slate-800 text-center font-bold border-t border-slate-200">
-                Haute Lisibilité
+                Format V3 - Haute Lisibilité
             </div>
+          </div>
+
+          <div className="flex items-center justify-center gap-2 text-xs text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/80 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700">
+              <Smartphone className="w-4 h-4 text-emerald-500 shrink-0" />
+              <span>Scannez avec la tablette de destination.</span>
+          </div>
         </div>
 
-        <div className="mt-6 flex items-center justify-center gap-2 text-xs text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-900 p-3 rounded-lg">
-            <Smartphone className="w-4 h-4" />
-            <span>Utilisez le <strong>Scanner</strong> d'une autre tablette.</span>
+        <div className="p-3 bg-slate-50 dark:bg-slate-800/80 border-t border-slate-200 dark:border-slate-800 flex justify-end">
+          <button 
+            type="button"
+            onClick={onClose}
+            className="px-4 py-1.5 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-800 dark:text-white rounded-lg text-xs font-bold transition-colors"
+          >
+            Fermer
+          </button>
         </div>
       </div>
     </div>

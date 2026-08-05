@@ -5,6 +5,7 @@ import { generateUUID } from '../utils/security';
 import { auditService } from './auditService';
 import { authService } from './authService';
 import { sendNativeNotification } from './notificationService';
+import { mergeVictimData } from './core/storageHelpers';
 
 const getNormalizedTime = (val: any): number => {
     if (!val) return 0;
@@ -685,7 +686,7 @@ class SyncService {
         const db = await initDB();
         const { eventType, new: newRecord, old: oldRecord } = payload;
         
-        const localData = newRecord ? { ...newRecord } : null;
+        let localData = newRecord ? { ...newRecord } : null;
         if (localData && localData.event_id && !localData.eventId) {
             localData.eventId = localData.event_id;
         }
@@ -704,18 +705,25 @@ class SyncService {
                     }
                 }
 
-                // --- GESTION OPTIMISÉE DES CONFLITS (LAST WRITE WINS) ---
+                // --- GESTION OPTIMISÉE DES CONFLITS (CRDT / FIELD-LEVEL MERGE POUR VICTIMES, LWW POUR AUTRES) ---
                 if (localData.id) {
                     try {
                         const localExisting = await db.get(table as any, localData.id);
                         if (localExisting) {
-                            const localTime = getNormalizedTime(localExisting.updatedAt || localExisting.updated_at || localExisting.timestamp);
-                            const remoteTime = getNormalizedTime(localData.updatedAt || localData.updated_at || localData.timestamp);
-                            
-                            // Si la version locale a un horodatage d'édition plus récent, on écarte la version distante
-                            if (localTime > remoteTime) {
-                                console.log(`[Sync Conflit] Rejet remote obsolète pour ${table} (Local: ${localTime} > Remote: ${remoteTime})`);
-                                return;
+                            if (table === 'victims') {
+                                // Fusion intelligente champ par champ
+                                const mergedVictim = mergeVictimData(localExisting, localData);
+                                localData = mergedVictim;
+                                console.log(`[Sync CRDT] Fusion champ par champ appliquée pour victime ${localData.id}`);
+                            } else {
+                                const localTime = getNormalizedTime(localExisting.updatedAt || localExisting.updated_at || localExisting.timestamp);
+                                const remoteTime = getNormalizedTime(localData.updatedAt || localData.updated_at || localData.timestamp);
+                                
+                                // Si la version locale a un horodatage d'édition plus récent, on écarte la version distante
+                                if (localTime > remoteTime) {
+                                    console.log(`[Sync Conflit] Rejet remote obsolète pour ${table} (Local: ${localTime} > Remote: ${remoteTime})`);
+                                    return;
+                                }
                             }
                         }
                     } catch (conflictErr) {

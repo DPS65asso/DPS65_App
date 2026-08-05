@@ -1,12 +1,13 @@
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
 
-type ThemeMode = 'system' | 'light' | 'dark';
+type ThemeMode = 'system' | 'light' | 'dark' | 'tactical';
 
 interface ThemeContextType {
   themeMode: ThemeMode;
   setThemeMode: (mode: ThemeMode) => void;
   isDark: boolean;
+  isTactical: boolean;
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
@@ -38,7 +39,8 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       localStorage.setItem('dps65_theme_mode', mode);
   };
 
-  const isDark = themeMode === 'system' ? systemIsDark : themeMode === 'dark';
+  const isTactical = themeMode === 'tactical';
+  const isDark = isTactical || (themeMode === 'system' ? systemIsDark : themeMode === 'dark');
 
   // Application des classes CSS au Body
   useEffect(() => {
@@ -47,15 +49,18 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     // Reset des classes (inkl. old ones for clean transition)
     root.classList.remove('light', 'dark', 'tactical', 'ultra-eco');
 
-    if (isDark) {
+    if (isTactical) {
+        root.classList.add('dark');
+        root.classList.add('tactical');
+    } else if (isDark) {
         root.classList.add('dark');
     } else {
         root.classList.add('light');
     }
-  }, [isDark]);
+  }, [isDark, isTactical]);
 
   return (
-    <ThemeContext.Provider value={{ themeMode, setThemeMode, isDark }}>
+    <ThemeContext.Provider value={{ themeMode, setThemeMode, isDark, isTactical }}>
       {children}
     </ThemeContext.Provider>
   );
@@ -68,3 +73,4 @@ export const useTheme = () => {
   }
   return context;
 };
+

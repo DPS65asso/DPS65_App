@@ -2,13 +2,12 @@
 import React, { useState, useEffect } from 'react';
 import { Logo } from './Logo';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { ChevronLeft, HardDrive, MapPin, LogOut, Bell } from 'lucide-react';
+import { ChevronLeft, HardDrive, MapPin, LogOut } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { BottomNav } from './BottomNav';
 import { Sidebar } from './Sidebar';
 import { SyncIndicator } from './SyncIndicator'; 
 import { geoService } from '../services/geoService';
-import { PushNotificationModal } from './PushNotificationModal';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -28,7 +27,6 @@ export const Layout: React.FC<LayoutProps> = ({ children, title, showBack = fals
   const [isGpsActive, setIsGpsActive] = useState(() => {
     return localStorage.getItem('dps65_tracking_state') !== null || geoService.isTracking;
   });
-  const [isPushModalOpen, setIsPushModalOpen] = useState(false);
 
   useEffect(() => {
     const handleCheck = () => {
@@ -163,16 +161,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, title, showBack = fals
                                   <span className="hidden sm:inline">Déconnexion</span>
                                 </button>
                               )}
-                              {!isOrganizer && !isAiPage && (
-                                <button
-                                  onClick={() => setIsPushModalOpen(true)}
-                                  title="Diffusion Notification Push"
-                                  className="px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-extrabold text-xs transition-all border border-blue-400/30 flex items-center gap-1.5 cursor-pointer shadow-md shadow-blue-500/25 active:scale-95 ring-2 ring-blue-500/20"
-                                >
-                                  <Bell className="w-4 h-4 text-amber-300 animate-pulse shrink-0" />
-                                  <span className="inline-block font-extrabold tracking-tight">Notif Push</span>
-                                </button>
-                              )}
+                              
                               {/* Sync Indicator dans la navbar classique */}
                               <SyncIndicator />
                         </div>
@@ -190,11 +179,6 @@ export const Layout: React.FC<LayoutProps> = ({ children, title, showBack = fals
               <BottomNav />
           </div>
       )}
-      
-      <PushNotificationModal
-        isOpen={isPushModalOpen}
-        onClose={() => setIsPushModalOpen(false)}
-      />
     </div>
   );
 };

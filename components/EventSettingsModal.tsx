@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { X, FileUp, Trash2, Save, Loader2, User, Phone, FileText } from 'lucide-react';
+import { X, FileUp, Trash2, Save, Loader2, User, Phone, FileText, Settings } from 'lucide-react';
 import { Event, Track } from '../types';
 import { storageService } from '../services/storageService';
 import { generateUUID, sanitizeInput } from '../utils/security';
@@ -108,12 +108,15 @@ export const EventSettingsModal: React.FC<Props> = ({ isOpen, event, onClose, on
     };
 
     return (
-        <div className="fixed inset-0 z-[3000] bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 overflow-hidden">
-            <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-700 flex flex-col max-h-[95dvh] sm:max-h-[90vh]">
-                <div className="p-4 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-900/50 flex-shrink-0">
-                    <h2 className="font-bold text-slate-800 dark:text-white">Paramètres de l'événement</h2>
-                    <button onClick={onClose} className="p-2 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-full transition-colors">
-                        <X className="w-5 h-5 text-slate-500" />
+        <div className="fixed inset-0 z-[3000] bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 overflow-hidden">
+            <div className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-800 flex flex-col max-h-[95dvh] sm:max-h-[90vh]">
+                <div className="p-3.5 bg-gradient-to-r from-blue-900 via-indigo-950 to-blue-900 text-white flex justify-between items-center border-b border-blue-800/80 flex-shrink-0">
+                    <div className="flex items-center gap-2 font-bold text-sm">
+                        <Settings className="w-4 h-4 text-emerald-400 shrink-0" />
+                        <span>Paramètres de l'événement</span>
+                    </div>
+                    <button onClick={onClose} className="p-1 text-slate-300 hover:text-white rounded-lg transition-colors">
+                        <X className="w-4 h-4" />
                     </button>
                 </div>
 

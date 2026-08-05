@@ -722,18 +722,22 @@ export const ProfilePage: React.FC = () => {
                             {/* THEME SELECTOR */}
                             <div className="space-y-2">
                                 <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Apparence</h3>
-                                <div className="grid grid-cols-3 gap-2 bg-slate-900 p-2 rounded-xl border border-slate-800">
+                                <div className="grid grid-cols-4 gap-1.5 bg-slate-900 p-2 rounded-xl border border-slate-800">
                                     <button onClick={() => setThemeMode('light')} className={`flex flex-col items-center justify-center p-2 rounded-lg transition-all ${themeMode === 'light' ? 'bg-white text-slate-900' : 'text-slate-400 hover:text-white'}`}>
                                         <Sun className="w-5 h-5 mb-1" />
-                                        <span className="text-[10px] font-bold uppercase">Clair</span>
+                                        <span className="text-[9px] font-bold uppercase">Clair</span>
                                     </button>
                                     <button onClick={() => setThemeMode('dark')} className={`flex flex-col items-center justify-center p-2 rounded-lg transition-all ${themeMode === 'dark' ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-white'}`}>
                                         <Moon className="w-5 h-5 mb-1" />
-                                        <span className="text-[10px] font-bold uppercase">Sombre</span>
+                                        <span className="text-[9px] font-bold uppercase">Sombre</span>
+                                    </button>
+                                    <button onClick={() => setThemeMode('tactical')} className={`flex flex-col items-center justify-center p-2 rounded-lg transition-all ${themeMode === 'tactical' ? 'bg-red-950 text-red-500 border border-red-800 shadow-[0_0_10px_rgba(220,38,38,0.3)]' : 'text-red-400/70 hover:text-red-400'}`}>
+                                        <Eye className="w-5 h-5 mb-1 text-red-500" />
+                                        <span className="text-[9px] font-bold uppercase">Tactique</span>
                                     </button>
                                     <button onClick={() => setThemeMode('system')} className={`flex flex-col items-center justify-center p-2 rounded-lg transition-all ${themeMode === 'system' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'}`}>
                                         <Monitor className="w-5 h-5 mb-1" />
-                                        <span className="text-[10px] font-bold uppercase">Auto</span>
+                                        <span className="text-[9px] font-bold uppercase">Auto</span>
                                     </button>
                                 </div>
                             </div>

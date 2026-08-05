@@ -5,9 +5,10 @@ import { Eraser, PenTool } from 'lucide-react';
 interface SignaturePadProps {
   onSave: (data: string | undefined) => void;
   initialData?: string;
+  height?: string;
 }
 
-export const SignaturePad: React.FC<SignaturePadProps> = ({ onSave, initialData }) => {
+export const SignaturePad: React.FC<SignaturePadProps> = ({ onSave, initialData, height = '160px' }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [hasSignature, setHasSignature] = useState(!!initialData);
@@ -144,7 +145,7 @@ export const SignaturePad: React.FC<SignaturePadProps> = ({ onSave, initialData 
           ref={canvasRef}
           width={600}
           height={300}
-          style={{ width: '100%', height: '160px', touchAction: 'none' }}
+          style={{ width: '100%', height, touchAction: 'none' }}
           onMouseDown={startDrawing}
           onMouseMove={draw}
           onMouseUp={stopDrawing}

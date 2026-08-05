@@ -7,8 +7,10 @@ import { ConfirmDialog } from '../components/ConfirmDialog';
 import { storageService } from '../services/storageService';
 import { Event, Victim, Outcome, TriageColor, AppConfig } from '../types';
 import { safeDateFormat, safeTimeFormat, getLocalDateString } from '../utils/security';
-import { generateEventReport } from '../services/pdfService';
-import { UserPlus, Loader2, Pencil, Trash2, Search, Calendar, MapPin, Bed, Settings, AlertCircle, Siren, X, Filter, Stethoscope, RefreshCw, FileText } from 'lucide-react';
+import { generateEventReport, generateSynopticMissionReport } from '../services/pdfService';
+import { ReBilanTimerBadge } from '../components/ReBilanTimerBadge';
+import { presenceService, PresenceState } from '../services/presenceService';
+import { UserPlus, Loader2, Pencil, Trash2, Search, Calendar, MapPin, Bed, Settings, AlertCircle, Siren, X, Filter, Stethoscope, RefreshCw, FileText, FileCheck, Edit3 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 import { NoviModal } from '../components/NoviModal';
@@ -42,6 +44,14 @@ export const EventDashboardPage: React.FC = () => {
   
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [activeEditors, setActiveEditors] = useState<Record<string, PresenceState>>({});
+
+  useEffect(() => {
+    const unsubscribe = presenceService.subscribe((editors) => {
+      setActiveEditors(editors);
+    });
+    return () => unsubscribe();
+  }, []);
 
   // RESTRICTION : Organisateur ne peut pas accéder à la liste des victimes
   useEffect(() => {
@@ -258,6 +268,7 @@ export const EventDashboardPage: React.FC = () => {
               ) : (
                   filteredVictims.map(victim => {
                       const stale = isVitalsStale(victim, now);
+                      const editor = activeEditors[victim.id];
                       let borderClass = 'border-l-4 border-l-blue-500'; 
                       let outcomeBadgeClass = 'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800'; 
                       if (victim.outcome === Outcome.EVACUATED_HOSPITAL) { borderClass = 'border-l-4 border-l-red-600'; outcomeBadgeClass = 'bg-red-100 text-red-800 border-red-200 dark:bg-red-900/30 dark:text-red-300 dark:border-red-800'; } 
@@ -280,17 +291,31 @@ export const EventDashboardPage: React.FC = () => {
                                       {stale && <span title="Constantes périmées (>15min)"><AlertCircle className="w-5 h-5 text-orange-500 animate-pulse" /></span>}
                                       {victim.isAdvancedMode && <Stethoscope className="w-4 h-4 text-purple-500" />}
                                   </div>
+                                  
+                                  {/* Indicateur de présence (Saisie en cours) */}
+                                  {editor && (
+                                    <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 border border-amber-300 dark:border-amber-700 animate-pulse w-fit">
+                                      <Edit3 className="w-3 h-3 text-amber-600 dark:text-amber-400" />
+                                      <span>{editor.userName} rédige le bilan...</span>
+                                    </div>
+                                  )}
+
                                   <div className="flex flex-wrap items-center gap-2 text-xs mt-1">
                                       {victim.triageColor && <span className="font-bold px-2 py-0.5 rounded text-white bg-slate-500" style={{backgroundColor: victim.triageColor === TriageColor.UA ? '#dc2626' : victim.triageColor === TriageColor.UR ? '#eab308' : '#16a34a'}}>{victim.triageColor}</span>}
                                       <span className={`px-2 py-0.5 rounded border font-bold uppercase tracking-wide ${outcomeBadgeClass}`}>{victim.outcome}</span>
-                                      {stale && <span className="text-[9px] font-black text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/20 px-1.5 py-0.5 rounded border border-orange-200 dark:border-orange-800 flex items-center gap-1 animate-pulse uppercase tracking-tighter"><AlertCircle className="w-3 h-3"/> Re-bilan Constantes</span>}
+                                      
+                                      {/* Minuteur de Re-bilan Chronométré */}
+                                      <ReBilanTimerBadge victim={victim} />
                                   </div>
                               </div>
                           </div>
                            <div className="text-sm text-slate-600 dark:text-slate-300 mb-2 line-clamp-1">{victim.reason.includes('PLAN NOVI') ? victim.reason : victim.outcome}</div>
                            <div className="flex items-center justify-between text-xs text-slate-400 pt-2 border-t border-slate-100 dark:border-slate-700">
                               <span>Arrivée: {safeTimeFormat(victim.arrivalTime)}</span>
-                              {victim.signatureData && <Pencil className="w-3 h-3 text-green-500" />}
+                              <div className="flex items-center gap-1.5">
+                                {victim.samuValidated && <span className="text-[10px] font-extrabold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 px-1.5 py-0.5 rounded border border-emerald-200 dark:border-emerald-800">✅ SAMU</span>}
+                                {victim.signatureData && <Pencil className="w-3 h-3 text-green-500" />}
+                              </div>
                            </div>
                            <button onClick={(e) => handleDeleteClick(e, victim.id)} className="absolute top-4 right-4 p-2 text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 lg:opacity-100 transition-opacity"><Trash2 className="w-4 h-4" /></button>
                       </div>
@@ -310,8 +335,11 @@ export const EventDashboardPage: React.FC = () => {
                      <button onClick={loadData} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-full transition-colors hidden lg:block">
                         <RefreshCw className="w-5 h-5" />
                      </button>
-                     <button onClick={() => generateEventReport(event, victims)} className="p-2 text-slate-400 hover:text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-full transition-colors">
+                     <button onClick={() => generateEventReport(event, victims)} title="Exporter Registre Victimes (PDF)" className="p-2 text-slate-400 hover:text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-full transition-colors">
                         <FileText className="w-5 h-5" />
+                     </button>
+                     <button onClick={() => generateSynopticMissionReport(event, victims)} title="Exporter Bilan Synoptique de Fin de Dispositif (PDF)" className="p-2 text-slate-400 hover:text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-full transition-colors">
+                        <FileCheck className="w-5 h-5" />
                      </button>
                      {profile?.role === 'admin' && (
                         <button onClick={() => setIsSettingsModalOpen(true)} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-full transition-colors">

@@ -35,6 +35,22 @@ export default defineConfig(({ mode }) => {
           orientation: 'portrait',
           scope: '/',
           start_url: '/',
+          shortcuts: [
+            {
+              name: "Nouveau Bilan Urgence",
+              short_name: "Urgence ACR",
+              description: "Créer un bilan d'urgence vital immédiat",
+              url: "/?action=emergency_victim",
+              icons: [{ src: "pwa-192x192.png", sizes: "192x192" }]
+            },
+            {
+              name: "Saisie Victime",
+              short_name: "Nouvelle Victime",
+              description: "Formulaire d'ajout rapide de victime",
+              url: "/?action=add_victim",
+              icons: [{ src: "pwa-192x192.png", sizes: "192x192" }]
+            }
+          ],
           icons: [
             {
               src: 'pwa-192x192.png',

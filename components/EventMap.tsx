@@ -952,26 +952,40 @@ export const EventMap: React.FC<Props> = ({
 
         {/* MODAL AJOUT MARQUEUR */}
         {showMarkerModal && (
-            <div className="fixed inset-0 z-[5000] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={(e) => { e.stopPropagation(); setShowMarkerModal(false); }}>
-                <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-2xl w-full max-w-xs border border-slate-200 dark:border-slate-700 animate-in zoom-in-95 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-                    <h3 className="font-bold text-lg mb-4 dark:text-white flex items-center gap-2"><MapPin className="w-5 h-5"/> Nouveau Point</h3>
-                    
-                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Nom du point</label>
-                    <input autoFocus type="text" className="w-full p-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-600 rounded-lg mb-4 font-bold outline-none focus:ring-2 focus:ring-blue-500 dark:text-white" placeholder="ex: PC Avançé, Danger..." value={newMarkerLabel} onChange={e => setNewMarkerLabel(e.target.value)} />
-                    
-                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Type</label>
-                    <div className="grid grid-cols-3 gap-2 mb-6">
-                        <button onClick={() => setNewMarkerType('POST')} className={`p-2 rounded-lg border-2 flex flex-col items-center gap-1 transition-all ${newMarkerType === 'POST' ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30 ring-2 ring-blue-500/20' : 'border-slate-200 dark:border-slate-700 opacity-60'}`}><Tent className="w-5 h-5 text-blue-600"/><span className="text-[10px] font-bold text-slate-700 dark:text-slate-200">Poste</span></button>
-                        <button onClick={() => setNewMarkerType('VEHICLE')} className={`p-2 rounded-lg border-2 flex flex-col items-center gap-1 transition-all ${newMarkerType === 'VEHICLE' ? 'border-red-500 bg-red-50 dark:bg-red-900/30 ring-2 ring-red-500/20' : 'border-slate-200 dark:border-slate-700 opacity-60'}`}><Truck className="w-5 h-5 text-red-600"/><span className="text-[10px] font-bold text-slate-700 dark:text-slate-200">VPSP</span></button>
-                        <button onClick={() => setNewMarkerType('QUAD')} className={`p-2 rounded-lg border-2 flex flex-col items-center gap-1 transition-all ${newMarkerType === 'QUAD' ? 'border-orange-500 bg-orange-50 dark:bg-orange-900/30 ring-2 ring-orange-500/20' : 'border-slate-200 dark:border-slate-700 opacity-60'}`}><Car className="w-5 h-5 text-orange-500"/><span className="text-[10px] font-bold text-slate-700 dark:text-slate-200">Quad</span></button>
-                        <button onClick={() => setNewMarkerType('DANGER')} className={`p-2 rounded-lg border-2 flex flex-col items-center gap-1 transition-all ${newMarkerType === 'DANGER' ? 'border-yellow-500 bg-yellow-50 dark:bg-yellow-900/30 ring-2 ring-yellow-500/20' : 'border-slate-200 dark:border-slate-700 opacity-60'}`}><AlertTriangle className="w-5 h-5 text-yellow-500"/><span className="text-[10px] font-bold text-slate-700 dark:text-slate-200">Danger</span></button>
-                        <button onClick={() => setNewMarkerType('POI')} className={`p-2 rounded-lg border-2 flex flex-col items-center gap-1 transition-all ${newMarkerType === 'POI' ? 'border-cyan-500 bg-cyan-50 dark:bg-cyan-900/30 ring-2 ring-cyan-500/20' : 'border-slate-200 dark:border-slate-700 opacity-60'}`}><MapPin className="w-5 h-5 text-cyan-500"/><span className="text-[10px] font-bold text-slate-700 dark:text-slate-200">Info</span></button>
-                        <button onClick={() => setNewMarkerType('TEAM')} className={`p-2 rounded-lg border-2 flex flex-col items-center gap-1 transition-all ${newMarkerType === 'TEAM' ? 'border-green-500 bg-green-50 dark:bg-green-900/30 ring-2 ring-green-500/20' : 'border-slate-200 dark:border-slate-700 opacity-60'}`}><User className="w-5 h-5 text-green-600"/><span className="text-[10px] font-bold text-slate-700 dark:text-slate-200">Équipe</span></button>
+            <div className="fixed inset-0 z-[5000] bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-200" onClick={(e) => { e.stopPropagation(); setShowMarkerModal(false); }}>
+                <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-xs border border-slate-200 dark:border-slate-800 overflow-hidden animate-in zoom-in-95 my-auto" onClick={(e) => e.stopPropagation()}>
+                    <div className="p-3.5 bg-gradient-to-r from-blue-900 via-indigo-950 to-blue-900 text-white flex items-center justify-between border-b border-blue-800/80">
+                        <div className="flex items-center gap-2 font-bold text-sm">
+                            <MapPin className="w-4 h-4 text-emerald-400 shrink-0" />
+                            <span>Nouveau Point sur Carte</span>
+                        </div>
+                        <button type="button" onClick={() => setShowMarkerModal(false)} className="p-1 text-slate-300 hover:text-white rounded-lg transition-colors">
+                            <X className="w-4 h-4" />
+                        </button>
                     </div>
 
-                    <div className="flex gap-3">
-                        <Button onClick={() => setShowMarkerModal(false)} variant="outline" fullWidth>Annuler</Button>
-                        <Button onClick={handleSaveMarker} fullWidth icon={<Save className="w-4 h-4"/>}>Placer</Button>
+                    <div className="p-4 space-y-3">
+                        <div>
+                            <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 mb-1">Nom du point *</label>
+                            <input autoFocus type="text" className="w-full p-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white text-xs font-bold outline-none focus:ring-2 focus:ring-emerald-500" placeholder="ex: PC Avancé, Obstacle..." value={newMarkerLabel} onChange={e => setNewMarkerLabel(e.target.value)} />
+                        </div>
+                        
+                        <div>
+                            <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 mb-1">Type de repère</label>
+                            <div className="grid grid-cols-3 gap-2">
+                                <button onClick={() => setNewMarkerType('POST')} className={`p-2 rounded-xl border flex flex-col items-center gap-1 transition-all ${newMarkerType === 'POST' ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30 ring-2 ring-blue-500/20' : 'border-slate-200 dark:border-slate-700 opacity-60'}`}><Tent className="w-4 h-4 text-blue-600"/><span className="text-[10px] font-bold text-slate-700 dark:text-slate-200">Poste</span></button>
+                                <button onClick={() => setNewMarkerType('VEHICLE')} className={`p-2 rounded-xl border flex flex-col items-center gap-1 transition-all ${newMarkerType === 'VEHICLE' ? 'border-red-500 bg-red-50 dark:bg-red-900/30 ring-2 ring-red-500/20' : 'border-slate-200 dark:border-slate-700 opacity-60'}`}><Truck className="w-4 h-4 text-red-600"/><span className="text-[10px] font-bold text-slate-700 dark:text-slate-200">VPSP</span></button>
+                                <button onClick={() => setNewMarkerType('QUAD')} className={`p-2 rounded-xl border flex flex-col items-center gap-1 transition-all ${newMarkerType === 'QUAD' ? 'border-orange-500 bg-orange-50 dark:bg-orange-900/30 ring-2 ring-orange-500/20' : 'border-slate-200 dark:border-slate-700 opacity-60'}`}><Car className="w-4 h-4 text-orange-500"/><span className="text-[10px] font-bold text-slate-700 dark:text-slate-200">Quad</span></button>
+                                <button onClick={() => setNewMarkerType('DANGER')} className={`p-2 rounded-xl border flex flex-col items-center gap-1 transition-all ${newMarkerType === 'DANGER' ? 'border-yellow-500 bg-yellow-50 dark:bg-yellow-900/30 ring-2 ring-yellow-500/20' : 'border-slate-200 dark:border-slate-700 opacity-60'}`}><AlertTriangle className="w-4 h-4 text-yellow-500"/><span className="text-[10px] font-bold text-slate-700 dark:text-slate-200">Danger</span></button>
+                                <button onClick={() => setNewMarkerType('POI')} className={`p-2 rounded-xl border flex flex-col items-center gap-1 transition-all ${newMarkerType === 'POI' ? 'border-cyan-500 bg-cyan-50 dark:bg-cyan-900/30 ring-2 ring-cyan-500/20' : 'border-slate-200 dark:border-slate-700 opacity-60'}`}><MapPin className="w-4 h-4 text-cyan-500"/><span className="text-[10px] font-bold text-slate-700 dark:text-slate-200">Info</span></button>
+                                <button onClick={() => setNewMarkerType('TEAM')} className={`p-2 rounded-xl border flex flex-col items-center gap-1 transition-all ${newMarkerType === 'TEAM' ? 'border-green-500 bg-green-50 dark:bg-green-900/30 ring-2 ring-green-500/20' : 'border-slate-200 dark:border-slate-700 opacity-60'}`}><User className="w-4 h-4 text-green-600"/><span className="text-[10px] font-bold text-slate-700 dark:text-slate-200">Équipe</span></button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="p-3 bg-slate-50 dark:bg-slate-800/80 border-t border-slate-200 dark:border-slate-800 flex justify-end gap-2">
+                        <Button onClick={() => setShowMarkerModal(false)} variant="outline" className="text-xs py-1.5 px-3 rounded-lg border-slate-300 dark:border-slate-700">Annuler</Button>
+                        <Button onClick={handleSaveMarker} className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs py-1.5 px-4 font-bold rounded-lg shadow-md shadow-emerald-600/20">Placer</Button>
                     </div>
                 </div>
             </div>

@@ -15,6 +15,9 @@ import { generateUUID, isValidPhoneNumber, MAX_INPUT_LENGTH, MAX_TEXTAREA_LENGTH
 import { useAuth } from '../context/AuthContext';
 import { Sparkline } from '../components/Sparkline';
 import { FullChartModal } from '../components/FullChartModal';
+import { presenceService } from '../services/presenceService';
+import { aiService } from '../services/aiService';
+import { Sparkles, Copy, Radio } from 'lucide-react';
 
 const inputClass = "w-full p-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-slate-700 text-slate-900 dark:text-white dark:placeholder-slate-400 transition-colors";
 const labelClass = "block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1";
@@ -36,6 +39,35 @@ export const AddVictimPage: React.FC = () => {
   const [showQrModal, setShowQrModal] = useState(false);
   const [showFullCpr, setShowFullCpr] = useState(false);
   const [copiedSms, setCopiedSms] = useState(false);
+  const [showSamuAiModal, setShowSamuAiModal] = useState(false);
+  const [showValidationModal, setShowValidationModal] = useState(false);
+  const [samuSummaryText, setSamuSummaryText] = useState('');
+  const [isGeneratingSamu, setIsGeneratingSamu] = useState(false);
+
+  // Presence Service Integration
+  useEffect(() => {
+    if (victimId && profile) {
+      const userName = `${profile.firstName || ''} ${profile.lastName || ''}`.trim() || profile.email || 'Secouriste';
+      presenceService.setEditing(victimId, userName, profile.role || 'SECOURISTE');
+      
+      return () => {
+        presenceService.clearEditing(victimId);
+      };
+    }
+  }, [victimId, profile]);
+
+  const handleGenerateSamuAi = async () => {
+    setIsGeneratingSamu(true);
+    setShowSamuAiModal(true);
+    try {
+      const text = await aiService.generateSamuChronologicalSummary(formData as Victim, eventData?.name || 'DPS65');
+      setSamuSummaryText(text);
+    } catch (err) {
+      setSamuSummaryText("Erreur lors de la génération de la synthèse SAMU. Veuillez réessayer.");
+    } finally {
+      setIsGeneratingSamu(false);
+    }
+  };
 
   const handleCopySmsFormat = () => {
       // Format: DPS65:ID|INIT|AGE|TRIAGE|OUTCOME|VITALS|GARROT
@@ -134,6 +166,7 @@ export const AddVictimPage: React.FC = () => {
     deceasedDetails: '',
     deceasedDate: '',
     deceasedTime: '',
+    deceasedDoctorName: '',
     responderName: navResponder.name || profile?.lastName || '',
     responderFirstName: navResponder.firstName || profile?.firstName || '',
     responderTeam: navResponder.team || currentTeam || '',
@@ -304,21 +337,8 @@ export const AddVictimPage: React.FC = () => {
       }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const doSaveVictim = async () => {
     if (!id) return;
-    if (formData.phoneNumber && !isValidPhoneNumber(formData.phoneNumber)) { alert("Le format du numéro de téléphone semble invalide."); return; }
-    
-    const hasArrival = formData.arrivalTime && formData.arrivalTime.length > 5;
-    const hasCare = formData.careOnSiteTime && formData.careOnSiteTime.length > 5;
-
-    if (!hasArrival && !hasCare) {
-        setTimeError(true);
-        alert("ERREUR : Vous devez renseigner au moins une heure de prise en charge (Terrain ou Poste de Secours).");
-        topRef.current?.scrollIntoView({ behavior: 'smooth' });
-        return;
-    }
-
     setIsSubmitting(true);
 
     let arrivalDateObj: Date; try { arrivalDateObj = formData.arrivalTime ? new Date(formData.arrivalTime) : new Date(); } catch { arrivalDateObj = new Date(); }
@@ -345,14 +365,45 @@ export const AddVictimPage: React.FC = () => {
       deceasedDetails: isDeceased ? (formData.deceasedDetails || '') : undefined,
       deceasedDate: isDeceased ? (formData.deceasedDate || '') : undefined,
       deceasedTime: isDeceased ? (formData.deceasedTime || '') : undefined,
+      deceasedDoctorName: isDeceased ? (formData.deceasedDoctorName || '') : undefined,
       hospitalName: formData.outcome === Outcome.EVACUATED_HOSPITAL ? formData.hospitalName : undefined,
       pulse: undefined, sao2: undefined, bp: undefined, glycemia: undefined, temp: undefined, eva: undefined
     } as Victim;
 
     try {
         if (isEditing && victimId) { await storageService.updateVictim({ ...victimData, id: victimId }); } else { await storageService.addVictim({ ...victimData, id: generateUUID() }); }
+        setShowValidationModal(false);
         navigate(`/events/${id}`);
     } catch (err) { console.error("Erreur enregistrement:", err); alert("Une erreur est survenue lors de l'enregistrement. Vérifiez votre connexion."); } finally { setIsSubmitting(false); }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!id) return;
+    if (formData.phoneNumber && !isValidPhoneNumber(formData.phoneNumber)) { alert("Le format du numéro de téléphone semble invalide."); return; }
+    
+    const hasArrival = formData.arrivalTime && formData.arrivalTime.length > 5;
+    const hasCare = formData.careOnSiteTime && formData.careOnSiteTime.length > 5;
+
+    if (!hasArrival && !hasCare) {
+        setTimeError(true);
+        alert("ERREUR : Vous devez renseigner au moins une heure de prise en charge (Terrain ou Poste de Secours).");
+        topRef.current?.scrollIntoView({ behavior: 'smooth' });
+        return;
+    }
+
+    const requiresValidation = [
+      Outcome.RELEASED,
+      Outcome.EVACUATED_HOSPITAL,
+      Outcome.REFUSED_CARE,
+      Outcome.DECEASED
+    ].includes(formData.outcome as Outcome);
+
+    if (requiresValidation) {
+      setShowValidationModal(true);
+    } else {
+      await doSaveVictim();
+    }
   };
 
   if (isLoading) {
@@ -402,31 +453,43 @@ export const AddVictimPage: React.FC = () => {
         )}
         
         {/* HEADER ACTIONS */}
-        <div className="grid grid-cols-3 gap-2 w-full -mt-2 mb-2">
-            <button 
-                type="button" 
-                onClick={(e) => { e.preventDefault(); handleCopySmsFormat(); }}
-                className="flex items-center justify-center gap-2 bg-amber-50 dark:bg-amber-950/20 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800 py-1.5 rounded-lg text-xs font-extrabold hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors shadow-sm"
-                title="Générer et copier un bilan condensé au format SMS Montagne"
+        <div className="-mt-4 space-y-2">
+            <button
+                type="button"
+                onClick={(e) => { e.preventDefault(); handleGenerateSamuAi(); }}
+                className="w-full py-1.5 px-3 rounded-lg bg-gradient-to-r from-blue-900 to-indigo-900 hover:from-blue-800 hover:to-indigo-800 text-white font-bold text-xs border border-blue-700/60 shadow-sm flex items-center justify-center gap-2 transition-all active:scale-98 cursor-pointer"
             >
-                {copiedSms ? <Check className="w-4 h-4 text-green-500 animate-bounce shrink-0" /> : <Send className="w-4 h-4 text-amber-500 shrink-0" />} <span>{copiedSms ? 'Copié !' : 'SMS'}</span>
+                <Radio className="w-3.5 h-3.5 text-emerald-400 animate-pulse shrink-0" />
+                <Sparkles className="w-3.5 h-3.5 text-amber-300 shrink-0" />
+                <span>Générer Synthèse Chronologique SAMU 15 (IA)</span>
             </button>
-            <button 
-                type="button" 
-                onClick={(e) => { e.preventDefault(); setShowQrModal(true); }}
-                className="flex items-center justify-center gap-2 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 py-1.5 rounded-lg text-xs font-extrabold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors shadow-sm"
-            >
-                <QrCode className="w-4 h-4 shrink-0" /> <span>QR Code</span>
-            </button>
-            <button 
-                type="button" 
-                onClick={(e) => { e.preventDefault(); handleExportPdf(); }}
-                disabled={isExporting}
-                title="Exporter la Fiche-Bilan de Secours SSU/SAMU"
-                className="flex items-center justify-center gap-2 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 py-1.5 rounded-lg text-xs font-extrabold hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors shadow-sm disabled:opacity-50"
-            >
-                {isExporting ? <Loader2 className="w-4 h-4 animate-spin shrink-0" /> : <FileText className="w-4 h-4 shrink-0" />} <span>PDF</span>
-            </button>
+
+            <div className="grid grid-cols-3 gap-2 w-full">
+                <button 
+                    type="button" 
+                    onClick={(e) => { e.preventDefault(); handleCopySmsFormat(); }}
+                    className="flex items-center justify-center gap-2 bg-amber-50 dark:bg-amber-950/20 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800 py-1.5 rounded-lg text-xs font-extrabold hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors shadow-sm"
+                    title="Générer et copier un bilan condensé au format SMS Montagne"
+                >
+                    {copiedSms ? <Check className="w-4 h-4 text-green-500 animate-bounce shrink-0" /> : <Send className="w-4 h-4 text-amber-500 shrink-0" />} <span>{copiedSms ? 'Copié !' : 'SMS'}</span>
+                </button>
+                <button 
+                    type="button" 
+                    onClick={(e) => { e.preventDefault(); setShowQrModal(true); }}
+                    className="flex items-center justify-center gap-2 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 py-1.5 rounded-lg text-xs font-extrabold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors shadow-sm"
+                >
+                    <QrCode className="w-4 h-4 shrink-0" /> <span>QR Code</span>
+                </button>
+                <button 
+                    type="button" 
+                    onClick={(e) => { e.preventDefault(); handleExportPdf(); }}
+                    disabled={isExporting}
+                    title="Exporter la Fiche-Bilan de Secours SSU/SAMU"
+                    className="flex items-center justify-center gap-2 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 py-1.5 rounded-lg text-xs font-extrabold hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors shadow-sm disabled:opacity-50"
+                >
+                    {isExporting ? <Loader2 className="w-4 h-4 animate-spin shrink-0" /> : <FileText className="w-4 h-4 shrink-0" />} <span>PDF</span>
+                </button>
+            </div>
         </div>
 
         {/* --- RCP HISTORIQUE --- */}
@@ -718,26 +781,217 @@ export const AddVictimPage: React.FC = () => {
             {formData.outcome === Outcome.DECEASED && (
                 <div className="mt-4 animate-in fade-in slide-in-from-top-2 duration-300 p-4 border border-red-100 dark:border-red-900/50 bg-red-50 dark:bg-red-900/20 rounded-lg space-y-3">
                     <h4 className="text-sm font-bold text-red-800 dark:text-red-300 flex items-center gap-2"><AlertTriangle className="w-4 h-4" /> Constat de décès</h4>
+                    <div>
+                        <label className="block text-xs font-medium text-red-700 dark:text-red-300 mb-1">Nom du Médecin (Déclarant)</label>
+                        <input type="text" className="w-full p-2 border border-red-200 dark:border-red-800 bg-white dark:bg-slate-700 rounded-lg focus:ring-2 focus:ring-red-500 outline-none text-slate-800 dark:text-white text-sm" placeholder="ex: Dr. Martin" value={formData.deceasedDoctorName || ''} onChange={e => handleChange('deceasedDoctorName', e.target.value)} disabled={isSubmitting} maxLength={MAX_INPUT_LENGTH} />
+                    </div>
                     <div className="grid grid-cols-2 gap-4">
                         <div><label className="block text-xs font-medium text-red-700 dark:text-red-300 mb-1">Date</label><input type="date" className="w-full p-2 border border-red-200 dark:border-red-800 bg-white dark:bg-slate-700 rounded-lg focus:ring-2 focus:ring-red-500 outline-none text-slate-800 dark:text-white text-sm dark:[color-scheme:dark]" value={formData.deceasedDate || ''} onChange={e => handleChange('deceasedDate', e.target.value)} disabled={isSubmitting} /></div>
                          <div><label className="block text-xs font-medium text-red-700 dark:text-red-300 mb-1">Heure</label><input type="time" className="w-full p-2 border border-red-200 dark:border-red-800 bg-white dark:bg-slate-700 rounded-lg focus:ring-2 focus:ring-red-500 outline-none text-slate-800 dark:text-white text-sm dark:[color-scheme:dark]" value={formData.deceasedTime || ''} onChange={e => handleChange('deceasedTime', e.target.value)} disabled={isSubmitting} /></div>
                     </div>
-                    <div><label className="block text-xs font-medium text-red-700 dark:text-red-300 mb-1">Détails</label><textarea rows={3} className="w-full p-2 border border-red-200 dark:border-red-800 bg-white dark:bg-slate-700 rounded-lg focus:ring-2 focus:ring-red-500 outline-none placeholder-red-300 dark:placeholder-red-700 text-slate-800 dark:text-white text-sm" placeholder="Circonstances..." value={formData.deceasedDetails || ''} onChange={e => handleChange('deceasedDetails', e.target.value)} maxLength={MAX_TEXTAREA_LENGTH} disabled={isSubmitting} /></div>
+                    <div><label className="block text-xs font-medium text-red-700 dark:text-red-300 mb-1">Détails / Circonstances</label><textarea rows={3} className="w-full p-2 border border-red-200 dark:border-red-800 bg-white dark:bg-slate-700 rounded-lg focus:ring-2 focus:ring-red-500 outline-none placeholder-red-300 dark:placeholder-red-700 text-slate-800 dark:text-white text-sm" placeholder="Circonstances..." value={formData.deceasedDetails || ''} onChange={e => handleChange('deceasedDetails', e.target.value)} maxLength={MAX_TEXTAREA_LENGTH} disabled={isSubmitting} /></div>
                     <div className="mt-4 pt-4 border-t border-red-200 dark:border-red-800/50">
                         <label className={`${labelClass} flex items-center gap-1 mb-2 text-red-800 dark:text-red-300 font-bold`}><PenTool className="w-4 h-4" /> Signature Médecin</label>
                         <SignaturePad onSave={(data) => handleChange('doctorSignatureData', data)} initialData={formData.doctorSignatureData} />
                     </div>
                 </div>
             )}
+
+
         </div>
 
-        <div className="sticky bottom-4">
+        <div className="sticky bottom-4 space-y-2">
             <Button type="submit" fullWidth className="shadow-xl" disabled={isSubmitting}>
               {isSubmitting ? <><Loader2 className="w-4 h-4 animate-spin" /> Enregistrement...</> : (isEditing ? 'Mettre à jour la fiche' : 'Enregistrer la fiche')}
             </Button>
         </div>
         
+             {/* Modal Validation Officielle & Signature du Bilan (Pop-up encadré avec fond flouté) */}
+        {showValidationModal && (
+          <div className="fixed inset-0 z-[300] bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-2 sm:p-4">
+            <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-md w-full border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden animate-in zoom-in-95 my-auto">
+              {/* Header Navy avec bouton Fermer */}
+              <div className="p-3 sm:p-3.5 bg-gradient-to-r from-blue-900 via-indigo-950 to-blue-900 text-white flex items-center justify-between border-b border-blue-800/80">
+                <div className="flex items-center gap-2 font-bold text-xs sm:text-sm">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span>Validation Officielle & Signature</span>
+                </div>
+                <button 
+                  type="button" 
+                  onClick={() => setShowValidationModal(false)} 
+                  className="p-1 text-slate-300 hover:text-white rounded-lg transition-colors"
+                  title="Fermer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Corps de la modal */}
+              <div className="p-3.5 sm:p-4 space-y-3">
+                <div className="p-2.5 bg-slate-100 dark:bg-slate-800/90 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center justify-between gap-2">
+                  <div className="space-y-0.5">
+                    <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Statut de clôture</span>
+                    <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-tight">
+                      Validation & signature obligatoires
+                    </p>
+                  </div>
+                  <span className="px-2.5 py-1 rounded-full text-xs font-black bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/40 shrink-0">
+                    {formData.outcome}
+                  </span>
+                </div>
+
+                <div className="space-y-2.5">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 mb-1">
+                      Valideur / Signataire (Chef / Médecin) *
+                    </label>
+                    <input 
+                      type="text" 
+                      className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none" 
+                      placeholder="Nom, Prénom & Qualité (ex: Dr. Martin / Chef Poste)"
+                      value={formData.validatedBy || (profile ? `${profile.firstName || ''} ${profile.lastName || ''} (${profile.role || 'SECOURISTE'})`.trim() : '')}
+                      onChange={(e) => {
+                        handleChange('validatedBy', e.target.value);
+                        handleChange('validatedAt', Date.now());
+                      }}
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between p-2.5 bg-slate-50 dark:bg-slate-800/80 rounded-lg border border-slate-200 dark:border-slate-700">
+                    <div className="space-y-0.5 pr-2">
+                      <span className="text-xs font-bold text-slate-800 dark:text-white block">Validation Régulation SAMU 15 / Chef</span>
+                      <span className="text-[10px] text-slate-500 dark:text-slate-400 block">Autorise la clôture et transmission</span>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                      <input 
+                        type="checkbox" 
+                        className="sr-only peer" 
+                        checked={!!formData.samuValidated} 
+                        onChange={(e) => {
+                          handleChange('samuValidated', e.target.checked);
+                          if (e.target.checked) {
+                            if (!formData.validatedBy && profile) {
+                              handleChange('validatedBy', `${profile.firstName || ''} ${profile.lastName || ''} (${profile.role || 'SECOURISTE'})`.trim());
+                            }
+                            handleChange('validatedAt', Date.now());
+                          }
+                        }} 
+                      />
+                      <div className="w-9 h-5 bg-slate-300 dark:bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-600"></div>
+                    </label>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 mb-1 flex items-center gap-1.5">
+                      <PenTool className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                      <span>Signature Numérique du Valideur *</span>
+                    </label>
+                    <div className="bg-white rounded-lg p-0.5 text-slate-900 border border-slate-300 dark:border-slate-700">
+                      <SignaturePad 
+                        height="120px"
+                        onSave={(data) => {
+                          handleChange('doctorSignatureData', data);
+                          if (data) {
+                            handleChange('samuValidated', true);
+                            handleChange('validatedAt', Date.now());
+                          }
+                        }} 
+                        initialData={formData.doctorSignatureData} 
+                      />
+                    </div>
+                  </div>
+
+                  {formData.outcome === Outcome.DECEASED && (
+                    <div className="p-2 bg-red-50 dark:bg-red-950/60 border border-red-200 dark:border-red-800/80 rounded-lg text-red-800 dark:text-red-200 text-[11px]">
+                      <p className="font-bold flex items-center gap-1 flex-wrap"><AlertTriangle className="w-3.5 h-3.5 text-red-600 dark:text-red-400 shrink-0" /> Constat : Dr. {formData.deceasedDoctorName || 'Non spécifié'}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Footer Actions */}
+              <div className="p-3 bg-slate-50 dark:bg-slate-800/80 border-t border-slate-200 dark:border-slate-800 flex items-center justify-end gap-2.5">
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={() => setShowValidationModal(false)}
+                  className="rounded-lg border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs py-1.5 px-3"
+                >
+                  Fermer
+                </Button>
+                <Button 
+                  type="button" 
+                  onClick={() => {
+                    const activeValideur = formData.validatedBy || (profile ? `${profile.firstName || ''} ${profile.lastName || ''} (${profile.role || 'SECOURISTE'})`.trim() : '');
+                    
+                    if (!activeValideur.trim()) {
+                      alert("Veuillez renseigner le nom et la qualité du valideur.");
+                      return;
+                    }
+                    if (!formData.doctorSignatureData && !formData.signatureData) {
+                      alert("La signature numérique du valideur est obligatoire pour valider et enregistrer la fiche.");
+                      return;
+                    }
+
+                    if (!formData.validatedBy) {
+                      handleChange('validatedBy', activeValideur);
+                      handleChange('validatedAt', Date.now());
+                    }
+
+                    doSaveVictim();
+                  }}
+                  className="bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold rounded-lg py-1.5 px-4 text-xs shadow-md shadow-emerald-600/20 flex items-center gap-1.5"
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Enregistrement...</> : <><CheckCircle2 className="w-3.5 h-3.5" /> Valider & Enregistrer</>}
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+        
         <TransferQrModal isOpen={showQrModal} onClose={() => setShowQrModal(false)} victim={formData} />
+
+        {/* Modal Synthèse IA SAMU 15 */}
+        {showSamuAiModal && (
+          <div className="fixed inset-0 z-[250] bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-2 sm:p-4">
+            <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-lg w-full border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden animate-in zoom-in-95 my-auto">
+              <div className="p-3.5 bg-gradient-to-r from-blue-900 via-indigo-950 to-blue-900 text-white flex items-center justify-between border-b border-blue-800/80">
+                <div className="flex items-center gap-2 font-bold text-xs sm:text-sm">
+                  <Radio className="w-4 h-4 text-emerald-400 animate-pulse shrink-0" />
+                  <span>Synthèse Radio SAMU 15 (Bilan Chronologique)</span>
+                </div>
+                <button type="button" onClick={() => setShowSamuAiModal(false)} className="p-1 text-slate-300 hover:text-white rounded-lg transition-colors"><X className="w-4 h-4" /></button>
+              </div>
+
+              <div className="p-5 max-h-[70vh] overflow-y-auto space-y-4">
+                {isGeneratingSamu ? (
+                  <div className="py-12 flex flex-col items-center justify-center space-y-3">
+                    <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
+                    <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">L'IA analyse les constantes, chronologies et bilans de la victime...</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="p-4 bg-slate-900 text-slate-100 font-mono text-xs rounded-xl border border-slate-800 whitespace-pre-wrap leading-relaxed select-all">
+                      {samuSummaryText}
+                    </div>
+                    <p className="text-[11px] text-slate-500 italic">Format conforme à la transmission radio SAMU 15 / Régulation Médicale.</p>
+                  </div>
+                )}
+              </div>
+
+              <div className="p-4 bg-slate-50 dark:bg-slate-800/80 border-t border-slate-200 dark:border-slate-800 flex justify-end gap-2">
+                <Button type="button" variant="outline" onClick={() => setShowSamuAiModal(false)}>Fermer</Button>
+                {!isGeneratingSamu && (
+                  <Button type="button" onClick={() => { navigator.clipboard.writeText(samuSummaryText); alert("Synthèse SAMU copiée dans le presse-papier !"); }} className="bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1.5">
+                    <Copy className="w-4 h-4" />
+                    <span>Copier la synthèse</span>
+                  </Button>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
       </form>
     </Layout>

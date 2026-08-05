@@ -139,6 +139,7 @@ export interface Victim {
   deceasedDetails?: string;
   deceasedDate?: string;
   deceasedTime?: string;
+  deceasedDoctorName?: string;
   
   responderName?: string;
   responderFirstName?: string;
@@ -161,6 +162,8 @@ export interface Victim {
   samuValidated?: boolean;
   signatureData?: string; 
   doctorSignatureData?: string; 
+  validatedBy?: string;
+  validatedAt?: number;
   triageColor?: TriageColor;
   resourceUsed?: 'stretcher' | 'chair' | 'none';
   cprHistory?: CprEvent[]; 
