@@ -124,29 +124,21 @@ export const PushNotificationModal: React.FC<PushNotificationModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-[9990] flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 w-full max-w-lg overflow-hidden transform transition-all scale-100 flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 z-[9990] flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 w-full max-w-lg overflow-hidden transform transition-all scale-100 flex flex-col max-h-[92dvh] my-auto">
         
-        {/* HEADER */}
-        <div className="p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-900/50">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-blue-600 text-white rounded-2xl shadow-md shadow-blue-500/20">
-              <Bell className="w-5 h-5 animate-bounce" />
-            </div>
-            <div>
-              <h2 className="text-lg font-black text-slate-800 dark:text-white leading-none uppercase tracking-tight">
-                Diffusion Notification Push
-              </h2>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 font-medium">
-                Envoyer une alerte en temps réel aux secouristes
-              </p>
-            </div>
+        {/* HEADER NAVY */}
+        <div className="p-3.5 bg-gradient-to-r from-blue-900 via-indigo-950 to-blue-900 text-white flex items-center justify-between border-b border-blue-800/80 flex-shrink-0">
+          <div className="flex items-center gap-2 font-bold text-sm">
+            <Bell className="w-4 h-4 text-emerald-400 shrink-0" />
+            <span>Diffusion Notification Push (Temps Réel)</span>
           </div>
           <button
+            type="button"
             onClick={onClose}
-            className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors"
+            className="p-1 text-slate-300 hover:text-white rounded-lg transition-colors"
           >
-            <X className="w-5 h-5" />
+            <X className="w-4 h-4" />
           </button>
         </div>
 
@@ -272,19 +264,19 @@ export const PushNotificationModal: React.FC<PushNotificationModalProps> = ({
           )}
 
           {/* SUBMIT BUTTON */}
-          <div className="pt-2 flex items-center justify-end gap-2">
+          <div className="pt-3 border-t border-slate-200 dark:border-slate-800 flex items-center justify-end gap-2 mt-4">
             <button
               type="button"
               onClick={onClose}
               disabled={isSending}
-              className="px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              className="px-3.5 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
             >
               Annuler
             </button>
             <button
               type="submit"
               disabled={isSending || !message.trim()}
-              className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-black uppercase tracking-wider shadow-lg shadow-blue-600/20 transition-all active:scale-95 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-all active:scale-95 flex items-center gap-2 shadow-md shadow-emerald-600/20 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Send className="w-4 h-4" />
               <span>{isSending ? 'Diffusion...' : 'Envoyer Notif Push'}</span>

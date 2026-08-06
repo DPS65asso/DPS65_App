@@ -89,23 +89,28 @@ export const OfflineMapPrompt: React.FC = () => {
     if (!showPrompt) return null;
 
     return (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-sm animate-in fade-in duration-300">
-            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl w-full max-w-md p-6 relative max-h-[95vh] overflow-y-auto transform scale-100 transition-all duration-300">
-                
-                {/* Close Button */}
-                {!isDownloading && (
-                    <button 
-                        onClick={() => handleDismiss(false)}
-                        className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors"
-                        title="Fermer"
-                        id="btn-close-offline-prompt"
-                    >
-                        <X className="w-5 h-5" />
-                    </button>
-                )}
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200">
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden transform scale-100 transition-all duration-300 my-auto">
+                <div className="p-3.5 bg-gradient-to-r from-blue-900 via-indigo-950 to-blue-900 text-white flex items-center justify-between border-b border-blue-800/80">
+                    <div className="flex items-center gap-2 font-bold text-sm">
+                        <Map className="w-4 h-4 text-emerald-400 shrink-0" />
+                        <span>Carte Hors-Ligne (65 - Hautes-Pyrénées)</span>
+                    </div>
+                    {!isDownloading && (
+                        <button 
+                            onClick={() => handleDismiss(false)}
+                            className="p-1 text-slate-300 hover:text-white rounded-lg transition-colors"
+                            title="Fermer"
+                            id="btn-close-offline-prompt"
+                        >
+                            <X className="w-4 h-4" />
+                        </button>
+                    )}
+                </div>
 
+                <div className="p-4 sm:p-5 max-h-[80vh] overflow-y-auto">
                 {!isDownloading && !downloadSuccess && (
-                    <div className="mt-2">
+                    <div>
                         {/* Header with design identity */}
                         <div className="flex items-center gap-3 mb-4">
                             <div className="w-12 h-12 rounded-2xl bg-blue-50 dark:bg-blue-950/40 flex items-center justify-center text-blue-600 dark:text-blue-400 ring-4 ring-blue-500/10">
@@ -253,6 +258,7 @@ export const OfflineMapPrompt: React.FC = () => {
                         </span>
                     </div>
                 )}
+                </div>
 
             </div>
         </div>
