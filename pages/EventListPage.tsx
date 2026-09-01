@@ -10,7 +10,7 @@ import { isLive } from '../services/supabaseClient';
 import { useAuth } from '../context/AuthContext';
 import { Event } from '../types';
 import { safeDateFormat, getLocalDateString } from '../utils/security';
-import { Calendar, ChevronRight, MapPin, Loader2, Trash2, Search, X, Filter, PlusCircle, Archive, ArchiveRestore, Download, Check, AlertTriangle } from 'lucide-react';
+import { Calendar, ChevronRight, MapPin, Loader2, Trash2, Search, X, Filter, PlusCircle, Archive, ArchiveRestore, Download, Check, AlertTriangle, FileSpreadsheet } from 'lucide-react';
 
 export const EventListPage: React.FC = () => {
   const navigate = useNavigate();
@@ -297,15 +297,26 @@ export const EventListPage: React.FC = () => {
         
         {/* ACTION PRINCIPALE : CRÉER (ADMIN SEULEMENT) */}
         {!showArchived && isAdmin && (
-            <div className="animate-in slide-in-from-top-2">
+            <div className="animate-in slide-in-from-top-2 grid grid-cols-1 lg:grid-cols-2 gap-3">
                 <Button 
                     onClick={() => navigate('/create-event')}
                     variant="primary" 
                     icon={<PlusCircle className="w-5 h-5" />}
                     fullWidth
-                    className="py-4 text-lg shadow-blue-500/20"
+                    className="py-4 text-base sm:text-lg shadow-blue-500/20"
                 >
-                    Créer un événement
+                    Créer un événement rapide
+                </Button>
+
+                {/* BOUTON BUREAU : CONVENTIONS & GRILLE DES RISQUES */}
+                <Button 
+                    onClick={() => navigate('/desktop/conventions')}
+                    variant="outline" 
+                    icon={<FileSpreadsheet className="w-5 h-5 text-emerald-600" />}
+                    fullWidth
+                    className="hidden lg:flex py-4 text-base font-bold border-2 border-emerald-500/40 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300"
+                >
+                    Conventions &amp; Grille des Risques (PC)
                 </Button>
             </div>
         )}

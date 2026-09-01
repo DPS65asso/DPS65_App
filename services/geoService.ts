@@ -521,6 +521,24 @@ class GeoService {
             );
         });
     }
+
+    public getLastSentPosition(): GeoPosition | null {
+        return this.lastSentPosition;
+    }
+
+    public getGpsAccuracyQuality(): { label: string; text: string; color: 'emerald' | 'amber' | 'rose'; accuracy: number } | null {
+        if (!this.lastSentPosition) return null;
+        const acc = Math.round(this.lastSentPosition.accuracy);
+        if (acc <= 10) {
+            return { label: 'Optimal', text: `±${acc}m`, color: 'emerald', accuracy: acc };
+        } else if (acc <= 30) {
+            return { label: 'Bon', text: `±${acc}m`, color: 'emerald', accuracy: acc };
+        } else if (acc <= 70) {
+            return { label: 'Moyen', text: `±${acc}m`, color: 'amber', accuracy: acc };
+        } else {
+            return { label: 'Faible', text: `±${acc}m`, color: 'rose', accuracy: acc };
+        }
+    }
 }
 
 export const geoService = new GeoService();

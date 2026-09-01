@@ -1,7 +1,8 @@
 
 import React, { useEffect, useState } from 'react';
 import { Layout } from '../../components/Layout';
-import { CalendarDays, MapPin, Clock, CheckCircle2, UserPlus, UserX, ChevronDown, ChevronUp, FileText, Loader2, Syringe, Stethoscope, ArrowRight, Lock, Users, Archive, History, Pencil, Sparkles, X } from 'lucide-react';
+import { CalendarDays, MapPin, Clock, CheckCircle2, UserPlus, UserX, ChevronDown, ChevronUp, FileText, Loader2, Syringe, Stethoscope, ArrowRight, Lock, Users, Archive, History, Pencil, Sparkles, X, FileSpreadsheet } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { authService } from '../../services/authService';
 import { storageService } from '../../services/storageService';
 import { Mission, UserProfile } from '../../types';
@@ -12,6 +13,7 @@ import { useNewContent } from '../../context/NewContentContext';
 const SEEN_MISSION_IDS_KEY = 'dps65_seen_mission_item_ids_v1';
 
 export const PlanningPage: React.FC = () => {
+    const navigate = useNavigate();
     const { user, isAdmin, profile } = useAuth();
     const { markItemAsSeen, markSectionAsSeen, isItemNew, badges } = useNewContent();
     const [missions, setMissions] = useState<Mission[]>([]);
@@ -303,6 +305,28 @@ export const PlanningPage: React.FC = () => {
         <Layout title="Missions" showBack="/management" hideSync={true}>
             <div className="space-y-6 pb-24">
                 
+                {/* BANNIÈRE RACCOURCI BUREAU : CONVENTIONS & GRILLE DES RISQUES */}
+                {isAdmin && (
+                    <div className="hidden lg:flex items-center justify-between p-4 bg-gradient-to-r from-emerald-900/40 via-slate-900 to-blue-950/40 border border-emerald-500/30 rounded-2xl">
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center text-emerald-400">
+                                <FileSpreadsheet className="w-5 h-5" />
+                            </div>
+                            <div>
+                                <h4 className="text-xs font-black uppercase tracking-wider text-emerald-400">Mode Bureau — Administration</h4>
+                                <p className="text-xs text-slate-300">Rédiger une convention organisateur &amp; dimensionner un dispositif avec la grille officielle RNMSC</p>
+                            </div>
+                        </div>
+                        <button 
+                            onClick={() => navigate('/desktop/conventions')}
+                            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center gap-2"
+                        >
+                            <FileSpreadsheet className="w-4 h-4" />
+                            <span>Conventions &amp; Grille RNMSC</span>
+                        </button>
+                    </div>
+                )}
+
                 {/* 1. MISSIONS ACTIVES */}
                 <div>
                     <div className="flex justify-between items-center mb-3">
@@ -350,8 +374,8 @@ export const PlanningPage: React.FC = () => {
                 )}
             </div>
             {editingMission && (
-                <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-200">
-                    <div className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-md shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col max-h-[92dvh] animate-in zoom-in-95 my-auto">
+                <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-[200] flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-200">
+                    <div className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-md shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col max-h-[85dvh] sm:max-h-[90dvh] animate-in zoom-in-95 my-auto">
                         <div className="p-3.5 bg-gradient-to-r from-blue-900 via-indigo-950 to-blue-900 text-white flex justify-between items-center border-b border-blue-800/80 flex-shrink-0">
                             <div className="flex items-center gap-2 font-bold text-sm">
                                 <Pencil className="w-4 h-4 text-emerald-400 shrink-0" />
@@ -362,7 +386,7 @@ export const PlanningPage: React.FC = () => {
                             </button>
                         </div>
 
-                        <div className="p-4 overflow-y-auto space-y-4 text-xs">
+                        <div className="p-4 overflow-y-auto space-y-4 text-xs flex-1">
                             <div>
                                 <label className="block font-bold text-slate-700 dark:text-slate-200 mb-1">Titre de la mission *</label>
                                 <input type="text" className="w-full p-2 border border-slate-300 dark:border-slate-700 rounded-lg dark:bg-slate-800 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-emerald-500 font-bold" value={editingMission.title} onChange={e => setEditingMission({...editingMission, title: e.target.value})} />

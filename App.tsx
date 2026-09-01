@@ -66,6 +66,7 @@ const ProfilePage = safeLazy(() => import('./pages/management/ProfilePage').then
 const AssoLifePage = safeLazy(() => import('./pages/management/AssoLifePage').then(module => ({ default: module.AssoLifePage })));
 const UniformPage = safeLazy(() => import('./pages/management/UniformPage').then(module => ({ default: module.UniformPage })));
 const OrganizerDashboardPage = safeLazy(() => import('./pages/OrganizerDashboardPage').then(module => ({ default: module.OrganizerDashboardPage })));
+const ConventionAndRiskPage = safeLazy(() => import('./pages/desktop/ConventionAndRiskPage').then(module => ({ default: module.ConventionAndRiskPage })));
 
 const LoadingScreen = () => (
   <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950">
@@ -106,6 +107,7 @@ const AppRoutes: React.FC = () => {
               <Route path="/management/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
               <Route path="/management/life" element={<ProtectedRoute><AssoLifePage /></ProtectedRoute>} />
               <Route path="/management/uniforms" element={<ProtectedRoute><UniformPage /></ProtectedRoute>} />
+              <Route path="/desktop/conventions" element={<ProtectedRoute><ConventionAndRiskPage /></ProtectedRoute>} />
               <Route path="/admin" element={<ProtectedRoute><AdminPage /></ProtectedRoute>} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>

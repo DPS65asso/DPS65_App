@@ -45,7 +45,7 @@ export function generateTileUrls(): string[] {
         for (let x = xMin; x <= xMax; x++) {
             for (let y = yMin; y <= yMax; y++) {
                 // Utilise le sous-domaine 'a' par défaut pour la normalisation
-                urls.push(`https://a.basemaps.cartocdn.com/rastertiles/voyager/${z}/${x}/${y}.png`);
+                urls.push(`https://a.tile.openstreetmap.org/${z}/${x}/${y}.png`);
             }
         }
     }
@@ -78,7 +78,7 @@ export function generateLocalEventTileUrls(lat: number, lon: number): string[] {
         
         for (let x = xMin; x <= xMax; x++) {
             for (let y = yMin; y <= yMax; y++) {
-                urls.push(`https://a.basemaps.cartocdn.com/rastertiles/voyager/${z}/${x}/${y}.png`);
+                urls.push(`https://a.tile.openstreetmap.org/${z}/${x}/${y}.png`);
             }
         }
     }
@@ -156,16 +156,34 @@ export function getEventCoordinates(event: any): { lat: number; lng: number } {
 }
 
 /**
- * Normalise une URL Leaflet en remplaçant les sous-domaines (b, c, d) par 'a'
+ * Normalise une URL Leaflet en remplaçant les sous-domaines aléatoires (a, b, c) par 'a'
  */
 export function normalizeTileUrl(url: string): string {
-    // Si c'est du cartocdn voyager
-    if (url.includes('basemaps.cartocdn.com/rastertiles/voyager')) {
-        return url.replace(/https:\/\/[a-d]\.basemaps\.cartocdn\.com/, 'https://a.basemaps.cartocdn.com')
-                  .replace(/\{r\}/g, '')
-                  .replace(/@2x/g, '');
+    if (url.includes('tile.openstreetmap.org')) {
+        return url.replace(/https:\/\/[a-c]\.tile\.openstreetmap\.org/, 'https://a.tile.openstreetmap.org');
+    }
+    if (url.includes('tile.opentopomap.org')) {
+        return url.replace(/https:\/\/[a-c]\.tile\.opentopomap\.org/, 'https://a.tile.opentopomap.org');
     }
     return url;
+}
+
+/**
+ * Nettoie automatiquement les anciennes tuiles périmées (ex: Carto nécessitant désormais une clé d'API)
+ */
+export async function cleanupLegacyCartoTiles(): Promise<void> {
+    try {
+        if (!('caches' in window)) return;
+        const cache = await caches.open(CACHE_NAME);
+        const requests = await cache.keys();
+        for (const req of requests) {
+            if (req.url.includes('cartocdn.com') || req.url.includes('carto.com')) {
+                await cache.delete(req);
+            }
+        }
+    } catch (e) {
+        console.warn("Échec du nettoyage des anciennes tuiles Carto", e);
+    }
 }
 
 /**
@@ -314,4 +332,23 @@ export async function downloadTileUrls(
 export async function deleteOfflineMap(): Promise<boolean> {
     if (!('caches' in window)) return false;
     return await caches.delete(CACHE_NAME);
+}
+
+/**
+ * Calcule le nombre de tuiles et la taille estimée du cache hors-ligne
+ */
+export async function getOfflineMapSize(): Promise<{ count: number; estimatedSizeMB: number }> {
+    if (!('caches' in window)) return { count: 0, estimatedSizeMB: 0 };
+    try {
+        const hasCache = await caches.has(CACHE_NAME);
+        if (!hasCache) return { count: 0, estimatedSizeMB: 0 };
+        const cache = await caches.open(CACHE_NAME);
+        const keys = await cache.keys();
+        const count = keys.length;
+        // Une tuile Carto Voyager pèse en moyenne ~18 à 22 Ko
+        const estimatedSizeMB = Math.round(((count * 20) / 1024) * 10) / 10;
+        return { count, estimatedSizeMB };
+    } catch (e) {
+        return { count: 0, estimatedSizeMB: 0 };
+    }
 }

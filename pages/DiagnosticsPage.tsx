@@ -7,10 +7,13 @@ import { initDB } from '../services/db';
 import { syncService } from '../services/syncService';
 import { storageService } from '../services/storageService';
 import { authService } from '../services/authService';
+import { getOfflineMapSize, deleteOfflineMap } from '../services/offlineMapService';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import { 
     Loader2, Database, Cloud, Zap, Shield, AlertTriangle, CheckCircle2, 
     XCircle, RefreshCw, Trash2, Info, Activity, Wifi, WifiOff, Download, 
-    Copy, Terminal, Radio, HardDrive, Smartphone, Globe, Bell, Play, Check
+    Copy, Terminal, Radio, HardDrive, Smartphone, Globe, Bell, Play, Check,
+    Volume2, Map, Share2
 } from 'lucide-react';
 
 interface DiagnosticLog {
@@ -34,6 +37,20 @@ export const DiagnosticsPage: React.FC = () => {
     const [tableAuditResults, setTableAuditResults] = useState<Record<string, { read: boolean; count?: number; error?: string }>>({});
     const [swStatus, setSwStatus] = useState<string>('Vérification...');
     const [cachesList, setCachesList] = useState<string[]>([]);
+    const [offlineMapStats, setOfflineMapStats] = useState<{ count: number; estimatedSizeMB: number }>({ count: 0, estimatedSizeMB: 0 });
+
+    // Modale de confirmation
+    const [confirmConfig, setConfirmConfig] = useState<{
+        isOpen: boolean;
+        title: string;
+        message: string;
+        onConfirm: () => void;
+    }>({
+        isOpen: false,
+        title: '',
+        message: '',
+        onConfirm: () => {}
+    });
 
     const addLog = (test: string, status: 'SUCCESS' | 'ERROR' | 'INFO' | 'WARN', message: string) => {
         setResults(prev => [{ id: Math.random().toString(36).substring(7), test, status, message, time: new Date().toLocaleTimeString('fr-FR') }, ...prev]);
@@ -82,6 +99,10 @@ export const DiagnosticsPage: React.FC = () => {
                 const keys = await caches.keys();
                 setCachesList(keys);
             }
+
+            // Offline map cache size
+            const mapSize = await getOfflineMapSize();
+            setOfflineMapStats(mapSize);
         } catch (e: any) {
             console.error(e);
         }
@@ -110,7 +131,7 @@ export const DiagnosticsPage: React.FC = () => {
         addLog('Ping Supabase', 'INFO', 'Mesure du temps de réponse...');
         try {
             const start = performance.now();
-            const { error } = await supabase.from('config').select('key').limit(1);
+            const { error } = await supabase.from('config').select('id').limit(1);
             const duration = Math.round(performance.now() - start);
             setLatency(duration);
             if (error) throw error;
@@ -203,6 +224,69 @@ export const DiagnosticsPage: React.FC = () => {
         }
     };
 
+    // Audio Siren Test
+    const runAudioSirenTest = () => {
+        addLog('Audio / Alarme', 'INFO', 'Démarrage du test de tonalité sonore...');
+        try {
+            const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+            if (!AudioCtx) {
+                addLog('Audio / Alarme', 'ERROR', 'AudioContext non supporté');
+                return;
+            }
+            const ctx = new AudioCtx();
+            if (ctx.state === 'suspended') ctx.resume();
+
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.type = 'square';
+            gain.gain.value = 0.3;
+
+            osc.frequency.setValueAtTime(435, ctx.currentTime);
+            osc.start();
+
+            setTimeout(() => {
+                if (osc) {
+                    osc.frequency.setValueAtTime(580, ctx.currentTime);
+                }
+            }, 400);
+
+            setTimeout(() => {
+                try {
+                    osc.stop();
+                    osc.disconnect();
+                    ctx.close();
+                    addLog('Audio / Alarme', 'SUCCESS', 'Tonalité bicolore 435Hz/580Hz jouée avec succès');
+                } catch (e) {}
+            }, 800);
+        } catch (e: any) {
+            addLog('Audio / Alarme', 'ERROR', `Erreur Audio : ${e.message}`);
+        }
+    };
+
+    // Web Share API Test
+    const runWebShareTest = async () => {
+        addLog('Web Share', 'INFO', 'Test du partage natif (SMS/Radio)...');
+        if (navigator.share) {
+            try {
+                await navigator.share({
+                    title: 'DPS65 Diagnostic',
+                    text: 'Test de partage natif DPS65 fonctionnel.'
+                });
+                addLog('Web Share', 'SUCCESS', 'Partage natif ouvert avec succès');
+            } catch (e: any) {
+                if (e.name === 'AbortError') {
+                    addLog('Web Share', 'INFO', 'Partage annulé par l\'utilisateur');
+                } else {
+                    addLog('Web Share', 'WARN', `Erreur partage: ${e.message}`);
+                }
+            }
+        } else {
+            addLog('Web Share', 'WARN', 'Web Share API non disponible sur ce navigateur (fallback presse-papier actif)');
+        }
+    };
+
     // 5. Force Sync
     const handleForceSync = async () => {
         setLoading(true);
@@ -220,55 +304,95 @@ export const DiagnosticsPage: React.FC = () => {
     };
 
     // 6. Clear Sync Queue
-    const handleClearQueue = async () => {
-        if (!confirm("Voulez-vous vraiment vider la file d'attente ? Les actions non synchronisées seront supprimées.")) return;
-        try {
-            const db = await initDB();
-            const tx = db.transaction('sync_queue', 'readwrite');
-            await tx.store.clear();
-            await tx.done;
-            addLog('Sync Queue', 'SUCCESS', 'File d\'attente vidée');
-            loadStats();
-        } catch (e: any) {
-            addLog('Sync Queue', 'ERROR', e.message);
-        }
+    const handleClearQueue = () => {
+        setConfirmConfig({
+            isOpen: true,
+            title: "Vider la file d'attente",
+            message: "Voulez-vous vraiment vider la file d'attente ? Les actions non synchronisées seront définitivement supprimées.",
+            onConfirm: async () => {
+                setConfirmConfig(prev => ({ ...prev, isOpen: false }));
+                try {
+                    const db = await initDB();
+                    const tx = db.transaction('sync_queue', 'readwrite');
+                    await tx.store.clear();
+                    await tx.done;
+                    addLog('Sync Queue', 'SUCCESS', 'File d\'attente vidée');
+                    loadStats();
+                } catch (e: any) {
+                    addLog('Sync Queue', 'ERROR', e.message);
+                }
+            }
+        });
     };
 
     // 7. Clear Caches & Service Worker
-    const handleClearCacheAPI = async () => {
-        if (!confirm("Voulez-vous vider le cache d'application (Service Worker) ?")) return;
-        try {
-            if ('caches' in window) {
-                const keys = await caches.keys();
-                await Promise.all(keys.map(k => caches.delete(k)));
-                addLog('Cache API', 'SUCCESS', `${keys.length} caches supprimés`);
-                setCachesList([]);
+    const handleClearCacheAPI = () => {
+        setConfirmConfig({
+            isOpen: true,
+            title: "Vider le cache applicatif",
+            message: "Voulez-vous vider le cache d'application (Service Worker) ?",
+            onConfirm: async () => {
+                setConfirmConfig(prev => ({ ...prev, isOpen: false }));
+                try {
+                    if ('caches' in window) {
+                        const keys = await caches.keys();
+                        await Promise.all(keys.map(k => caches.delete(k)));
+                        addLog('Cache API', 'SUCCESS', `${keys.length} caches supprimés`);
+                        setCachesList([]);
+                    }
+                } catch (e: any) {
+                    addLog('Cache API', 'ERROR', e.message);
+                }
             }
-        } catch (e: any) {
-            addLog('Cache API', 'ERROR', e.message);
-        }
+        });
+    };
+
+    // Clear Offline Map
+    const handleClearOfflineMap = () => {
+        setConfirmConfig({
+            isOpen: true,
+            title: "Supprimer la carte hors-ligne",
+            message: `Voulez-vous supprimer les ${offlineMapStats.count} tuiles de carte hors-ligne (~${offlineMapStats.estimatedSizeMB} Mo) pour libérer le stockage ?`,
+            onConfirm: async () => {
+                setConfirmConfig(prev => ({ ...prev, isOpen: false }));
+                try {
+                    await deleteOfflineMap();
+                    addLog('Carte Hors-ligne', 'SUCCESS', 'Cache des tuiles cartographiques supprimé');
+                    loadStats();
+                } catch (e: any) {
+                    addLog('Carte Hors-ligne', 'ERROR', e.message);
+                }
+            }
+        });
     };
 
     // 8. Wipe Local Data
-    const handleClearLocalData = async () => {
-        if (!confirm("ATTENTION : Cela va effacer TOUTES les données locales (IndexedDB & LocalStorage) et recharger la page.")) return;
-        setLoading(true);
-        try {
-            localStorage.clear();
-            sessionStorage.clear();
-            const db = await initDB();
-            const stores = ['victims', 'events', 'sync_queue', 'team_locations', 'custom_markers', 'logbook'];
-            const tx = db.transaction(stores as any, 'readwrite');
-            for (const store of stores) {
-                await tx.objectStore(store as any).clear();
+    const handleClearLocalData = () => {
+        setConfirmConfig({
+            isOpen: true,
+            title: "Réinitialisation complète",
+            message: "ATTENTION : Cela va effacer TOUTES les données locales (IndexedDB & LocalStorage) et recharger la page.",
+            onConfirm: async () => {
+                setConfirmConfig(prev => ({ ...prev, isOpen: false }));
+                setLoading(true);
+                try {
+                    localStorage.clear();
+                    sessionStorage.clear();
+                    const db = await initDB();
+                    const stores = ['victims', 'events', 'sync_queue', 'team_locations', 'custom_markers', 'logbook'];
+                    const tx = db.transaction(stores as any, 'readwrite');
+                    for (const store of stores) {
+                        await tx.objectStore(store as any).clear();
+                    }
+                    await tx.done;
+                    addLog('Wipe Local', 'SUCCESS', 'Toutes les données locales ont été nettoyées. Rechargement...');
+                    setTimeout(() => window.location.reload(), 1500);
+                } catch (e: any) {
+                    addLog('Wipe Local', 'ERROR', e.message);
+                    setLoading(false);
+                }
             }
-            await tx.done;
-            addLog('Wipe Local', 'SUCCESS', 'Toutes les données locales ont été nettoyées. Rechargement...');
-            setTimeout(() => window.location.reload(), 1500);
-        } catch (e: any) {
-            addLog('Wipe Local', 'ERROR', e.message);
-            setLoading(false);
-        }
+        });
     };
 
     // Export Full Diagnostic JSON
@@ -516,6 +640,30 @@ export const DiagnosticsPage: React.FC = () => {
                             </div>
                         </div>
 
+                        {/* CARTE HORS-LIGNE & TUILES */}
+                        <div className="bg-white dark:bg-slate-800 p-4 sm:p-6 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm space-y-4 min-w-0">
+                            <h3 className="font-black text-sm uppercase text-slate-800 dark:text-white flex items-center gap-2">
+                                <Map className="w-5 h-5 text-emerald-500" /> Cartographie Hors-Ligne (Hautes-Pyrénées)
+                            </h3>
+                            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-slate-50 dark:bg-slate-900/50 p-4 rounded-xl min-w-0">
+                                <div className="min-w-0 flex-1">
+                                    <p className="text-xs font-bold text-slate-800 dark:text-white">
+                                        {offlineMapStats.count > 0 ? (
+                                            <span className="text-emerald-600 dark:text-emerald-400">✅ {offlineMapStats.count} tuiles stockées en cache (~{offlineMapStats.estimatedSizeMB} Mo)</span>
+                                        ) : (
+                                            <span className="text-slate-400">Aucune tuile en cache hors-ligne</span>
+                                        )}
+                                    </p>
+                                    <p className="text-[11px] text-slate-400">Permet la visualisation cartographique autonome sur le terrain en zone blanche de montagne.</p>
+                                </div>
+                                {offlineMapStats.count > 0 && (
+                                    <Button size="sm" variant="danger" onClick={handleClearOfflineMap} icon={<Trash2 className="w-4 h-4" />} className="w-full sm:w-auto shrink-0">
+                                        Purger la Carte
+                                    </Button>
+                                )}
+                            </div>
+                        </div>
+
                         <div className="bg-white dark:bg-slate-800 p-4 sm:p-6 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm space-y-4 min-w-0">
                             <h3 className="font-black text-sm uppercase text-slate-800 dark:text-white flex items-center gap-2">
                                 <HardDrive className="w-5 h-5 text-amber-500" /> Caches navigateur (Cache Storage API)
@@ -538,9 +686,9 @@ export const DiagnosticsPage: React.FC = () => {
                     <div className="space-y-6 w-full min-w-0">
                         <div className="bg-white dark:bg-slate-800 p-4 sm:p-6 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm space-y-4 min-w-0">
                             <h3 className="font-black text-sm uppercase text-slate-800 dark:text-white flex items-center gap-2">
-                                <Radio className="w-5 h-5 text-emerald-500" /> Communication Multi-onglets & Notifications
+                                <Radio className="w-5 h-5 text-emerald-500" /> Communication Multi-onglets, Audio & PWA
                             </h3>
-                            <p className="text-xs text-slate-400">Testez la propagation des messages entre onglets via `BroadcastChannel` et les permissions de notifications PWA.</p>
+                            <p className="text-xs text-slate-400">Testez les fonctionnalités de communication, notifications système, diffusion audio d'alarme et partage radio/SMS.</p>
                             
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 w-full min-w-0">
                                 <Button variant="outline" onClick={runBroadcastTest} icon={<Radio className="w-4 h-4" />}>
@@ -548,6 +696,12 @@ export const DiagnosticsPage: React.FC = () => {
                                 </Button>
                                 <Button variant="outline" onClick={runNotificationTest} icon={<Bell className="w-4 h-4" />}>
                                     Test Notification Navigateur
+                                </Button>
+                                <Button variant="outline" onClick={runAudioSirenTest} icon={<Volume2 className="w-4 h-4 text-rose-500" />}>
+                                    Test Sirène Alerte Vitale (Audio)
+                                </Button>
+                                <Button variant="outline" onClick={runWebShareTest} icon={<Share2 className="w-4 h-4 text-blue-500" />}>
+                                    Test Partage SMS / Radio
                                 </Button>
                             </div>
                         </div>
@@ -589,7 +743,7 @@ export const DiagnosticsPage: React.FC = () => {
                                     <div className={`p-2 rounded-lg text-xs leading-relaxed break-words whitespace-pre-wrap ${
                                         log.status === 'ERROR' 
                                             ? 'bg-red-950/50 text-red-200 border border-red-900/80 font-semibold' 
-                                            : log.status === 'WARN'
+                                             : log.status === 'WARN'
                                             ? 'bg-amber-950/30 text-amber-200 border border-amber-900/50'
                                             : 'bg-slate-900/70 text-slate-300 border border-slate-800/50'
                                     }`}>
@@ -602,6 +756,15 @@ export const DiagnosticsPage: React.FC = () => {
                 )}
 
             </div>
+
+            {/* Modale de Confirmation non-bloquante */}
+            <ConfirmDialog 
+                isOpen={confirmConfig.isOpen}
+                title={confirmConfig.title}
+                message={confirmConfig.message}
+                onConfirm={confirmConfig.onConfirm}
+                onCancel={() => setConfirmConfig(prev => ({ ...prev, isOpen: false }))}
+            />
         </Layout>
     );
 };

@@ -1,6 +1,6 @@
 
 import { initDB, SyncQueueItem } from './db';
-import { supabase, isLive } from './supabaseClient';
+import { supabase, isLive, supabaseUrl, supabaseAnonKey } from './supabaseClient';
 import { generateUUID } from '../utils/security';
 import { auditService } from './auditService';
 import { authService } from './authService';
@@ -94,18 +94,39 @@ class SyncService {
         }
 
         try {
-            // Un ping asynchrone ultra léger (HEAD) sur /index.html ou Supabase (évite portail captif)
+            // Ping réseau direct vers Supabase ou endpoint public léger avec bypass du cache SW
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 4000);
             
-            const response = await fetch('/index.html?t=' + Date.now(), {
-                method: 'HEAD',
-                signal: controller.signal,
-                cache: 'no-store'
-            });
+            let online = false;
+            if (isLive && supabaseUrl) {
+                try {
+                    const response = await fetch(`${supabaseUrl}/rest/v1/?apikey=${supabaseAnonKey}&_t=${Date.now()}`, {
+                        method: 'HEAD',
+                        signal: controller.signal,
+                        cache: 'no-store',
+                        headers: { 'Cache-Control': 'no-cache' }
+                    });
+                    // Statut 200, ou même 401/400 prouve qu'on communique directement avec le serveur cloud
+                    online = response.ok || response.status === 401 || response.status === 400;
+                } catch {
+                    online = false;
+                }
+            } else {
+                try {
+                    const response = await fetch('https://www.gstatic.com/generate_204?t=' + Date.now(), {
+                        method: 'HEAD',
+                        signal: controller.signal,
+                        mode: 'no-cors',
+                        cache: 'no-store'
+                    });
+                    online = true;
+                } catch {
+                    online = false;
+                }
+            }
             clearTimeout(timeoutId);
             
-            const online = response.ok;
             if (this.isOnline !== online) {
                 this.isOnline = online;
                 this.notifyListeners();

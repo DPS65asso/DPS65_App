@@ -98,17 +98,30 @@ export const AddVictimPage: React.FC = () => {
       const compactId = victimId ? victimId.slice(0, 4) : 'TEMP';
       const text = `DPS65:${compactId}|${initials}|${ageCode}|${triage}|${outcome}|${lastVitals}|${formData.hasTourniquet ? 'G_OK' : 'S_G'}`;
       
+      // 1. Copie presse-papier
       if (navigator.clipboard) {
           navigator.clipboard.writeText(text).then(() => {
               setCopiedSms(true);
-              setTimeout(() => setCopiedSms(false), 2000);
-              alert(`Bilan SMS Copié !\n\n${text}\n\nCollez-le directement pour l'envoyer par SMS ou par radio.`);
+              setTimeout(() => setCopiedSms(false), 3000);
           }).catch(err => {
               console.error("Clipboard error", err);
-              alert(`Bilan SMS généré :\n\n${text}`);
+          });
+      }
+
+      // 2. Partage natif via Web Share API sur Android APK et iOS si supporté
+      if (navigator.share) {
+          navigator.share({
+              title: `Bilan DPS65 - ${initials} (${ageCode} ans)`,
+              text: text,
+          }).catch((e) => {
+              // Si annulation utilisateur ou non supporté, on ne bloque pas
+              if (e.name !== 'AbortError') {
+                  console.warn("Native share error:", e);
+              }
           });
       } else {
-          alert(`Bilan SMS généré (Veuillez le noter) :\n\n${text}`);
+          setCopiedSms(true);
+          setTimeout(() => setCopiedSms(false), 3000);
       }
   };
   

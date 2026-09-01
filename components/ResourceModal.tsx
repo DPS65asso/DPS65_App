@@ -15,7 +15,7 @@ export const ResourceModal: React.FC<ResourceModalProps> = ({ isOpen, config, on
     useEffect(() => setLocalConfig(config), [config, isOpen]);
     if (!isOpen) return null;
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200">
             <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-xs w-full border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden animate-in zoom-in-95 my-auto">
                 <div className="p-3.5 bg-gradient-to-r from-blue-900 via-indigo-950 to-blue-900 text-white flex items-center justify-between border-b border-blue-800/80">
                     <div className="flex items-center gap-2 font-bold text-sm">

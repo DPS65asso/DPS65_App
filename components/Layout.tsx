@@ -8,6 +8,7 @@ import { BottomNav } from './BottomNav';
 import { Sidebar } from './Sidebar';
 import { SyncIndicator } from './SyncIndicator'; 
 import { geoService } from '../services/geoService';
+import { ConfirmDialog } from './ConfirmDialog';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -27,6 +28,20 @@ export const Layout: React.FC<LayoutProps> = ({ children, title, showBack = fals
   const [isGpsActive, setIsGpsActive] = useState(() => {
     return localStorage.getItem('dps65_tracking_state') !== null || geoService.isTracking;
   });
+  const [gpsAccuracy, setGpsAccuracy] = useState<{ label: string; text: string; color: string; accuracy: number } | null>(null);
+
+  // State pour ConfirmDialog non-bloquant
+  const [confirmConfig, setConfirmConfig] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {}
+  });
 
   useEffect(() => {
     const handleCheck = () => {
@@ -34,14 +49,21 @@ export const Layout: React.FC<LayoutProps> = ({ children, title, showBack = fals
       if (active !== isGpsActive) {
         setIsGpsActive(active);
       }
+      if (active) {
+        setGpsAccuracy(geoService.getGpsAccuracyQuality());
+      } else {
+        setGpsAccuracy(null);
+      }
     };
-    const int = setInterval(handleCheck, 1000);
+    const int = setInterval(handleCheck, 2000);
+    handleCheck();
     
     // Ecouter aussi le canal status change des autres onglets
     const bc = new BroadcastChannel('gps_status_change');
     bc.onmessage = (e) => {
       if (e.data.type === 'GPS_STOPPED') {
         setIsGpsActive(false);
+        setGpsAccuracy(null);
       }
     };
 
@@ -52,21 +74,40 @@ export const Layout: React.FC<LayoutProps> = ({ children, title, showBack = fals
   }, [isGpsActive]);
 
   const handleDeactivateGps = () => {
-    if (window.confirm("Voulez-vous désactiver la géolocalisation GPS en cours ? Cela arrêtera votre suivi en temps réel.")) {
-      geoService.stopTracking();
-      localStorage.removeItem('dps65_tracking_state');
-      setIsGpsActive(false);
-      const bc = new BroadcastChannel('gps_status_change');
-      bc.postMessage({ type: 'GPS_STOPPED' });
-      bc.close();
-    }
+    setConfirmConfig({
+      isOpen: true,
+      title: "Arrêt du suivi GPS",
+      message: "Voulez-vous désactiver la géolocalisation GPS en cours ? Cela arrêtera votre transmission de position en temps réel vers le PC opérationnel.",
+      onConfirm: () => {
+        geoService.stopTracking();
+        localStorage.removeItem('dps65_tracking_state');
+        setIsGpsActive(false);
+        setGpsAccuracy(null);
+        const bc = new BroadcastChannel('gps_status_change');
+        bc.postMessage({ type: 'GPS_STOPPED' });
+        bc.close();
+        setConfirmConfig(prev => ({ ...prev, isOpen: false }));
+      }
+    });
+  };
+
+  const handleOrganizerLogout = () => {
+    setConfirmConfig({
+      isOpen: true,
+      title: "Déconnexion Organisateur",
+      message: "Voulez-vous vous déconnecter du suivi organisateur ?",
+      onConfirm: async () => {
+        setConfirmConfig(prev => ({ ...prev, isOpen: false }));
+        await signOut();
+        navigate('/login');
+      }
+    });
   };
 
   const isCustomHeaderPage = (title === undefined || title === null) && !showBack;
   const isMobile = window.innerWidth < 1024;
-  const isNoviMode = location.pathname.includes('/novi'); // Assuming Novi mode is a path or state
-  const isSettingsMode = location.pathname.includes('/settings'); // Assuming Settings mode is a path or state
-  const isAiPage = location.pathname.startsWith('/ai');
+  const isNoviMode = location.pathname.includes('/novi');
+  const isSettingsMode = location.pathname.includes('/settings');
   const shouldHideMenu = isMobile && (isNoviMode || isSettingsMode);
 
   return (
@@ -76,15 +117,16 @@ export const Layout: React.FC<LayoutProps> = ({ children, title, showBack = fals
       <div className="flex-1 flex flex-col relative w-full lg:pl-64 transition-all duration-300">
           
           {isCustomHeaderPage && !hideHeaderTools && !hideSync && (
-            <div className="absolute left-0 w-full pointer-events-none z-[60] top-0">
+            <div className="absolute left-0 w-full pointer-events-none z-[60] top-0 pt-safe">
               <div className="absolute top-4 right-4 lg:right-8 pointer-events-auto flex items-center gap-2">
                   {isGpsActive && (
                     <button 
                       onClick={handleDeactivateGps}
-                      title="GPS Actif - Cliquer pour désactiver"
+                      title={`GPS Actif ${gpsAccuracy ? `(${gpsAccuracy.label} : ${gpsAccuracy.text})` : ''} - Cliquer pour désactiver`}
                       className="pointer-events-auto flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold border uppercase tracking-wider bg-green-500 text-white border-green-600 dark:bg-green-600 hover:bg-red-600 hover:border-red-700 hover:text-white transition-all cursor-pointer shadow-sm animate-pulse hover:animate-none"
                     >
-                      <MapPin className="w-3.5 h-3.5 fill-current" /> GPS ON
+                      <MapPin className="w-3.5 h-3.5 fill-current" />
+                      <span>GPS {gpsAccuracy ? gpsAccuracy.text : 'ON'}</span>
                     </button>
                   )}
                   <SyncIndicator />
@@ -97,7 +139,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, title, showBack = fals
             </div>
           )}
 
-          <div className="flex-1 overflow-y-auto w-full overflow-x-hidden scroll-smooth" style={{ WebkitOverflowScrolling: 'touch' }}>
+          <div className="flex-1 overflow-y-auto w-full overflow-x-hidden scroll-smooth pt-safe pb-safe" style={{ WebkitOverflowScrolling: 'touch' }}>
               <main className="container mx-auto max-w-7xl p-4 lg:p-8 flex flex-col pb-32 min-h-full relative w-full min-w-0">
                 {!isCustomHeaderPage && (
                   <div className="flex items-center justify-between mb-6 pt-2">
@@ -105,12 +147,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, title, showBack = fals
                       {showBack ? (
                         isOrganizer ? (
                           <button 
-                            onClick={async () => {
-                              if (window.confirm("Voulez-vous vous déconnecter du suivi organisateur ?")) {
-                                await signOut();
-                                navigate('/login');
-                              }
-                            }}
+                            onClick={handleOrganizerLogout}
                             className="p-2 -ml-2 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-full transition-colors flex-shrink-0"
                             title="Se déconnecter"
                           >
@@ -140,20 +177,16 @@ export const Layout: React.FC<LayoutProps> = ({ children, title, showBack = fals
                               {isGpsActive && (
                                 <button 
                                   onClick={handleDeactivateGps}
-                                  title="GPS Actif - Cliquer pour désactiver"
+                                  title={`GPS Actif ${gpsAccuracy ? `(${gpsAccuracy.label} : ${gpsAccuracy.text})` : ''} - Cliquer pour désactiver`}
                                   className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold border uppercase tracking-wider bg-green-500 text-white border-green-600 dark:bg-green-600 hover:bg-red-600 hover:border-red-700 hover:text-white transition-all cursor-pointer shadow-sm animate-pulse hover:animate-none"
                                 >
-                                  <MapPin className="w-3 h-3 fill-current" /> GPS ON
+                                  <MapPin className="w-3 h-3 fill-current" />
+                                  <span>GPS {gpsAccuracy ? gpsAccuracy.text : 'ON'}</span>
                                 </button>
                               )}
                               {isOrganizer && (
                                 <button
-                                  onClick={async () => {
-                                    if (window.confirm("Voulez-vous vous déconnecter ?")) {
-                                      await signOut();
-                                      navigate('/login');
-                                    }
-                                  }}
+                                  onClick={handleOrganizerLogout}
                                   className="flex items-center gap-1.5 px-3 py-1.5 bg-red-50 hover:bg-red-100 dark:bg-red-950/20 dark:hover:bg-red-950/40 text-red-600 dark:text-red-400 font-bold rounded-xl text-xs transition-colors shadow-xs outline-none cursor-pointer"
                                   title="Se déconnecter"
                                 >
@@ -179,6 +212,15 @@ export const Layout: React.FC<LayoutProps> = ({ children, title, showBack = fals
               <BottomNav />
           </div>
       )}
+
+      {/* Modale de Confirmation non-bloquante */}
+      <ConfirmDialog 
+        isOpen={confirmConfig.isOpen}
+        title={confirmConfig.title}
+        message={confirmConfig.message}
+        onConfirm={confirmConfig.onConfirm}
+        onCancel={() => setConfirmConfig(prev => ({ ...prev, isOpen: false }))}
+      />
     </div>
   );
 };

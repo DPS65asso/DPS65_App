@@ -4,7 +4,7 @@ import { MapContainer, TileLayer, Marker, Popup, useMap, LayersControl, useMapEv
 import { TeamLocation, CustomMarker, MarkerType, Track, Event } from '../types';
 import { initDB } from '../services/db';
 import { storageService } from '../services/storageService';
-import { normalizeTileUrl } from '../services/offlineMapService';
+import { normalizeTileUrl, cleanupLegacyCartoTiles } from '../services/offlineMapService';
 import { generateUUID } from '../utils/security';
 import L from 'leaflet';
 import { Battery, BatteryCharging, Mountain, Radio, Map as MapIcon, Target, Phone, Trash2, Tent, Truck, AlertTriangle, MapPin, User, Save, X, Move, Car, Zap, Layers, Check, ChevronDown, ChevronUp, Download } from 'lucide-react';
@@ -90,7 +90,7 @@ const originalCreateTile = (L.TileLayer.prototype as any).createTile;
                     tile.addEventListener('load', cleanup);
                     tile.addEventListener('error', cleanup);
                 }).catch(() => {});
-            } else if (url.includes('basemaps.cartocdn.com/rastertiles/voyager')) {
+            } else if (url.includes('tile.openstreetmap.org') || url.includes('tile.opentopomap.org') || url.includes('arcgisonline.com')) {
                 // Mettre en cache automatiquement au fil de l'eau si l'utilisateur navigue en ligne
                 const handleOnlineTileLoaded = () => {
                     tile.removeEventListener('load', handleOnlineTileLoaded);
@@ -434,8 +434,9 @@ export const EventMap: React.FC<Props> = ({
       }
   }, [liveEvent]);
 
-  // Fetch RainViewer latest data
+  // Fetch RainViewer latest data & Nettoyage tuiles obsolètes
   useEffect(() => {
+    cleanupLegacyCartoTiles();
     const fetchRainViewer = async () => {
         try {
             const res = await fetch('https://api.rainviewer.com/public/weather-maps.json');
@@ -719,7 +720,11 @@ export const EventMap: React.FC<Props> = ({
 
             {/* FOND DE CARTE */}
             {currentStyle === 'standard' && (
-                <TileLayer attribution='&copy; OSM' url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png" />
+                <TileLayer 
+                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' 
+                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" 
+                    maxZoom={19}
+                />
             )}
             {currentStyle === 'topo' && (
                 <TileLayer attribution='&copy; OpenTopoMap' url="https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png" maxZoom={17} />

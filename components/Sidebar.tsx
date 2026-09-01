@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { Home, List, Sparkles, Activity, BookOpen, User } from 'lucide-react';
+import { Home, List, Sparkles, Activity, BookOpen, User, FileSpreadsheet } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { Logo } from './Logo';
 import { useNewContent } from '../context/NewContentContext';
@@ -44,6 +44,19 @@ export const Sidebar: React.FC = () => {
                 <List className="w-5 h-5" />
                 <span className="flex-1">Événements</span>
                 <NewContentBadge show={badges.events} />
+            </NavLink>
+
+            {/* MODULE BUREAU : CONVENTION & GRILLE DES RISQUES */}
+            <NavLink to="/desktop/conventions" className={({ isActive }) => 
+                `flex items-center gap-4 px-4 py-3 rounded-xl transition-all duration-200 font-bold text-sm ${
+                    isActive 
+                    ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/20' 
+                    : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+                }`
+            }>
+                <FileSpreadsheet className="w-5 h-5 text-emerald-500" />
+                <span className="flex-1 text-xs leading-tight">Conventions &amp; Risques</span>
+                <span className="text-[9px] bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 font-black px-1.5 py-0.5 rounded uppercase">PC</span>
             </NavLink>
           </>
         )}
