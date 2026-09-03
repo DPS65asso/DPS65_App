@@ -15,6 +15,7 @@ import { generateUUID, isValidPhoneNumber, MAX_INPUT_LENGTH, MAX_TEXTAREA_LENGTH
 import { useAuth } from '../context/AuthContext';
 import { Sparkline } from '../components/Sparkline';
 import { FullChartModal } from '../components/FullChartModal';
+import { Modal } from '../components/Modal';
 import { presenceService } from '../services/presenceService';
 import { aiService } from '../services/aiService';
 import { Sparkles, Copy, Radio } from 'lucide-react';
@@ -819,39 +820,64 @@ export const AddVictimPage: React.FC = () => {
             </Button>
         </div>
         
-             {/* Modal Validation Officielle & Signature du Bilan (Pop-up encadré avec fond flouté) */}
-        {showValidationModal && (
-          <div className="fixed inset-0 z-[300] bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-2 sm:p-4">
-            <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-md w-full border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden animate-in zoom-in-95 my-auto">
-              {/* Header Navy avec bouton Fermer */}
-              <div className="p-3 sm:p-3.5 bg-gradient-to-r from-blue-900 via-indigo-950 to-blue-900 text-white flex items-center justify-between border-b border-blue-800/80">
-                <div className="flex items-center gap-2 font-bold text-xs sm:text-sm">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                  <span>Validation Officielle & Signature</span>
-                </div>
-                <button 
-                  type="button" 
-                  onClick={() => setShowValidationModal(false)} 
-                  className="p-1 text-slate-300 hover:text-white rounded-lg transition-colors"
-                  title="Fermer"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
+        {/* Modal Validation Officielle & Signature du Bilan */}
+        <Modal
+          isOpen={showValidationModal}
+          onClose={() => setShowValidationModal(false)}
+          title="Validation Officielle & Signature"
+          icon={<CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />}
+          maxWidth="max-w-md"
+          footer={
+            <>
+              <Button 
+                type="button" 
+                variant="outline" 
+                onClick={() => setShowValidationModal(false)}
+                className="rounded-xl border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs sm:text-sm py-2 px-3.5 min-h-[40px]"
+              >
+                Fermer
+              </Button>
+              <Button 
+                type="button" 
+                onClick={() => {
+                  const activeValideur = formData.validatedBy || (profile ? `${profile.firstName || ''} ${profile.lastName || ''} (${profile.role || 'SECOURISTE'})`.trim() : '');
+                  
+                  if (!activeValideur.trim()) {
+                    alert("Veuillez renseigner le nom et la qualité du valideur.");
+                    return;
+                  }
+                  if (!formData.doctorSignatureData && !formData.signatureData) {
+                    alert("La signature numérique du valideur est obligatoire pour valider et enregistrer la fiche.");
+                    return;
+                  }
 
-              {/* Corps de la modal */}
-              <div className="p-3.5 sm:p-4 space-y-3">
-                <div className="p-2.5 bg-slate-100 dark:bg-slate-800/90 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center justify-between gap-2">
-                  <div className="space-y-0.5">
-                    <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Statut de clôture</span>
-                    <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-tight">
-                      Validation & signature obligatoires
-                    </p>
-                  </div>
-                  <span className="px-2.5 py-1 rounded-full text-xs font-black bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/40 shrink-0">
-                    {formData.outcome}
-                  </span>
-                </div>
+                  if (!formData.validatedBy) {
+                    handleChange('validatedBy', activeValideur);
+                    handleChange('validatedAt', Date.now());
+                  }
+
+                  doSaveVictim();
+                }}
+                className="bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold rounded-xl py-2 px-4 text-xs sm:text-sm shadow-md shadow-emerald-600/20 flex items-center gap-1.5 min-h-[40px]"
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Enregistrement...</> : <><CheckCircle2 className="w-3.5 h-3.5" /> Valider & Enregistrer</>}
+              </Button>
+            </>
+          }
+        >
+          <div className="space-y-3">
+            <div className="p-2.5 bg-slate-100 dark:bg-slate-800/90 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center justify-between gap-2">
+              <div className="space-y-0.5">
+                <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Statut de clôture</span>
+                <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-tight">
+                  Validation & signature obligatoires
+                </p>
+              </div>
+              <span className="px-2.5 py-1 rounded-full text-xs font-black bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/40 shrink-0">
+                {formData.outcome}
+              </span>
+            </div>
 
                 <div className="space-y-2.5">
                   <div>
@@ -921,90 +947,57 @@ export const AddVictimPage: React.FC = () => {
                   )}
                 </div>
               </div>
-
-              {/* Footer Actions */}
-              <div className="p-3 bg-slate-50 dark:bg-slate-800/80 border-t border-slate-200 dark:border-slate-800 flex items-center justify-end gap-2.5">
-                <Button 
-                  type="button" 
-                  variant="outline" 
-                  onClick={() => setShowValidationModal(false)}
-                  className="rounded-lg border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs py-1.5 px-3"
-                >
-                  Fermer
-                </Button>
-                <Button 
-                  type="button" 
-                  onClick={() => {
-                    const activeValideur = formData.validatedBy || (profile ? `${profile.firstName || ''} ${profile.lastName || ''} (${profile.role || 'SECOURISTE'})`.trim() : '');
-                    
-                    if (!activeValideur.trim()) {
-                      alert("Veuillez renseigner le nom et la qualité du valideur.");
-                      return;
-                    }
-                    if (!formData.doctorSignatureData && !formData.signatureData) {
-                      alert("La signature numérique du valideur est obligatoire pour valider et enregistrer la fiche.");
-                      return;
-                    }
-
-                    if (!formData.validatedBy) {
-                      handleChange('validatedBy', activeValideur);
-                      handleChange('validatedAt', Date.now());
-                    }
-
-                    doSaveVictim();
-                  }}
-                  className="bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold rounded-lg py-1.5 px-4 text-xs shadow-md shadow-emerald-600/20 flex items-center gap-1.5"
-                  disabled={isSubmitting}
-                >
-                  {isSubmitting ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Enregistrement...</> : <><CheckCircle2 className="w-3.5 h-3.5" /> Valider & Enregistrer</>}
-                </Button>
-              </div>
-            </div>
-          </div>
-        )}
+        </Modal>
         
         <TransferQrModal isOpen={showQrModal} onClose={() => setShowQrModal(false)} victim={formData} />
 
         {/* Modal Synthèse IA SAMU 15 */}
-        {showSamuAiModal && (
-          <div className="fixed inset-0 z-[250] bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-2 sm:p-4">
-            <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-lg w-full border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden animate-in zoom-in-95 my-auto">
-              <div className="p-3.5 bg-gradient-to-r from-blue-900 via-indigo-950 to-blue-900 text-white flex items-center justify-between border-b border-blue-800/80">
-                <div className="flex items-center gap-2 font-bold text-xs sm:text-sm">
-                  <Radio className="w-4 h-4 text-emerald-400 animate-pulse shrink-0" />
-                  <span>Synthèse Radio SAMU 15 (Bilan Chronologique)</span>
-                </div>
-                <button type="button" onClick={() => setShowSamuAiModal(false)} className="p-1 text-slate-300 hover:text-white rounded-lg transition-colors"><X className="w-4 h-4" /></button>
-              </div>
-
-              <div className="p-5 max-h-[70vh] overflow-y-auto space-y-4">
-                {isGeneratingSamu ? (
-                  <div className="py-12 flex flex-col items-center justify-center space-y-3">
-                    <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
-                    <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">L'IA analyse les constantes, chronologies et bilans de la victime...</p>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    <div className="p-4 bg-slate-900 text-slate-100 font-mono text-xs rounded-xl border border-slate-800 whitespace-pre-wrap leading-relaxed select-all">
-                      {samuSummaryText}
-                    </div>
-                    <p className="text-[11px] text-slate-500 italic">Format conforme à la transmission radio SAMU 15 / Régulation Médicale.</p>
-                  </div>
-                )}
-              </div>
-
-              <div className="p-4 bg-slate-50 dark:bg-slate-800/80 border-t border-slate-200 dark:border-slate-800 flex justify-end gap-2">
-                <Button type="button" variant="outline" onClick={() => setShowSamuAiModal(false)}>Fermer</Button>
-                {!isGeneratingSamu && (
-                  <Button type="button" onClick={() => { navigator.clipboard.writeText(samuSummaryText); alert("Synthèse SAMU copiée dans le presse-papier !"); }} className="bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1.5">
-                    <Copy className="w-4 h-4" />
-                    <span>Copier la synthèse</span>
-                  </Button>
-                )}
-              </div>
+        <Modal
+          isOpen={showSamuAiModal}
+          onClose={() => setShowSamuAiModal(false)}
+          title="Synthèse Radio SAMU 15 (Bilan Chronologique)"
+          icon={<Radio className="w-4 h-4 text-emerald-400 animate-pulse shrink-0" />}
+          maxWidth="max-w-lg"
+          footer={
+            <>
+              <Button 
+                type="button" 
+                variant="outline" 
+                onClick={() => setShowSamuAiModal(false)}
+                className="rounded-xl border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs sm:text-sm py-2 px-3.5 min-h-[40px]"
+              >
+                Fermer
+              </Button>
+              {!isGeneratingSamu && (
+                <Button 
+                  type="button" 
+                  onClick={() => { 
+                    navigator.clipboard.writeText(samuSummaryText); 
+                    alert("Synthèse SAMU copiée dans le presse-papier !"); 
+                  }} 
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1.5 rounded-xl text-xs sm:text-sm py-2 px-4 shadow-md shadow-emerald-600/20 min-h-[40px]"
+                >
+                  <Copy className="w-4 h-4" />
+                  <span>Copier la synthèse</span>
+                </Button>
+              )}
+            </>
+          }
+        >
+          {isGeneratingSamu ? (
+            <div className="py-12 flex flex-col items-center justify-center space-y-3">
+              <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
+              <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">L'IA analyse les constantes, chronologies et bilans de la victime...</p>
             </div>
-          </div>
-        )}
+          ) : (
+            <div className="space-y-3">
+              <div className="p-4 bg-slate-900 text-slate-100 font-mono text-xs rounded-xl border border-slate-800 whitespace-pre-wrap leading-relaxed select-all">
+                {samuSummaryText}
+              </div>
+              <p className="text-[11px] text-slate-500 italic">Format conforme à la transmission radio SAMU 15 / Régulation Médicale.</p>
+            </div>
+          )}
+        </Modal>
 
       </form>
     </Layout>

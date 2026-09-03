@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { generateUUID } from '../utils/security';
 import { AppConfig } from '../types';
 import { sendNativeNotification, requestNotificationPermission } from '../services/notificationService';
+import { Modal } from './Modal';
 
 interface PushNotificationModalProps {
   isOpen: boolean;
@@ -124,26 +125,35 @@ export const PushNotificationModal: React.FC<PushNotificationModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-[9990] flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 w-full max-w-lg overflow-hidden transform transition-all scale-100 flex flex-col max-h-[92dvh] my-auto">
-        
-        {/* HEADER NAVY */}
-        <div className="p-3.5 bg-gradient-to-r from-blue-900 via-indigo-950 to-blue-900 text-white flex items-center justify-between border-b border-blue-800/80 flex-shrink-0">
-          <div className="flex items-center gap-2 font-bold text-sm">
-            <Bell className="w-4 h-4 text-emerald-400 shrink-0" />
-            <span>Diffusion Notification Push (Temps Réel)</span>
-          </div>
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Diffusion Notification Push (Temps Réel)"
+      icon={<Bell className="w-4 h-4 text-emerald-400 shrink-0" />}
+      maxWidth="max-w-lg"
+      footer={
+        <>
           <button
             type="button"
             onClick={onClose}
-            className="p-1 text-slate-300 hover:text-white rounded-lg transition-colors"
+            disabled={isSending}
+            className="px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-700 text-xs sm:text-sm font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors min-h-[40px] cursor-pointer"
           >
-            <X className="w-4 h-4" />
+            Annuler
           </button>
-        </div>
-
-        {/* BODY CONTENT */}
-        <form onSubmit={handleSend} className="p-5 overflow-y-auto space-y-4 custom-scrollbar flex-1">
+          <button
+            type="submit"
+            form="push-notification-form"
+            disabled={isSending || !message.trim()}
+            className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs sm:text-sm font-bold transition-all active:scale-95 flex items-center gap-2 shadow-md shadow-emerald-600/20 disabled:opacity-50 disabled:cursor-not-allowed min-h-[40px] cursor-pointer"
+          >
+            <Send className="w-4 h-4" />
+            <span>{isSending ? 'Diffusion...' : 'Envoyer Notif Push'}</span>
+          </button>
+        </>
+      }
+    >
+      <form id="push-notification-form" onSubmit={handleSend} className="space-y-4">
           
           {/* PRESETS DE NOTIFICATION */}
           <div>
@@ -263,28 +273,7 @@ export const PushNotificationModal: React.FC<PushNotificationModalProps> = ({
             </div>
           )}
 
-          {/* SUBMIT BUTTON */}
-          <div className="pt-3 border-t border-slate-200 dark:border-slate-800 flex items-center justify-end gap-2 mt-4">
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={isSending}
-              className="px-3.5 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-            >
-              Annuler
-            </button>
-            <button
-              type="submit"
-              disabled={isSending || !message.trim()}
-              className="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-all active:scale-95 flex items-center gap-2 shadow-md shadow-emerald-600/20 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <Send className="w-4 h-4" />
-              <span>{isSending ? 'Diffusion...' : 'Envoyer Notif Push'}</span>
-            </button>
-          </div>
-
-        </form>
-      </div>
-    </div>
+      </form>
+    </Modal>
   );
 };

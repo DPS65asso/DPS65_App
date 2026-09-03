@@ -5,6 +5,7 @@ import { Event, Track } from '../types';
 import { storageService } from '../services/storageService';
 import { generateUUID, sanitizeInput } from '../utils/security';
 import { Button } from './Button';
+import { Modal } from './Modal';
 
 interface Props {
     isOpen: boolean;
@@ -108,30 +109,33 @@ export const EventSettingsModal: React.FC<Props> = ({ isOpen, event, onClose, on
     };
 
     return (
-        <div className="fixed inset-0 z-[3000] bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 overflow-hidden">
-            <div className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-800 flex flex-col max-h-[95dvh] sm:max-h-[90vh]">
-                <div className="p-3.5 bg-gradient-to-r from-blue-900 via-indigo-950 to-blue-900 text-white flex justify-between items-center border-b border-blue-800/80 flex-shrink-0">
-                    <div className="flex items-center gap-2 font-bold text-sm">
-                        <Settings className="w-4 h-4 text-emerald-400 shrink-0" />
-                        <span>Paramètres de l'événement</span>
-                    </div>
-                    <button onClick={onClose} className="p-1 text-slate-300 hover:text-white rounded-lg transition-colors">
-                        <X className="w-4 h-4" />
-                    </button>
+        <Modal
+            isOpen={isOpen}
+            onClose={onClose}
+            title="Paramètres de l'événement"
+            icon={<Settings className="w-4 h-4 text-emerald-400 shrink-0" />}
+            maxWidth="max-w-lg"
+            bodyClassName="space-y-6"
+            footer={
+                <div className="flex gap-3 w-full">
+                    <Button onClick={onClose} variant="outline" fullWidth className="rounded-xl min-h-[40px]">Annuler</Button>
+                    <Button onClick={handleSave} fullWidth disabled={isSaving} className="rounded-xl min-h-[40px] bg-blue-600 hover:bg-blue-500">
+                        {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Save className="w-4 h-4 mr-2" /> Enregistrer</>}
+                    </Button>
                 </div>
-
-                <div className="p-4 sm:p-6 overflow-y-auto space-y-6 flex-1 overscroll-contain">
-                    <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-100 dark:border-blue-800">
-                        <label className="block text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase mb-1 tracking-widest">Code Accès Organisateur</label>
-                        <input 
-                            type="text" 
-                            className="w-full p-2 bg-white dark:bg-slate-900 border border-blue-200 dark:border-blue-700 rounded-lg text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500 font-black tracking-widest uppercase text-center"
-                            value={organizerCode}
-                            onChange={e => setOrganizerCode(e.target.value)}
-                            placeholder="EX: ORGA-123"
-                        />
-                        <p className="mt-1 text-[9px] text-blue-500/70 italic text-center">Ce code permet à l'organisateur de se connecter avec un accès restreint (Vue Tactique & Carte uniquement).</p>
-                    </div>
+            }
+        >
+            <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-100 dark:border-blue-800">
+                <label className="block text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase mb-1 tracking-widest">Code Accès Organisateur</label>
+                <input 
+                    type="text" 
+                    className="w-full p-2 bg-white dark:bg-slate-900 border border-blue-200 dark:border-blue-700 rounded-lg text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500 font-black tracking-widest uppercase text-center"
+                    value={organizerCode}
+                    onChange={e => setOrganizerCode(e.target.value)}
+                    placeholder="EX: ORGA-123"
+                />
+                <p className="mt-1 text-[9px] text-blue-500/70 italic text-center">Ce code permet à l'organisateur de se connecter avec un accès restreint (Vue Tactique & Carte uniquement).</p>
+            </div>
 
                     <div>
                         <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Nom</label>
@@ -270,15 +274,6 @@ export const EventSettingsModal: React.FC<Props> = ({ isOpen, event, onClose, on
                             <span className="text-xs font-bold uppercase">Ajouter des Plans PDF</span>
                         </button>
                     </div>
-                </div>
-
-                <div className="p-4 bg-slate-50 dark:bg-slate-900/50 border-t border-slate-100 dark:border-slate-700 flex gap-3 flex-shrink-0">
-                    <Button onClick={onClose} variant="outline" fullWidth>Annuler</Button>
-                    <Button onClick={handleSave} fullWidth disabled={isSaving}>
-                        {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Save className="w-4 h-4 mr-2" /> Enregistrer</>}
-                    </Button>
-                </div>
-            </div>
-        </div>
+        </Modal>
     );
 };

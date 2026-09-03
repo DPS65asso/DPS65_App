@@ -172,7 +172,7 @@ export async function generateOfficialConventionPdf(data: ConventionFormData): P
     doc.setFont('Helvetica', 'bold');
     doc.setFontSize(7);
     doc.setTextColor(30, 41, 59);
-    doc.text("L'ORGANISATEUR (LU & APPROUVÉ)", 14, signY + 3.5);
+    doc.text("L'ORGANISATEUR (LU & APPROUVE)", 14, signY + 3.5);
     doc.setFont('Helvetica', 'normal');
     doc.setFontSize(6.5);
     doc.setTextColor(71, 85, 105);

@@ -65,7 +65,7 @@ export const EmergencyGuide: React.FC<{ onClose: () => void }> = ({ onClose }) =
 
   if (showMetronome) {
     return (
-      <div className="fixed inset-0 z-[100] bg-black flex flex-col items-center justify-center p-6 text-white text-center animate-in fade-in duration-500 overflow-y-auto">
+      <div className="fixed inset-0 z-[99999] bg-black flex flex-col items-center justify-center p-6 text-white text-center animate-in fade-in duration-500 overflow-y-auto">
         <button onClick={onClose} className="absolute top-6 right-6 p-2 bg-slate-800 rounded-full hover:bg-slate-700 transition-colors z-[110]">
           <X className="w-8 h-8" />
         </button>
@@ -80,7 +80,7 @@ export const EmergencyGuide: React.FC<{ onClose: () => void }> = ({ onClose }) =
   const currentStep = steps[stepIndex];
 
   return (
-    <div className={`fixed inset-0 z-[100] ${currentStep.color} flex flex-col items-center justify-center p-6 text-white text-center transition-colors duration-500 animate-in fade-in`}>
+    <div className={`fixed inset-0 z-[99999] ${currentStep.color} flex flex-col items-center justify-center p-6 text-white text-center transition-colors duration-500 animate-in fade-in`}>
       <button onClick={onClose} className="absolute top-6 left-6 p-2 bg-black/20 rounded-full hover:bg-black/40">
         <X className="w-8 h-8" />
       </button>

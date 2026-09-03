@@ -1279,7 +1279,7 @@ const MorseTranscriber: React.FC = () => {
 
             {/* MODAL / ÉCRAN FLASH PLEIN ÉCRAN */}
             {isLightModalOpen && (
-                <div className={`fixed inset-0 z-50 transition-colors duration-75 flex flex-col justify-between p-6 select-none ${
+                <div className={`fixed inset-0 z-[99999] transition-colors duration-75 flex flex-col justify-between p-6 select-none ${
                     flashBgOn 
                         ? 'bg-white text-slate-950' 
                         : 'bg-slate-950 text-white'

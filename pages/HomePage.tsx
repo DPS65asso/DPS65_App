@@ -11,6 +11,7 @@ import { bagService } from '../services/bagService';
 import { authService } from '../services/authService';
 import { useAuth } from '../context/AuthContext';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { Modal } from '../components/Modal';
 import { Loader2, RefreshCw, HeartPulse, Settings, MapPin, QrCode, Users, Radio, Briefcase, ChevronRight, Power, Shield, Stethoscope, ShieldAlert, FlaskConical, User, GraduationCap, Package, Phone, X } from 'lucide-react';
 import { AppConfig, Bag, UserRole, Event as DpsEvent } from '../types';
 import { generateUUID, getLocalDateString } from '../utils/security';
@@ -552,101 +553,95 @@ export const HomePage: React.FC = () => {
         </div>
       </div>
 
-      {showTeamSelect && (
-          <div className="fixed inset-0 z-[120] bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-200">
-              <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-sm w-full border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden animate-in zoom-in-95 my-auto">
-                  <div className="p-3.5 bg-gradient-to-r from-blue-900 via-indigo-950 to-blue-900 text-white flex items-center justify-between border-b border-blue-800/80">
-                      <div className="flex items-center gap-2 font-bold text-sm">
-                          <Radio className="w-4 h-4 text-emerald-400 shrink-0" />
-                          <span>Prise de Service</span>
-                      </div>
-                      <button type="button" onClick={() => setShowTeamSelect(false)} className="p-1 text-slate-300 hover:text-white rounded-lg transition-colors">
-                          <X className="w-4 h-4" />
-                      </button>
-                  </div>
-                  
-                  <div className="p-4 space-y-3">
-                      <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
-                          Sélectionnez votre indicatif radio pour démarrer la garde :
-                      </p>
-                      
-                      <div className="grid grid-cols-2 gap-2 max-h-[260px] overflow-y-auto pr-1">
-                          {config?.teams.map(t => (
-                              <button
-                                key={t}
-                                onClick={() => handleTeamSelected(t)}
-                                className={`p-2.5 rounded-xl font-bold text-xs border transition-all ${
-                                    currentTeam === t 
-                                    ? 'bg-emerald-600 text-white border-emerald-500 shadow-md' 
-                                    : 'bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700'
-                                }`}
-                              >
-                                  {t}
-                              </button>
-                          ))}
-                      </div>
-                  </div>
-                  
-                  <div className="p-3 bg-slate-50 dark:bg-slate-800/80 border-t border-slate-200 dark:border-slate-800 flex justify-end">
-                      <Button variant="outline" onClick={() => setShowTeamSelect(false)} className="text-xs py-1.5 px-3 rounded-lg border-slate-300 dark:border-slate-700">Annuler</Button>
-                  </div>
-              </div>
-          </div>
-      )}
+      <Modal
+        isOpen={showTeamSelect}
+        onClose={() => setShowTeamSelect(false)}
+        title="Prise de Service"
+        icon={<Radio className="w-4 h-4 text-emerald-400 shrink-0" />}
+        maxWidth="max-w-sm"
+        footer={
+          <Button 
+            variant="outline" 
+            onClick={() => setShowTeamSelect(false)} 
+            className="text-xs sm:text-sm py-2 px-4 rounded-xl border-slate-300 dark:border-slate-700 min-h-[40px]"
+          >
+            Annuler
+          </Button>
+        }
+      >
+        <div className="space-y-3">
+            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+                Sélectionnez votre indicatif radio pour démarrer la garde :
+            </p>
+            
+            <div className="grid grid-cols-2 gap-2 max-h-[260px] overflow-y-auto pr-1">
+                {config?.teams.map(t => (
+                    <button
+                      key={t}
+                      onClick={() => handleTeamSelected(t)}
+                      className={`p-3 rounded-xl font-bold text-xs border transition-all min-h-[44px] ${
+                          currentTeam === t 
+                          ? 'bg-emerald-600 text-white border-emerald-500 shadow-md' 
+                          : 'bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700'
+                      }`}
+                    >
+                        {t}
+                    </button>
+                ))}
+            </div>
+        </div>
+      </Modal>
 
-      {showBagSelect && (
-          <div className="fixed inset-0 z-[130] bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-200">
-              <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-sm w-full border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden animate-in zoom-in-95 my-auto">
-                  <div className="p-3.5 bg-gradient-to-r from-blue-900 via-indigo-950 to-blue-900 text-white flex items-center justify-between border-b border-blue-800/80">
-                      <div className="flex items-center gap-2 font-bold text-sm">
-                          <Briefcase className="w-4 h-4 text-emerald-400 shrink-0" />
-                          <span>Attribution du Matériel</span>
-                      </div>
-                      <button type="button" onClick={handleSkipBag} className="p-1 text-slate-300 hover:text-white rounded-lg transition-colors">
-                          <X className="w-4 h-4" />
-                      </button>
-                  </div>
+      <Modal
+        isOpen={showBagSelect}
+        onClose={handleSkipBag}
+        title="Attribution du Matériel"
+        icon={<Briefcase className="w-4 h-4 text-emerald-400 shrink-0" />}
+        maxWidth="max-w-sm"
+        footer={
+          <Button 
+            variant="outline" 
+            onClick={handleSkipBag} 
+            className="text-xs sm:text-sm py-2 px-4 rounded-xl border-slate-300 dark:border-slate-700 min-h-[40px]"
+          >
+            Pas de sac / Ignorer
+          </Button>
+        }
+      >
+        <div className="space-y-3">
+            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+                Attribuer un sac d'intervention à <strong>{currentTeam}</strong> :
+            </p>
 
-                  <div className="p-4 space-y-3">
-                      <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
-                          Attribuer un sac d'intervention à <strong>{currentTeam}</strong> :
-                      </p>
-
-                      <div className="max-h-[260px] overflow-y-auto space-y-2 pr-1 custom-scrollbar">
-                          {loadingBags ? (
-                              <div className="py-8 text-center text-slate-400"><Loader2 className="w-6 h-6 animate-spin mx-auto mb-2"/> Chargement du stock...</div>
-                          ) : availableBags.length === 0 ? (
-                              <div className="py-4 text-center text-slate-400 italic text-xs">Aucun sac disponible au dépôt pour votre profil.</div>
-                          ) : (
-                              availableBags.map(bag => (
-                                  <button
-                                    key={bag.id}
-                                    onClick={() => handleBagSelected(bag)}
-                                    className={`w-full p-2.5 rounded-xl border flex items-center justify-between group transition-all text-left ${
-                                        bag.assignedTeam === currentTeam 
-                                        ? 'bg-emerald-50 border-emerald-300 dark:bg-emerald-900/20 dark:border-emerald-800 ring-2 ring-emerald-500' 
-                                        : 'bg-slate-50 border-slate-200 dark:bg-slate-800 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700'
-                                    }`}
-                                  >
-                                      <div>
-                                          <span className="font-bold text-xs text-slate-900 dark:text-white block">{bag.name}</span>
-                                          <span className="text-[10px] uppercase font-extrabold text-slate-500 bg-white dark:bg-slate-900 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700">
-                                              {BAG_LABELS[bag.type] || bag.type.replace('_', ' ')}
-                                          </span>
-                                      </div>
-                                      <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-emerald-500" />
-                                  </button>
-                              ))
-                          )}
-                      </div>
-                  </div>
-
-                  <div className="p-3 bg-slate-50 dark:bg-slate-800/80 border-t border-slate-200 dark:border-slate-800 flex justify-end">
-                      <Button variant="outline" onClick={handleSkipBag} className="text-xs py-1.5 px-3 rounded-lg border-slate-300 dark:border-slate-700">Pas de sac / Ignorer</Button>
-                  </div>
-              </div>
-          </div>
-      )}
+            <div className="max-h-[260px] overflow-y-auto space-y-2 pr-1 custom-scrollbar">
+                {loadingBags ? (
+                    <div className="py-8 text-center text-slate-400"><Loader2 className="w-6 h-6 animate-spin mx-auto mb-2"/> Chargement du stock...</div>
+                ) : availableBags.length === 0 ? (
+                    <div className="py-4 text-center text-slate-400 italic text-xs">Aucun sac disponible au dépôt pour votre profil.</div>
+                ) : (
+                    availableBags.map(bag => (
+                        <button
+                          key={bag.id}
+                          onClick={() => handleBagSelected(bag)}
+                          className={`w-full p-3 rounded-xl border flex items-center justify-between group transition-all text-left min-h-[44px] ${
+                              bag.assignedTeam === currentTeam 
+                              ? 'bg-emerald-50 border-emerald-300 dark:bg-emerald-900/20 dark:border-emerald-800 ring-2 ring-emerald-500' 
+                              : 'bg-slate-50 border-slate-200 dark:bg-slate-800 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700'
+                          }`}
+                        >
+                            <div>
+                                <span className="font-bold text-xs text-slate-900 dark:text-white block">{bag.name}</span>
+                                <span className="text-[10px] uppercase font-extrabold text-slate-500 bg-white dark:bg-slate-900 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700">
+                                    {BAG_LABELS[bag.type] || bag.type.replace('_', ' ')}
+                                </span>
+                            </div>
+                            <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-emerald-500" />
+                        </button>
+                    ))
+                )}
+            </div>
+        </div>
+      </Modal>
 
       {showEmergency && <EmergencyGuide onClose={() => setShowEmergency(false)} />}
 

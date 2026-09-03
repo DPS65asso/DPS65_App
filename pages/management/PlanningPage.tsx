@@ -2,6 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { Layout } from '../../components/Layout';
 import { CalendarDays, MapPin, Clock, CheckCircle2, UserPlus, UserX, ChevronDown, ChevronUp, FileText, Loader2, Syringe, Stethoscope, ArrowRight, Lock, Users, Archive, History, Pencil, Sparkles, X, FileSpreadsheet } from 'lucide-react';
+import { Modal } from '../../components/Modal';
 import { useNavigate } from 'react-router-dom';
 import { authService } from '../../services/authService';
 import { storageService } from '../../services/storageService';
@@ -374,146 +375,159 @@ export const PlanningPage: React.FC = () => {
                 )}
             </div>
             {editingMission && (
-                <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-[200] flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-200">
-                    <div className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-md shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col max-h-[85dvh] sm:max-h-[90dvh] animate-in zoom-in-95 my-auto">
-                        <div className="p-3.5 bg-gradient-to-r from-blue-900 via-indigo-950 to-blue-900 text-white flex justify-between items-center border-b border-blue-800/80 flex-shrink-0">
-                            <div className="flex items-center gap-2 font-bold text-sm">
-                                <Pencil className="w-4 h-4 text-emerald-400 shrink-0" />
-                                <span>Modifier la mission</span>
-                            </div>
-                            <button type="button" onClick={() => setEditingMission(null)} className="p-1 text-slate-300 hover:text-white rounded-lg transition-colors">
-                                <X className="w-4 h-4" />
+                <Modal
+                    isOpen={!!editingMission}
+                    onClose={() => setEditingMission(null)}
+                    title="Modifier la mission"
+                    icon={<Pencil className="w-4 h-4 text-emerald-400 shrink-0" />}
+                    maxWidth="max-w-md"
+                    footer={
+                        <>
+                            <button 
+                                type="button" 
+                                onClick={() => setEditingMission(null)} 
+                                className="px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl text-slate-700 dark:text-slate-200 font-bold text-xs sm:text-sm transition-colors border border-slate-200 dark:border-slate-700 min-h-[40px] flex items-center justify-center cursor-pointer"
+                            >
+                                Annuler
                             </button>
+                            <button 
+                                type="button" 
+                                onClick={handleSaveMission} 
+                                className="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold text-xs sm:text-sm transition-all shadow-md shadow-emerald-600/20 active:scale-[0.98] min-h-[40px] flex items-center justify-center cursor-pointer"
+                            >
+                                Enregistrer
+                            </button>
+                        </>
+                    }
+                >
+                    <div className="space-y-4 text-xs">
+                        <div>
+                            <label className="block font-bold text-slate-700 dark:text-slate-200 mb-1">Titre de la mission *</label>
+                            <input type="text" className="w-full p-2.5 border border-slate-300 dark:border-slate-700 rounded-xl dark:bg-slate-800 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-emerald-500 font-bold" value={editingMission.title} onChange={e => setEditingMission({...editingMission, title: e.target.value})} />
+                        </div>
+                        <div>
+                            <label className="block font-bold text-slate-700 dark:text-slate-200 mb-1">Date *</label>
+                            <input type="date" className="w-full p-2.5 border border-slate-300 dark:border-slate-700 rounded-xl dark:bg-slate-800 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-emerald-500 font-bold [color-scheme:light] dark:[color-scheme:dark]" value={editingMission.date} onChange={e => setEditingMission({...editingMission, date: e.target.value})} />
+                        </div>
+                        <div>
+                            <label className="block font-bold text-slate-700 dark:text-slate-200 mb-1">Lieu *</label>
+                            <input type="text" className="w-full p-2.5 border border-slate-300 dark:border-slate-700 rounded-xl dark:bg-slate-800 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-emerald-500" value={editingMission.location} onChange={e => setEditingMission({...editingMission, location: e.target.value})} />
                         </div>
 
-                        <div className="p-4 overflow-y-auto space-y-4 text-xs flex-1">
+                        <div className="grid grid-cols-2 gap-3">
                             <div>
-                                <label className="block font-bold text-slate-700 dark:text-slate-200 mb-1">Titre de la mission *</label>
-                                <input type="text" className="w-full p-2 border border-slate-300 dark:border-slate-700 rounded-lg dark:bg-slate-800 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-emerald-500 font-bold" value={editingMission.title} onChange={e => setEditingMission({...editingMission, title: e.target.value})} />
-                            </div>
-                            <div>
-                                <label className="block font-bold text-slate-700 dark:text-slate-200 mb-1">Date *</label>
-                                <input type="date" className="w-full p-2 border border-slate-300 dark:border-slate-700 rounded-lg dark:bg-slate-800 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-emerald-500" value={editingMission.date} onChange={e => setEditingMission({...editingMission, date: e.target.value})} />
-                            </div>
-                            <div>
-                                <label className="block font-bold text-slate-700 dark:text-slate-200 mb-1">Lieu *</label>
-                                <input type="text" className="w-full p-2 border border-slate-300 dark:border-slate-700 rounded-lg dark:bg-slate-800 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-emerald-500" value={editingMission.location} onChange={e => setEditingMission({...editingMission, location: e.target.value})} />
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-3">
-                                <div>
-                                    <label className="block font-bold text-slate-700 dark:text-slate-200 mb-1">Type</label>
-                                    <select className="w-full p-2 border border-slate-300 dark:border-slate-700 rounded-lg dark:bg-slate-800 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-emerald-500 font-bold" value={editingMission.type} onChange={e => setEditingMission({...editingMission, type: e.target.value as any})}>
-                                        <option value="DPS">DPS</option>
-                                        <option value="FORMATION">Formation</option>
-                                        <option value="REUNION">Réunion</option>
-                                        <option value="AUTRE">Autre</option>
-                                    </select>
-                                </div>
-                                <div className="flex gap-2">
-                                    <div className="flex-1">
-                                        <label className="block font-bold text-slate-700 dark:text-slate-200 mb-1">Début</label>
-                                        <input type="time" className="w-full p-2 border border-slate-300 dark:border-slate-700 rounded-lg dark:bg-slate-800 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-emerald-500" value={editingMission.timeStart || ''} onChange={e => setEditingMission({...editingMission, timeStart: e.target.value})} />
-                                    </div>
-                                    <div className="flex-1">
-                                        <label className="block font-bold text-slate-700 dark:text-slate-200 mb-1">Fin</label>
-                                        <input type="time" className="w-full p-2 border border-slate-300 dark:border-slate-700 rounded-lg dark:bg-slate-800 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-emerald-500" value={editingMission.timeEnd || ''} onChange={e => setEditingMission({...editingMission, timeEnd: e.target.value})} />
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="grid grid-cols-4 gap-2">
-                                <div>
-                                    <label className="block font-bold text-slate-700 dark:text-slate-200 mb-1">PSE1</label>
-                                    <input type="number" className="w-full p-2 border border-slate-300 dark:border-slate-700 rounded-lg dark:bg-slate-800 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-emerald-500" value={editingMission.requiredPse1 || 0} onChange={e => setEditingMission({...editingMission, requiredPse1: parseInt(e.target.value) || 0})} />
-                                </div>
-                                <div>
-                                    <label className="block font-bold text-slate-700 dark:text-slate-200 mb-1">PSE2</label>
-                                    <input type="number" className="w-full p-2 border border-slate-300 dark:border-slate-700 rounded-lg dark:bg-slate-800 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-emerald-500" value={editingMission.requiredPse2 || 0} onChange={e => setEditingMission({...editingMission, requiredPse2: parseInt(e.target.value) || 0})} />
-                                </div>
-                                <div>
-                                    <label className="block font-bold text-slate-700 dark:text-slate-200 mb-1">IDE</label>
-                                    <input type="number" className="w-full p-2 border border-slate-300 dark:border-slate-700 rounded-lg dark:bg-slate-800 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-emerald-500" value={editingMission.requiredIde || 0} onChange={e => setEditingMission({...editingMission, requiredIde: parseInt(e.target.value) || 0})} />
-                                </div>
-                                <div>
-                                    <label className="block font-bold text-slate-700 dark:text-slate-200 mb-1">MED</label>
-                                    <input type="number" className="w-full p-2 border border-slate-300 dark:border-slate-700 rounded-lg dark:bg-slate-800 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-emerald-500" value={editingMission.requiredMed || 0} onChange={e => setEditingMission({...editingMission, requiredMed: parseInt(e.target.value) || 0})} />
-                                </div>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-3">
-                                <div>
-                                    <label className="block font-bold text-slate-700 dark:text-slate-200 mb-1">Inscrits</label>
-                                    <div className="max-h-36 overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-lg p-2 space-y-1 bg-slate-50 dark:bg-slate-800/80">
-                                        {editingMission.registeredUserIds.length === 0 && <p className="text-[10px] text-slate-400 italic">Aucun</p>}
-                                        {editingMission.registeredUserIds.map(uid => (
-                                            <div key={uid} className="flex flex-col text-[10px] bg-white dark:bg-slate-800 p-1.5 rounded border border-slate-200 dark:border-slate-700">
-                                                <span className="font-bold truncate text-slate-800 dark:text-slate-100">{getMemberName(uid)}</span>
-                                                <div className="flex justify-between mt-1">
-                                                    <button type="button" onClick={() => {
-                                                        const newReg = editingMission.registeredUserIds.filter(id => id !== uid);
-                                                        const newRes = [...(editingMission.reservistUserIds || []), uid];
-                                                        setEditingMission({...editingMission, registeredUserIds: newReg, reservistUserIds: newRes});
-                                                    }} className="text-amber-600 hover:text-amber-700 dark:text-amber-400 font-bold">Réserve</button>
-                                                    <button type="button" onClick={() => {
-                                                        const newReg = editingMission.registeredUserIds.filter(id => id !== uid);
-                                                        setEditingMission({...editingMission, registeredUserIds: newReg});
-                                                    }} className="text-rose-600 hover:text-rose-700 dark:text-rose-400 font-bold">Retirer</button>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                                <div>
-                                    <label className="block font-bold text-slate-700 dark:text-slate-200 mb-1">Réservistes</label>
-                                    <div className="max-h-36 overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-lg p-2 space-y-1 bg-slate-50 dark:bg-slate-800/80">
-                                        {(editingMission.reservistUserIds || []).length === 0 && <p className="text-[10px] text-slate-400 italic">Aucun</p>}
-                                        {(editingMission.reservistUserIds || []).map(uid => (
-                                            <div key={uid} className="flex flex-col text-[10px] bg-white dark:bg-slate-800 p-1.5 rounded border border-slate-200 dark:border-slate-700">
-                                                <span className="font-bold truncate text-slate-800 dark:text-slate-100">{getMemberName(uid)}</span>
-                                                <div className="flex justify-between mt-1">
-                                                    <button type="button" onClick={() => {
-                                                        const newRes = (editingMission.reservistUserIds || []).filter(id => id !== uid);
-                                                        const newReg = [...editingMission.registeredUserIds, uid];
-                                                        setEditingMission({...editingMission, registeredUserIds: newReg, reservistUserIds: newRes});
-                                                    }} className="text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 font-bold">Inscrire</button>
-                                                    <button type="button" onClick={() => {
-                                                        const newRes = (editingMission.reservistUserIds || []).filter(id => id !== uid);
-                                                        setEditingMission({...editingMission, reservistUserIds: newRes});
-                                                    }} className="text-rose-600 hover:text-rose-700 dark:text-rose-400 font-bold">Retirer</button>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div>
-                                <label className="block font-bold text-slate-700 dark:text-slate-200 mb-1">Ajouter un membre</label>
-                                <select 
-                                    className="w-full p-2 border border-slate-300 dark:border-slate-700 rounded-lg dark:bg-slate-800 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-emerald-500 font-bold"
-                                    onChange={(e) => {
-                                        const uid = e.target.value;
-                                        if (!uid) return;
-                                        if (editingMission.registeredUserIds.includes(uid) || (editingMission.reservistUserIds || []).includes(uid)) return;
-                                        setEditingMission({...editingMission, registeredUserIds: [...editingMission.registeredUserIds, uid]});
-                                        e.target.value = "";
-                                    }}
-                                >
-                                    <option value="">Sélectionner un secouriste...</option>
-                                    {profiles.filter(p => !editingMission.registeredUserIds.includes(p.id) && !(editingMission.reservistUserIds || []).includes(p.id)).map(p => (
-                                        <option key={p.id} value={p.id}>{p.firstName} {p.lastName}</option>
-                                    ))}
+                                <label className="block font-bold text-slate-700 dark:text-slate-200 mb-1">Type</label>
+                                <select className="w-full p-2.5 border border-slate-300 dark:border-slate-700 rounded-xl dark:bg-slate-800 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-emerald-500 font-bold" value={editingMission.type} onChange={e => setEditingMission({...editingMission, type: e.target.value as any})}>
+                                    <option value="DPS">DPS</option>
+                                    <option value="FORMATION">Formation</option>
+                                    <option value="REUNION">Réunion</option>
+                                    <option value="AUTRE">Autre</option>
                                 </select>
                             </div>
+                            <div className="flex gap-2">
+                                <div className="flex-1">
+                                    <label className="block font-bold text-slate-700 dark:text-slate-200 mb-1">Début</label>
+                                    <input type="time" className="w-full p-2.5 border border-slate-300 dark:border-slate-700 rounded-xl dark:bg-slate-800 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-emerald-500 [color-scheme:light] dark:[color-scheme:dark]" value={editingMission.timeStart || ''} onChange={e => setEditingMission({...editingMission, timeStart: e.target.value})} />
+                                </div>
+                                <div className="flex-1">
+                                    <label className="block font-bold text-slate-700 dark:text-slate-200 mb-1">Fin</label>
+                                    <input type="time" className="w-full p-2.5 border border-slate-300 dark:border-slate-700 rounded-xl dark:bg-slate-800 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-emerald-500 [color-scheme:light] dark:[color-scheme:dark]" value={editingMission.timeEnd || ''} onChange={e => setEditingMission({...editingMission, timeEnd: e.target.value})} />
+                                </div>
+                            </div>
                         </div>
 
-                        <div className="p-3 bg-slate-50 dark:bg-slate-800/80 border-t border-slate-200 dark:border-slate-800 flex justify-end gap-2 flex-shrink-0">
-                            <button type="button" onClick={() => setEditingMission(null)} className="px-3 py-1.5 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 rounded-lg text-slate-800 dark:text-white font-bold text-xs transition-colors">Annuler</button>
-                            <button type="button" onClick={handleSaveMission} className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold text-xs transition-colors shadow-md shadow-emerald-600/20">Enregistrer</button>
+                        <div className="grid grid-cols-4 gap-2">
+                            <div>
+                                <label className="block font-bold text-slate-700 dark:text-slate-200 mb-1">PSE1</label>
+                                <input type="number" min="0" className="w-full p-2 border border-slate-300 dark:border-slate-700 rounded-xl dark:bg-slate-800 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-emerald-500 text-center font-bold" value={editingMission.requiredPse1 || 0} onChange={e => setEditingMission({...editingMission, requiredPse1: parseInt(e.target.value) || 0})} />
+                            </div>
+                            <div>
+                                <label className="block font-bold text-slate-700 dark:text-slate-200 mb-1">PSE2</label>
+                                <input type="number" min="0" className="w-full p-2 border border-slate-300 dark:border-slate-700 rounded-xl dark:bg-slate-800 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-emerald-500 text-center font-bold" value={editingMission.requiredPse2 || 0} onChange={e => setEditingMission({...editingMission, requiredPse2: parseInt(e.target.value) || 0})} />
+                            </div>
+                            <div>
+                                <label className="block font-bold text-slate-700 dark:text-slate-200 mb-1">IDE</label>
+                                <input type="number" min="0" className="w-full p-2 border border-slate-300 dark:border-slate-700 rounded-xl dark:bg-slate-800 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-emerald-500 text-center font-bold" value={editingMission.requiredIde || 0} onChange={e => setEditingMission({...editingMission, requiredIde: parseInt(e.target.value) || 0})} />
+                            </div>
+                            <div>
+                                <label className="block font-bold text-slate-700 dark:text-slate-200 mb-1">MED</label>
+                                <input type="number" min="0" className="w-full p-2 border border-slate-300 dark:border-slate-700 rounded-xl dark:bg-slate-800 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-emerald-500 text-center font-bold" value={editingMission.requiredMed || 0} onChange={e => setEditingMission({...editingMission, requiredMed: parseInt(e.target.value) || 0})} />
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                            <div>
+                                <div className="flex items-center justify-between mb-1">
+                                    <label className="font-bold text-slate-700 dark:text-slate-200">Inscrits</label>
+                                    <span className="text-[10px] bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 font-bold px-1.5 py-0.5 rounded-full">{editingMission.registeredUserIds.length}</span>
+                                </div>
+                                <div className="max-h-40 overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-xl p-2 space-y-1.5 bg-slate-50 dark:bg-slate-800/80">
+                                    {editingMission.registeredUserIds.length === 0 && <p className="text-[10px] text-slate-400 italic py-2 text-center">Aucun inscrit</p>}
+                                    {editingMission.registeredUserIds.map(uid => (
+                                        <div key={uid} className="flex flex-col text-[10px] bg-white dark:bg-slate-800 p-2 rounded-lg border border-slate-200 dark:border-slate-700 shadow-xs">
+                                            <span className="font-bold truncate text-slate-800 dark:text-slate-100">{getMemberName(uid)}</span>
+                                            <div className="flex justify-between mt-1 pt-1 border-t border-slate-100 dark:border-slate-700/60">
+                                                <button type="button" onClick={() => {
+                                                    const newReg = editingMission.registeredUserIds.filter(id => id !== uid);
+                                                    const newRes = [...(editingMission.reservistUserIds || []), uid];
+                                                    setEditingMission({...editingMission, registeredUserIds: newReg, reservistUserIds: newRes});
+                                                }} className="text-amber-600 hover:text-amber-700 dark:text-amber-400 font-bold cursor-pointer">En réserve</button>
+                                                <button type="button" onClick={() => {
+                                                    const newReg = editingMission.registeredUserIds.filter(id => id !== uid);
+                                                    setEditingMission({...editingMission, registeredUserIds: newReg});
+                                                }} className="text-rose-600 hover:text-rose-700 dark:text-rose-400 font-bold cursor-pointer">Retirer</button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                            <div>
+                                <div className="flex items-center justify-between mb-1">
+                                    <label className="font-bold text-slate-700 dark:text-slate-200">Réservistes</label>
+                                    <span className="text-[10px] bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 font-bold px-1.5 py-0.5 rounded-full">{(editingMission.reservistUserIds || []).length}</span>
+                                </div>
+                                <div className="max-h-40 overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-xl p-2 space-y-1.5 bg-slate-50 dark:bg-slate-800/80">
+                                    {(editingMission.reservistUserIds || []).length === 0 && <p className="text-[10px] text-slate-400 italic py-2 text-center">Aucun réserviste</p>}
+                                    {(editingMission.reservistUserIds || []).map(uid => (
+                                        <div key={uid} className="flex flex-col text-[10px] bg-white dark:bg-slate-800 p-2 rounded-lg border border-slate-200 dark:border-slate-700 shadow-xs">
+                                            <span className="font-bold truncate text-slate-800 dark:text-slate-100">{getMemberName(uid)}</span>
+                                            <div className="flex justify-between mt-1 pt-1 border-t border-slate-100 dark:border-slate-700/60">
+                                                <button type="button" onClick={() => {
+                                                    const newRes = (editingMission.reservistUserIds || []).filter(id => id !== uid);
+                                                    const newReg = [...editingMission.registeredUserIds, uid];
+                                                    setEditingMission({...editingMission, registeredUserIds: newReg, reservistUserIds: newRes});
+                                                }} className="text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 font-bold cursor-pointer">Inscrire</button>
+                                                <button type="button" onClick={() => {
+                                                    const newRes = (editingMission.reservistUserIds || []).filter(id => id !== uid);
+                                                    setEditingMission({...editingMission, reservistUserIds: newRes});
+                                                }} className="text-rose-600 hover:text-rose-700 dark:text-rose-400 font-bold cursor-pointer">Retirer</button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label className="block font-bold text-slate-700 dark:text-slate-200 mb-1">Ajouter un membre</label>
+                            <select 
+                                className="w-full p-2.5 border border-slate-300 dark:border-slate-700 rounded-xl dark:bg-slate-800 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-emerald-500 font-bold"
+                                onChange={(e) => {
+                                    const uid = e.target.value;
+                                    if (!uid) return;
+                                    if (editingMission.registeredUserIds.includes(uid) || (editingMission.reservistUserIds || []).includes(uid)) return;
+                                    setEditingMission({...editingMission, registeredUserIds: [...editingMission.registeredUserIds, uid]});
+                                    e.target.value = "";
+                                }}
+                            >
+                                <option value="">Sélectionner un secouriste...</option>
+                                {profiles.filter(p => !editingMission.registeredUserIds.includes(p.id) && !(editingMission.reservistUserIds || []).includes(p.id)).map(p => (
+                                    <option key={p.id} value={p.id}>{p.firstName} {p.lastName}</option>
+                                ))}
+                            </select>
                         </div>
                     </div>
-                </div>
+                </Modal>
             )}
         </Layout>
     );
