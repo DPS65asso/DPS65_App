@@ -1,5 +1,5 @@
 
-import { Victim, Event as AppEvent, LogbookEntry } from '../../types';
+import { Victim, Event as AppEvent, LogbookEntry, Track } from '../../types';
 
 // SÉCURITÉ & CHIFFREMENT : DÉSACTIVÉS
 // Les données transitent directement entre l'UI et la base de données locale (IndexedDB).
@@ -99,4 +99,96 @@ export const mergeVictimData = (local: Victim, remote: Victim): Victim => {
         updatedAt: Math.max(localTime, remoteTime, Date.now())
     };
 };
+
+/**
+ * FUSION ÉVÉNEMENT : Protège rigoureusement les tracés GPX et plans PDF contre tout écrasement ou perte.
+ */
+export const mergeEventData = (local?: AppEvent | null, remote?: AppEvent | null): AppEvent => {
+    if (!local && !remote) return {} as AppEvent;
+    if (!local) return remote as AppEvent;
+    if (!remote) return local as AppEvent;
+
+    const localTime = local.updatedAt || local.createdAt || 0;
+    const remoteTime = remote.updatedAt || remote.createdAt || 0;
+
+    const primary = localTime >= remoteTime ? local : remote;
+    const secondary = localTime >= remoteTime ? remote : local;
+
+    // 1. Fusion des tracés GPX (tracks)
+    // On conserve impérativement tous les tracés existants (local ou remote)
+    let mergedTracks: Track[] = [];
+    if (local.tracks && local.tracks.length > 0 && remote.tracks && remote.tracks.length > 0) {
+        const trackMap = new Map<string, Track>();
+        local.tracks.forEach(t => trackMap.set(t.id || t.name, t));
+        remote.tracks.forEach(t => trackMap.set(t.id || t.name, t));
+        mergedTracks = Array.from(trackMap.values());
+    } else if (local.tracks && local.tracks.length > 0) {
+        mergedTracks = local.tracks;
+    } else if (remote.tracks && remote.tracks.length > 0) {
+        mergedTracks = remote.tracks;
+    } else if (local.trackData && local.trackData.length > 0) {
+        mergedTracks = [{ id: 'legacy-track-local', name: 'Tracé GPX', data: local.trackData, color: '#2563eb' }];
+    } else if (remote.trackData && remote.trackData.length > 0) {
+        mergedTracks = [{ id: 'legacy-track-remote', name: 'Tracé GPX', data: remote.trackData, color: '#2563eb' }];
+    }
+
+    // 2. Fusion des coordonnées de secours (trackData)
+    let mergedTrackData = primary.trackData || secondary.trackData;
+    if ((!mergedTrackData || mergedTrackData.length === 0) && mergedTracks.length > 0) {
+        mergedTrackData = mergedTracks[0].data;
+    }
+
+    // 3. Fusion des plans de cartographie PDF (mapPdfs)
+    // On conserve impérativement tous les fichiers PDF existants
+    let mergedMapPdfs: { id: string; name: string; url: string; }[] = [];
+    if (local.mapPdfs && local.mapPdfs.length > 0 && remote.mapPdfs && remote.mapPdfs.length > 0) {
+        const pdfMap = new Map<string, { id: string; name: string; url: string; }>();
+        // On privilégie les entrées qui ont une URL renseignée (Base64 ou Cloud URL)
+        remote.mapPdfs.forEach(p => { if (p && p.url) pdfMap.set(p.id || p.name, p); });
+        local.mapPdfs.forEach(p => { if (p && p.url) pdfMap.set(p.id || p.name, p); });
+        mergedMapPdfs = Array.from(pdfMap.values());
+    } else if (local.mapPdfs && local.mapPdfs.length > 0) {
+        mergedMapPdfs = local.mapPdfs;
+    } else if (remote.mapPdfs && remote.mapPdfs.length > 0) {
+        mergedMapPdfs = remote.mapPdfs;
+    } else if (local.mapPdfUrl) {
+        mergedMapPdfs = [{ id: 'primary-pdf-local', name: 'Plan de cartographie.pdf', url: local.mapPdfUrl }];
+    } else if (remote.mapPdfUrl) {
+        mergedMapPdfs = [{ id: 'primary-pdf-remote', name: 'Plan de cartographie.pdf', url: remote.mapPdfUrl }];
+    }
+
+    // 4. URL PDF unique (mapPdfUrl)
+    let mergedMapPdfUrl = primary.mapPdfUrl || secondary.mapPdfUrl;
+    if (!mergedMapPdfUrl && mergedMapPdfs.length > 0) {
+        mergedMapPdfUrl = mergedMapPdfs[0].url;
+    }
+
+    // 5. Normalisation des booléens d'archivage
+    const isArchived = primary.isArchived !== undefined 
+        ? primary.isArchived 
+        : (primary.is_archived !== undefined 
+            ? primary.is_archived 
+            : (secondary.isArchived !== undefined ? secondary.isArchived : !!secondary.is_archived));
+
+    return {
+        ...secondary,
+        ...primary,
+        id: primary.id || secondary.id,
+        name: primary.name || secondary.name || '',
+        date: primary.date || secondary.date || '',
+        location: primary.location || secondary.location || '',
+        supervisorName: primary.supervisorName || secondary.supervisorName,
+        supervisorPhone: primary.supervisorPhone || secondary.supervisorPhone,
+        organizer_code: primary.organizer_code || secondary.organizer_code,
+        resourceConfig: primary.resourceConfig || secondary.resourceConfig,
+        isArchived,
+        is_archived: isArchived,
+        tracks: mergedTracks.length > 0 ? mergedTracks : undefined,
+        trackData: mergedTrackData && mergedTrackData.length > 0 ? mergedTrackData : undefined,
+        mapPdfs: mergedMapPdfs.length > 0 ? mergedMapPdfs : undefined,
+        mapPdfUrl: mergedMapPdfUrl,
+        updatedAt: Math.max(localTime, remoteTime, Date.now())
+    };
+};
+
 

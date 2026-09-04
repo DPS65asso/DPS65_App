@@ -14,6 +14,7 @@ export interface Event {
   createdAt: number;
   updatedAt?: number; // Delta Sync
   isArchived?: boolean; // Événement archivé
+  is_archived?: boolean; // Supabase compatibility
   resourceConfig?: {
     totalStretchers: number;
     totalChairs: number;

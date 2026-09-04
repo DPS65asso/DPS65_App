@@ -430,7 +430,11 @@ export const EventMap: React.FC<Props> = ({
   useEffect(() => {
       if (liveEvent) {
           if (liveEvent.trackData) setEventTrack(liveEvent.trackData);
-          if (liveEvent.tracks) setEventTracks(liveEvent.tracks);
+          if (liveEvent.tracks && liveEvent.tracks.length > 0) {
+              setEventTracks(liveEvent.tracks);
+          } else if (liveEvent.trackData && liveEvent.trackData.length > 0) {
+              setEventTracks([{ id: 'primary-track', name: 'Tracé principal', data: liveEvent.trackData, color: '#2563eb' }]);
+          }
       }
   }, [liveEvent]);
 
@@ -569,18 +573,20 @@ export const EventMap: React.FC<Props> = ({
 
   useEffect(() => {
     const loadEventData = async () => {
-        if (liveEvent) {
-            if (liveEvent.trackData) setEventTrack(liveEvent.trackData);
-            if (liveEvent.tracks) setEventTracks(liveEvent.tracks);
-            return;
+        let event = liveEvent;
+        if (!event) {
+            try {
+                event = await storageService.getEventById(eventId);
+            } catch(e) { console.error(e); }
         }
-        try {
-            const event = await storageService.getEventById(eventId);
-            if (event) {
-                if (event.trackData) setEventTrack(event.trackData);
-                if (event.tracks) setEventTracks(event.tracks);
+        if (event) {
+            if (event.trackData) setEventTrack(event.trackData);
+            if (event.tracks && event.tracks.length > 0) {
+                setEventTracks(event.tracks);
+            } else if (event.trackData && event.trackData.length > 0) {
+                setEventTracks([{ id: 'primary-track', name: 'Tracé principal', data: event.trackData, color: '#2563eb' }]);
             }
-        } catch(e) { console.error(e); }
+        }
     };
 
     const loadLocs = async () => {
@@ -633,9 +639,17 @@ export const EventMap: React.FC<Props> = ({
         }
     };
 
+    const eventsBc = new BroadcastChannel('dps65_events_channel');
+    eventsBc.onmessage = (e) => {
+        if (e.data.type === 'UPDATE_EVENTS') {
+            loadEventData();
+        }
+    };
+
     return () => {
         clearInterval(interval);
         bc.close();
+        eventsBc.close();
     };
   }, [eventId, liveTeams, liveMarkers, liveEvent]);
 

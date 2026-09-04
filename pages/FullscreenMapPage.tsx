@@ -7,6 +7,7 @@ import { Event, Victim, TriageColor, Outcome, TeamLocation, CustomMarker } from 
 import { authService } from '../services/authService';
 import { storageService } from '../services/storageService';
 import { initDB } from '../services/db';
+import { mergeEventData } from '../services/core/storageHelpers';
 
 // Lazy load map components
 const EventMap = lazy(() => import('../components/EventMap').then(module => ({ 
@@ -45,6 +46,7 @@ export const FullscreenMapPage: React.FC = () => {
     
     try {
       // 1. Événement
+      const localEvent = await storageService.getEventById(id);
       const { data: eventData } = await supabase
         .from('events')
         .select('*')
@@ -52,10 +54,10 @@ export const FullscreenMapPage: React.FC = () => {
         .maybeSingle();
 
       if (eventData) {
-        setEvent(eventData);
-      } else {
-        const localEvent = await storageService.getEventById(id);
-        if (localEvent) setEvent(localEvent);
+        const merged = localEvent ? mergeEventData(localEvent, eventData) : eventData;
+        setEvent(merged);
+      } else if (localEvent) {
+        setEvent(localEvent);
       }
 
       // 2. Victimes

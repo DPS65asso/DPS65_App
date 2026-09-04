@@ -4,7 +4,7 @@ import { supabase, isLive } from '../supabaseClient';
 import { Event as AppEvent, Mission } from '../../types';
 import { generateUUID, getLocalDateString } from '../../utils/security';
 import { auditService } from '../auditService';
-import { sanitizeEventData } from '../core/storageHelpers';
+import { sanitizeEventData, mergeEventData } from '../core/storageHelpers';
 import { syncService } from '../syncService';
 
 const bc = new BroadcastChannel('dps65_events_channel');
@@ -20,13 +20,24 @@ export const eventService = {
         const cleanEvent = { ...sanitizeEventData(event), updatedAt: Date.now() };
         const db = await initDB();
         
+        // Conserver les fichiers (GPX/PDF) s'ils existaient déjà et ne sont pas redéfinis dans la mise à jour
+        const existing = (await db.get('events', cleanEvent.id)) || (await db.get('events_archive', cleanEvent.id));
+        const mergedEvent = existing ? mergeEventData(existing, cleanEvent) : cleanEvent;
+
         const tx = db.transaction(['events', 'sync_queue'], 'readwrite');
-        await tx.objectStore('events').put(cleanEvent);
+        await tx.objectStore('events').put(mergedEvent);
+
+        const syncData: any = { 
+            ...mergedEvent, 
+            is_archived: !!mergedEvent.isArchived 
+        };
+        delete syncData.isArchived; // Supabase n'a pas de colonne isArchived (seulement is_archived)
+
         await tx.objectStore('sync_queue').put({
             id: generateUUID(),
             table: 'events',
             action: 'UPSERT',
-            data: { ...cleanEvent, is_archived: !!cleanEvent.isArchived },
+            data: syncData,
             timestamp: Date.now(),
             status: 'PENDING',
             retries: 0
@@ -35,7 +46,7 @@ export const eventService = {
         
         syncService.processQueue();
         
-        auditService.log('CREATE_EVENT', `Event: ${cleanEvent.name}`);
+        auditService.log('CREATE_EVENT', `Event: ${mergedEvent.name}`);
         bc.postMessage({ type: 'UPDATE_EVENTS' });
     },
 
@@ -83,9 +94,9 @@ export const eventService = {
         // 2. Synchronisation en UPSERT avec is_archived: true (ne supprime PAS l'événement sur Supabase)
         const syncData: any = {
             ...archivedEvent,
-            is_archived: true,
-            isArchived: true
+            is_archived: true
         };
+        delete syncData.isArchived;
 
         await tx.objectStore('sync_queue').put({
             id: generateUUID(),
@@ -122,9 +133,9 @@ export const eventService = {
 
         const syncData: any = {
             ...activeEvent,
-            is_archived: false,
-            isArchived: false
+            is_archived: false
         };
+        delete syncData.isArchived;
 
         await tx.objectStore('sync_queue').put({
             id: generateUUID(),
@@ -149,14 +160,16 @@ export const eventService = {
         if (!event) event = await db.get('events_archive', id);
         
         // Si non trouvé localement et qu'on est en ligne, on tente de le récupérer sur Supabase
-        if (!event && isLive) {
+        if (isLive) {
             try {
                 const { data, error } = await supabase.from('events').select('*').eq('id', id).maybeSingle();
                 if (!error && data) {
-                    event = data as AppEvent;
-                    if (data.is_archived) event.isArchived = true;
-                    // On le met en cache localement
-                    await db.put(event.isArchived ? 'events_archive' : 'events', event);
+                    const remoteEvt = data as AppEvent;
+                    if (data.is_archived) remoteEvt.isArchived = true;
+                    // Fusionner avec l'existant local pour préserver les fichiers GPX et PDF
+                    const merged = event ? mergeEventData(event, remoteEvt) : remoteEvt;
+                    await db.put(merged.isArchived ? 'events_archive' : 'events', merged);
+                    event = merged;
                 }
             } catch (e) {
                 console.error("Error fetching event from Supabase:", e);

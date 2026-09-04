@@ -93,7 +93,11 @@ export const EventMap3D: React.FC<Props> = ({
 
   useEffect(() => {
       if (liveEvent) {
-          if (liveEvent.tracks) setEventTracks(liveEvent.tracks);
+          if (liveEvent.tracks && liveEvent.tracks.length > 0) {
+              setEventTracks(liveEvent.tracks);
+          } else if (liveEvent.trackData && liveEvent.trackData.length > 0) {
+              setEventTracks([{ id: 'primary-track', name: 'Tracé principal', data: liveEvent.trackData, color: '#2563eb' }]);
+          }
       }
   }, [liveEvent]);
 
@@ -147,7 +151,13 @@ export const EventMap3D: React.FC<Props> = ({
     const loadEventData = async () => {
         try {
             const event = await storageService.getEventById(eventId);
-            if (event && event.tracks) setEventTracks(event.tracks);
+            if (event) {
+                if (event.tracks && event.tracks.length > 0) {
+                    setEventTracks(event.tracks);
+                } else if (event.trackData && event.trackData.length > 0) {
+                    setEventTracks([{ id: 'primary-track', name: 'Tracé principal', data: event.trackData, color: '#2563eb' }]);
+                }
+            }
         } catch(e) { console.error(e); }
     };
 
@@ -185,9 +195,17 @@ export const EventMap3D: React.FC<Props> = ({
         else if (e.data.type === 'UPDATE_CUSTOM_MARKERS') loadMarkers();
     };
 
+    const eventsBc = new BroadcastChannel('dps65_events_channel');
+    eventsBc.onmessage = (e) => {
+        if (e.data.type === 'UPDATE_EVENTS') {
+            loadEventData();
+        }
+    };
+
     return () => {
         clearInterval(interval);
         bc.close();
+        eventsBc.close();
     };
   }, [eventId, liveTeams, liveMarkers, liveEvent]);
 

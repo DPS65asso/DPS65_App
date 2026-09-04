@@ -756,4 +756,15 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+-- ----------------------------------------------------
+-- 11. MIGRATIONS POUR LES TRACÉS GPX & CARTOGRAPHIE PDF
+-- ----------------------------------------------------
+-- Assure la présence de toutes les colonnes cartographiques et fichiers sur la table events
+ALTER TABLE IF EXISTS public.events ADD COLUMN IF NOT EXISTS tracks JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE IF EXISTS public.events ADD COLUMN IF NOT EXISTS "trackData" JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE IF EXISTS public.events ADD COLUMN IF NOT EXISTS "mapPdfUrl" TEXT;
+ALTER TABLE IF EXISTS public.events ADD COLUMN IF NOT EXISTS "mapPdfs" JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE IF EXISTS public.events ADD COLUMN IF NOT EXISTS is_archived BOOLEAN DEFAULT FALSE;
+
+
 

@@ -111,7 +111,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, title, showBack = fals
   const shouldHideMenu = isMobile && (isNoviMode || isSettingsMode);
 
   return (
-    <div className={`fixed inset-0 h-[100dvh] w-full bg-slate-50 dark:bg-slate-950 flex transition-colors duration-300 overflow-hidden ${shouldHideMenu ? 'hidden' : ''}`}>
+    <div className={`fixed inset-0 w-full bg-slate-50 dark:bg-slate-950 flex transition-colors duration-300 overflow-hidden ${shouldHideMenu ? 'hidden' : ''}`}>
       {!hideHeaderTools && !isOrganizer && <Sidebar />}
 
       <div className="flex-1 flex flex-col relative w-full lg:pl-64 transition-all duration-300">

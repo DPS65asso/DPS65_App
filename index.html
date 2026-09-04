@@ -13,7 +13,7 @@
     
     <!-- iOS support -->
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="DPS65">
     <link rel="apple-touch-icon" href="/pwa-192x192.png">
     <link rel="icon" type="image/svg+xml" href="/icon.svg">
@@ -48,10 +48,17 @@
     </script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
+      html, body, #root {
+        height: 100%;
+        min-height: 100%;
+        width: 100%;
+        margin: 0;
+        padding: 0;
+      }
       body {
         font-family: 'Inter', sans-serif;
         -webkit-tap-highlight-color: transparent;
-        padding-top: env(safe-area-inset-top, 0px);
+        overscroll-behavior-y: none;
       }
       .pt-safe { padding-top: env(safe-area-inset-top, 0px); }
       .pb-safe { padding-bottom: env(safe-area-inset-bottom, 0px); }

@@ -223,7 +223,7 @@ export const TacticalDashboardPage: React.FC = () => {
                 <div className="mb-6 animate-in fade-in slide-in-from-top-4 duration-300">
                     <div className="bg-slate-900 rounded-xl overflow-hidden border-2 border-blue-500 shadow-2xl relative h-[500px]">
                         <Suspense fallback={<div className="flex h-full items-center justify-center text-white"><Loader2 className="w-8 h-8 animate-spin" /></div>}>
-                            <EventMap eventId={selectedEventId} />
+                            <EventMap eventId={selectedEventId} liveEvent={selectedEvent} />
                         </Suspense>
                     </div>
                 </div>

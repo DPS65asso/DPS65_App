@@ -32,6 +32,31 @@ export const EventSettingsModal: React.FC<Props> = ({ isOpen, event, onClose, on
     const fileInputRef = useRef<HTMLInputElement>(null);
     const pdfInputRef = useRef<HTMLInputElement>(null);
     
+    // Synchroniser l'état local dès que la modale s'ouvre ou que l'événement change
+    useEffect(() => {
+        if (isOpen && event) {
+            setName(event.name || '');
+            setLocation(event.location || '');
+            setSupervisorName(event.supervisorName || '');
+            setSupervisorPhone(event.supervisorPhone || '');
+            setOrganizerCode(event.organizer_code || '');
+            
+            const existingTracks = event.tracks && event.tracks.length > 0
+                ? event.tracks
+                : event.trackData && event.trackData.length > 0
+                    ? [{ id: 'primary-track', name: 'Tracé principal', data: event.trackData, color: '#2563eb' }]
+                    : [];
+            setTracks(existingTracks);
+
+            const existingPdfs = event.mapPdfs && event.mapPdfs.length > 0
+                ? event.mapPdfs
+                : event.mapPdfUrl
+                    ? [{ id: 'primary-pdf', name: 'Plan de cartographie.pdf', url: event.mapPdfUrl }]
+                    : [];
+            setMapPdfs(existingPdfs);
+        }
+    }, [isOpen, event]);
+
     // Bloquer le scroll du body quand la modale est ouverte
     useEffect(() => {
         if (isOpen) {
@@ -57,18 +82,34 @@ export const EventSettingsModal: React.FC<Props> = ({ isOpen, event, onClose, on
                 try {
                     const parser = new DOMParser();
                     const xmlDoc = parser.parseFromString(text, "text/xml");
-                    const trkpts = xmlDoc.getElementsByTagName("trkpt");
-                    
-                    const coords: [number, number][] = [];
-                    const step = Math.ceil(trkpts.length / 2000); 
-
-                    for(let i=0; i < trkpts.length; i += step) {
-                        const lat = parseFloat(trkpts[i].getAttribute("lat") || "0");
-                        const lon = parseFloat(trkpts[i].getAttribute("lon") || "0");
-                        if (lat && lon) coords.push([lat, lon]);
+                    let trkpts = Array.from(xmlDoc.getElementsByTagName("trkpt"));
+                    if (trkpts.length === 0) trkpts = Array.from(xmlDoc.getElementsByTagName("rtept"));
+                    if (trkpts.length === 0) trkpts = Array.from(xmlDoc.getElementsByTagName("wpt"));
+                    if (trkpts.length === 0) {
+                        trkpts = Array.from(xmlDoc.querySelectorAll("trkpt, rtept, wpt"));
                     }
                     
-                    let trackName = xmlDoc.getElementsByTagName("name")[0]?.textContent || file.name.replace('.gpx', '');
+                    const coords: [number, number][] = [];
+                    const step = Math.max(1, Math.ceil(trkpts.length / 2000)); 
+
+                    for(let i=0; i < trkpts.length; i += step) {
+                        const latStr = trkpts[i].getAttribute("lat");
+                        const lonStr = trkpts[i].getAttribute("lon") || trkpts[i].getAttribute("lng");
+                        if (latStr !== null && lonStr !== null) {
+                            const lat = parseFloat(latStr);
+                            const lon = parseFloat(lonStr);
+                            if (!isNaN(lat) && !isNaN(lon)) {
+                                coords.push([lat, lon]);
+                            }
+                        }
+                    }
+
+                    if (coords.length === 0) {
+                        alert(`Le fichier ${file.name} ne contient aucun point GPS exploitable.`);
+                        return;
+                    }
+                    
+                    let trackName = xmlDoc.getElementsByTagName("name")[0]?.textContent?.trim() || file.name.replace(/\.gpx$/i, '');
                     
                     setTracks(prev => {
                         const isFirst = prev.length === 0;
@@ -81,7 +122,8 @@ export const EventSettingsModal: React.FC<Props> = ({ isOpen, event, onClose, on
                         return [...prev, newTrack];
                     });
                 } catch (err) {
-                    alert(`Erreur fichier ${file.name}`);
+                    alert(`Erreur lors de la lecture du fichier ${file.name}`);
+                    console.error(err);
                 }
             };
             reader.readAsText(file);

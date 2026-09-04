@@ -308,7 +308,7 @@ export const HomePage: React.FC = () => {
     <Layout showStatus={false} hideHeaderTools={isCriticalMode} hideSync={true}>
 
       {!isCriticalMode && (
-          <div className="absolute top-2 right-4 lg:right-10 z-20 flex gap-2">
+          <div className="absolute top-[calc(0.75rem+env(safe-area-inset-top,0px))] right-4 lg:right-10 z-20 flex gap-2">
               <button 
                 onClick={handleRefresh}
                 title="Actualiser l'application"
@@ -337,7 +337,7 @@ export const HomePage: React.FC = () => {
       )}
 
       {!isCriticalMode && (
-          <div className="absolute top-2 left-4 lg:left-10 z-20 flex flex-col gap-2 items-start">
+          <div className="absolute top-[calc(0.75rem+env(safe-area-inset-top,0px))] left-4 lg:left-10 z-20 flex flex-col gap-2 items-start">
               <div className="mt-1">
                   <SyncIndicator />
               </div>

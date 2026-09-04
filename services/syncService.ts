@@ -5,7 +5,7 @@ import { generateUUID } from '../utils/security';
 import { auditService } from './auditService';
 import { authService } from './authService';
 import { sendNativeNotification } from './notificationService';
-import { mergeVictimData } from './core/storageHelpers';
+import { mergeVictimData, mergeEventData } from './core/storageHelpers';
 
 const getNormalizedTime = (val: any): number => {
     if (!val) return 0;
@@ -362,18 +362,31 @@ class SyncService {
                                 if (localData.is_archived !== undefined && localData.isArchived === undefined) {
                                     localData.isArchived = !!localData.is_archived;
                                 }
-                                if (localData.isArchived) {
+                                const localExisting = (await tx.store.get(remote.id)) || (await db.get('events_archive', remote.id));
+                                const merged = localExisting ? mergeEventData(localExisting, localData) : localData;
+
+                                if (merged.isArchived) {
                                     try {
                                         const archTx = db.transaction('events_archive', 'readwrite');
-                                        await archTx.store.put(localData);
+                                        await archTx.store.put(merged);
                                         await archTx.done;
                                     } catch (e) {
                                         console.warn("Could not save to events_archive during pull", e);
                                     }
                                 }
-                            }
 
-                            if (dbStoreName !== 'config') {
+                                if (!localExisting || JSON.stringify(localExisting) !== JSON.stringify(merged)) {
+                                    await tx.store.put(merged);
+                                    changed = true;
+                                }
+                            } else if (dbStoreName === 'victims') {
+                                const localExisting = await tx.store.get(remote.id);
+                                const merged = localExisting ? mergeVictimData(localExisting, localData) : localData;
+                                if (!localExisting || JSON.stringify(localExisting) !== JSON.stringify(merged)) {
+                                    await tx.store.put(merged);
+                                    changed = true;
+                                }
+                            } else if (dbStoreName !== 'config') {
                                 const localExisting = await tx.store.get(remote.id);
                                 if (!localExisting || JSON.stringify(localExisting) !== JSON.stringify(localData)) {
                                     await tx.store.put(localData);
@@ -400,6 +413,10 @@ class SyncService {
 
                             for (const localItem of localItems) {
                                 if (localItem && localItem.id) {
+                                    // Ne jamais élaguer un événement archivé ou récemment créé localement
+                                    if (tableName === 'events' && (localItem.isArchived || sessionStorage.getItem(`local_create_${localItem.id}`))) {
+                                        continue;
+                                    }
                                     if (!remoteIds.has(localItem.id) && !pendingDeletes.has(localItem.id) && !pendingUpserts.has(localItem.id)) {
                                         console.log(`[Sync Prune] Suppression de l'élément local obsolète: ${tableName}:${localItem.id}`);
                                         await tx.store.delete(localItem.id);
@@ -497,7 +514,9 @@ class SyncService {
             }
 
             if (event) {
-                await db.put('events', event);
+                const localExisting = await db.get('events', event.id);
+                const merged = localExisting ? mergeEventData(localExisting, event) : event;
+                await db.put('events', merged);
                 console.log("[Sync Organizer] Event synced successfully.");
             }
 
@@ -758,15 +777,18 @@ class SyncService {
                     }
                     await db.put(table as any, localData, 'main');
                 } else if (table === 'events') {
-                    if (localData.is_archived !== undefined && localData.isArchived === undefined) {
-                        localData.isArchived = !!localData.is_archived;
+                    const localExisting = (await db.get('events', localData.id)) || (await db.get('events_archive', localData.id));
+                    const merged = localExisting ? mergeEventData(localExisting, localData) : localData;
+                    if (merged.is_archived !== undefined && merged.isArchived === undefined) {
+                        merged.isArchived = !!merged.is_archived;
                     }
-                    if (localData.isArchived) {
-                        await db.put('events_archive', localData);
+                    if (merged.isArchived) {
+                        await db.put('events_archive', merged);
+                        await db.delete('events', merged.id);
                     } else {
-                        await db.delete('events_archive', localData.id);
+                        await db.delete('events_archive', merged.id);
+                        await db.put('events', merged);
                     }
-                    await db.put('events', localData);
                 } else {
                     await db.put(table as any, localData);
                 }
@@ -889,19 +911,55 @@ class SyncService {
                             dataToPush.event_id = dataToPush.eventId || dataToPush.event_id;
                             delete dataToPush.eventId;
                         }
+                        if (item.table === 'events') {
+                            if ('isArchived' in dataToPush) {
+                                dataToPush.is_archived = !!dataToPush.isArchived || !!dataToPush.is_archived;
+                                delete dataToPush.isArchived;
+                            }
+                        }
 
                         const supabaseCall = async () => {
                             if (item.action === 'UPSERT') {
                                 sessionStorage.setItem(`local_create_${item.data.id}`, 'true');
-                                return await supabase.from(item.table).upsert(dataToPush);
+                                let res = await supabase.from(item.table).upsert(dataToPush);
+                                
+                                // Si l'envoi échoue sur events (ex: colonne non migrée ou payload PDF trop lourd pour le cloud)
+                                if (res.error && item.table === 'events') {
+                                    const errMsg = res.error.message || '';
+                                    console.warn(`[Sync Events] Upsert initial échoué (${errMsg}), tentative avec payload optimisé...`);
+                                    const fallbackData = { ...dataToPush };
+
+                                    if (errMsg.includes('mapPdfs')) {
+                                        delete fallbackData.mapPdfs;
+                                    }
+                                    if (errMsg.includes('tracks')) {
+                                        delete fallbackData.tracks;
+                                    }
+                                    if (errMsg.includes('Payload Too Large') || errMsg.includes('413') || errMsg.includes('size')) {
+                                        if (fallbackData.mapPdfs && Array.isArray(fallbackData.mapPdfs)) {
+                                            fallbackData.mapPdfs = fallbackData.mapPdfs.map((p: any) => ({
+                                                id: p.id,
+                                                name: p.name,
+                                                url: p.url && !p.url.startsWith('data:') ? p.url : ''
+                                            }));
+                                        }
+                                        if (fallbackData.mapPdfUrl && fallbackData.mapPdfUrl.startsWith('data:')) {
+                                            delete fallbackData.mapPdfUrl;
+                                        }
+                                    }
+                                    res = await supabase.from(item.table).upsert(fallbackData);
+                                }
+                                return res;
                             } else if (item.action === 'DELETE') {
                                 return await supabase.from(item.table).delete().eq('id', item.data.id);
                             }
                             return { error: { message: 'Action inconnue' } };
                         };
 
+                        const payloadSize = JSON.stringify(dataToPush).length;
+                        const timeoutMs = Math.max(10000, Math.min(60000, Math.ceil(payloadSize / 50000) * 1000));
                         const timeoutPromise = new Promise((_, reject) => 
-                            setTimeout(() => reject(new Error('Supabase Timeout (10s)')), 10000)
+                            setTimeout(() => reject(new Error(`Supabase Timeout (${Math.round(timeoutMs / 1000)}s)`)), timeoutMs)
                         );
 
                         const result: any = await Promise.race([supabaseCall(), timeoutPromise]);

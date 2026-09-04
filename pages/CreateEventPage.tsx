@@ -34,22 +34,36 @@ export const CreateEventPage: React.FC = () => {
               try {
                   const parser = new DOMParser();
                   const xmlDoc = parser.parseFromString(text, "text/xml");
-                  const trkpts = xmlDoc.getElementsByTagName("trkpt");
+                  let trkpts = Array.from(xmlDoc.getElementsByTagName("trkpt"));
+                  if (trkpts.length === 0) trkpts = Array.from(xmlDoc.getElementsByTagName("rtept"));
+                  if (trkpts.length === 0) trkpts = Array.from(xmlDoc.getElementsByTagName("wpt"));
+                  if (trkpts.length === 0) {
+                      trkpts = Array.from(xmlDoc.querySelectorAll("trkpt, rtept, wpt"));
+                  }
                   
                   const coords: [number, number][] = [];
-                  // Sampling pour éviter de stocker trop de points (max 2000 points)
-                  const step = Math.ceil(trkpts.length / 2000); 
+                  // Sampling pour stocker max 2000 points
+                  const step = Math.max(1, Math.ceil(trkpts.length / 2000)); 
 
                   for(let i=0; i < trkpts.length; i += step) {
-                      const lat = parseFloat(trkpts[i].getAttribute("lat") || "0");
-                      const lon = parseFloat(trkpts[i].getAttribute("lon") || "0");
-                      if (lat && lon) {
-                          coords.push([lat, lon]);
+                      const latStr = trkpts[i].getAttribute("lat");
+                      const lonStr = trkpts[i].getAttribute("lon") || trkpts[i].getAttribute("lng");
+                      if (latStr !== null && lonStr !== null) {
+                          const lat = parseFloat(latStr);
+                          const lon = parseFloat(lonStr);
+                          if (!isNaN(lat) && !isNaN(lon)) {
+                              coords.push([lat, lon]);
+                          }
                       }
+                  }
+
+                  if (coords.length === 0) {
+                      alert(`Le fichier ${file.name} ne contient aucun point GPS exploitable (<trkpt>, <rtept> ou <wpt>).`);
+                      return;
                   }
                   
                   // Extraire le nom du tracé du GPX ou utiliser le nom du fichier
-                  let trackName = xmlDoc.getElementsByTagName("name")[0]?.textContent || file.name.replace('.gpx', '');
+                  let trackName = xmlDoc.getElementsByTagName("name")[0]?.textContent?.trim() || file.name.replace(/\.gpx$/i, '');
                   
                   setTracks(prev => {
                       const isFirst = prev.length === 0;
