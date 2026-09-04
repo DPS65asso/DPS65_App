@@ -883,9 +883,11 @@ class SyncService {
                 const allItems = await db.getAll('sync_queue');
                 let pendingItems = allItems.filter(i => i.status === 'PENDING');
                 
-                if (forceAll) {
-                    const failedItems = allItems.filter(i => i.status === 'FAILED');
-                    pendingItems = [...pendingItems, ...failedItems];
+                // Si forceAll ou pour les éléments échoués depuis plus d'une minute, on réessaye
+                const now = Date.now();
+                const failedToRetry = allItems.filter(i => i.status === 'FAILED' && (forceAll || (now - (i.timestamp || 0) > 60000)));
+                if (failedToRetry.length > 0) {
+                    pendingItems = [...pendingItems, ...failedToRetry];
                 }
                 
                 if (pendingItems.length === 0) {
@@ -921,33 +923,76 @@ class SyncService {
                         const supabaseCall = async () => {
                             if (item.action === 'UPSERT') {
                                 sessionStorage.setItem(`local_create_${item.data.id}`, 'true');
-                                let res = await supabase.from(item.table).upsert(dataToPush);
+                                let res: any = await supabase.from(item.table).upsert(dataToPush);
                                 
-                                // Si l'envoi échoue sur events (ex: colonne non migrée ou payload PDF trop lourd pour le cloud)
-                                if (res.error && item.table === 'events') {
-                                    const errMsg = res.error.message || '';
-                                    console.warn(`[Sync Events] Upsert initial échoué (${errMsg}), tentative avec payload optimisé...`);
-                                    const fallbackData = { ...dataToPush };
+                                // Récupération en cas d'erreur (ex: colonne non encore créée sur Supabase ou payload trop lourd)
+                                if (res.error) {
+                                    let fallbackData: any = { ...dataToPush };
+                                    let currentRes: any = res;
+                                    let attempts = 0;
 
-                                    if (errMsg.includes('mapPdfs')) {
-                                        delete fallbackData.mapPdfs;
-                                    }
-                                    if (errMsg.includes('tracks')) {
-                                        delete fallbackData.tracks;
-                                    }
-                                    if (errMsg.includes('Payload Too Large') || errMsg.includes('413') || errMsg.includes('size')) {
-                                        if (fallbackData.mapPdfs && Array.isArray(fallbackData.mapPdfs)) {
-                                            fallbackData.mapPdfs = fallbackData.mapPdfs.map((p: any) => ({
-                                                id: p.id,
-                                                name: p.name,
-                                                url: p.url && !p.url.startsWith('data:') ? p.url : ''
-                                            }));
+                                    while (currentRes.error && attempts < 5) {
+                                        attempts++;
+                                        const errMsg = currentRes.error.message || '';
+                                        let modified = false;
+
+                                        // 1. Détection automatique des colonnes manquantes dans PostgreSQL / PostgREST
+                                        const colMatch = errMsg.match(/column "(.*?)" of relation/i) || 
+                                                         errMsg.match(/Could not find the '(.*?)' column/i) ||
+                                                         errMsg.match(/column '(.*?)'/i);
+                                        if (colMatch && colMatch[1]) {
+                                            const missingCol = colMatch[1];
+                                            if (missingCol in fallbackData) {
+                                                console.warn(`[Sync ${item.table}] Colonne '${missingCol}' non migrée sur Supabase, retrait automatique du payload.`);
+                                                delete fallbackData[missingCol];
+                                                modified = true;
+                                            }
                                         }
-                                        if (fallbackData.mapPdfUrl && fallbackData.mapPdfUrl.startsWith('data:')) {
-                                            delete fallbackData.mapPdfUrl;
+
+                                        // 2. Gestion spécifique de la table events
+                                        if (item.table === 'events') {
+                                            if ((errMsg.includes('is_archived') || errMsg.includes('archived')) && 'is_archived' in fallbackData) {
+                                                console.warn("[Sync Events] Supabase n'a pas la colonne 'is_archived', retrait du payload.");
+                                                delete fallbackData.is_archived;
+                                                modified = true;
+                                            }
+                                            if (errMsg.includes('mapPdfs') && 'mapPdfs' in fallbackData) {
+                                                delete fallbackData.mapPdfs;
+                                                modified = true;
+                                            }
+                                            if (errMsg.includes('tracks') && 'tracks' in fallbackData) {
+                                                delete fallbackData.tracks;
+                                                modified = true;
+                                            }
+                                            if (errMsg.includes('trackData') && 'trackData' in fallbackData) {
+                                                delete fallbackData.trackData;
+                                                modified = true;
+                                            }
+                                            if (errMsg.includes('mapPdfUrl') && 'mapPdfUrl' in fallbackData) {
+                                                delete fallbackData.mapPdfUrl;
+                                                modified = true;
+                                            }
+                                            if (errMsg.includes('Payload Too Large') || errMsg.includes('413') || errMsg.includes('size')) {
+                                                if (fallbackData.mapPdfs && Array.isArray(fallbackData.mapPdfs)) {
+                                                    fallbackData.mapPdfs = fallbackData.mapPdfs.map((p: any) => ({
+                                                        id: p.id,
+                                                        name: p.name,
+                                                        url: p.url && !p.url.startsWith('data:') ? p.url : ''
+                                                    }));
+                                                    modified = true;
+                                                }
+                                                if (fallbackData.mapPdfUrl && fallbackData.mapPdfUrl.startsWith('data:')) {
+                                                    delete fallbackData.mapPdfUrl;
+                                                    modified = true;
+                                                }
+                                            }
                                         }
+
+                                        if (!modified) break;
+                                        console.log(`[Sync ${item.table}] Nouvel essai d'envoi vers Supabase (tentative ${attempts})...`);
+                                        currentRes = await supabase.from(item.table).upsert(fallbackData);
                                     }
-                                    res = await supabase.from(item.table).upsert(fallbackData);
+                                    res = currentRes;
                                 }
                                 return res;
                             } else if (item.action === 'DELETE') {
