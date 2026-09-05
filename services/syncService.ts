@@ -49,6 +49,7 @@ class SyncService {
                 const connected = await this.checkConnectivity();
                 if (connected) {
                     this.reconnectRealtime();
+                    this.pullEvents(); // Priorité absolue : rafraîchissement instantané des événements
                     this.processQueue();
                     this.pullLatestData();
                 }
@@ -305,7 +306,79 @@ class SyncService {
         this.notifyListeners();
         try { await authService.getSession(); } catch(e) {}
         await this.processQueue(true);
+        await this.pullEvents();
         await this.pullLatestData();
+    }
+
+    /**
+     * Pull ciblé et ultra-léger de la liste des événements.
+     * Ignore les gros payloads binaires (PDFs base64) pour garantir une réponse instantanée (<15Ko)
+     * même sur mobile avec réseau instable.
+     */
+    public async pullEvents(): Promise<boolean> {
+        if (!this.isOnline || !isLive) return false;
+        try {
+            // Sélection des métadonnées essentielles sans les gros objets binaires
+            const { data, error } = (await (supabase.from('events') as any)
+                .select('id, name, date, location, "createdAt", "updatedAt", "resourceConfig", "supervisorName", "supervisorPhone", organizer_code, is_archived')) as { data: any[] | null; error: any };
+            
+            if (error) {
+                console.warn("[Sync pullEvents] Erreur:", error.message);
+                return false;
+            }
+
+            if (data && data.length > 0) {
+                const db = await initDB();
+                const queue = await db.getAll('sync_queue');
+                const pendingDeletes = new Set(
+                    queue
+                        .filter(item => item.table === 'events' && item.action === 'DELETE')
+                        .map(item => item.data.id)
+                );
+
+                const tx = db.transaction('events', 'readwrite');
+                let changed = false;
+
+                for (const remote of data) {
+                    if (pendingDeletes.has(remote.id)) continue;
+                    const localData: any = { ...remote };
+                    if (localData.is_archived !== undefined && localData.isArchived === undefined) {
+                        localData.isArchived = !!localData.is_archived;
+                    }
+
+                    const localExisting = (await tx.store.get(remote.id)) || (await db.get('events_archive', remote.id));
+                    const merged = localExisting ? mergeEventData(localExisting, localData) : localData;
+
+                    if (merged.isArchived) {
+                        try {
+                            const archTx = db.transaction('events_archive', 'readwrite');
+                            await archTx.store.put(merged);
+                            await archTx.done;
+                        } catch (e) {}
+                    }
+
+                    if (!localExisting || JSON.stringify(localExisting) !== JSON.stringify(merged)) {
+                        await tx.store.put(merged);
+                        changed = true;
+                    }
+                }
+
+                await tx.done;
+
+                if (changed) {
+                    try {
+                        const bc = new BroadcastChannel('dps65_events_channel');
+                        bc.postMessage({ type: 'UPDATE_EVENTS' });
+                        bc.close();
+                    } catch (e) {}
+                    this.notifyListeners();
+                }
+            }
+            return true;
+        } catch (err) {
+            console.warn("[Sync pullEvents] Exception:", err);
+            return false;
+        }
     }
 
     public async pullLatestData() {
@@ -322,7 +395,11 @@ class SyncService {
         try {
             const syncTable = async (tableName: string, dbStoreName: string) => {
                 try {
-                    const { data, error } = await supabase.from(tableName).select('*');
+                    // Pour 'events', on récupère les colonnes légères pour éviter le blocage réseau causé par les PDF/GPX massifs
+                    const selectCols = tableName === 'events'
+                        ? 'id, name, date, location, "createdAt", "updatedAt", "resourceConfig", "supervisorName", "supervisorPhone", organizer_code, is_archived'
+                        : '*';
+                    const { data, error } = (await (supabase.from(tableName as any) as any).select(selectCols)) as { data: any[] | null; error: any };
                     if (error) {
                         // On logge l'erreur mais on ne bloque pas les autres tables
                         console.warn(`Sync: Could not pull ${tableName}: ${error.message}`);
@@ -755,6 +832,10 @@ class SyncService {
                                 const mergedVictim = mergeVictimData(localExisting, localData);
                                 localData = mergedVictim;
                                 console.log(`[Sync CRDT] Fusion champ par champ appliquée pour victime ${localData.id}`);
+                            } else if (table === 'events') {
+                                // Fusion intelligente pour les événements (préserve les tracés/fichiers locaux et applique les nouveautés)
+                                const mergedEvent = mergeEventData(localExisting, localData);
+                                localData = mergedEvent;
                             } else {
                                 const localTime = getNormalizedTime(localExisting.updatedAt || localExisting.updated_at || localExisting.timestamp);
                                 const remoteTime = getNormalizedTime(localData.updatedAt || localData.updated_at || localData.timestamp);

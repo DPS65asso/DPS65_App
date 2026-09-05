@@ -10,12 +10,13 @@ import { isLive } from '../services/supabaseClient';
 import { useAuth } from '../context/AuthContext';
 import { Event } from '../types';
 import { safeDateFormat, getLocalDateString } from '../utils/security';
-import { Calendar, ChevronRight, MapPin, Loader2, Trash2, Search, X, Filter, PlusCircle, Archive, ArchiveRestore, Download, Check, AlertTriangle, FileSpreadsheet } from 'lucide-react';
+import { Calendar, ChevronRight, MapPin, Loader2, Trash2, Search, X, Filter, PlusCircle, Archive, ArchiveRestore, Download, Check, AlertTriangle, FileSpreadsheet, RefreshCw } from 'lucide-react';
 
 export const EventListPage: React.FC = () => {
   const navigate = useNavigate();
   const { isAdmin, profile } = useAuth();
   const [events, setEvents] = useState<Event[]>([]);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   // RESTRICTION : Organisateur ne peut pas accéder à la liste des événements
   useEffect(() => {
@@ -98,6 +99,11 @@ export const EventListPage: React.FC = () => {
   useEffect(() => {
     loadEvents();
     
+    // Déclenchement d'un rafraîchissement silencieux immédiat et léger en tâche de fond (<15Ko)
+    if (navigator.onLine && isLive) {
+      syncService.pullEvents().then(() => loadEvents()).catch(() => {});
+    }
+
     // Écoute des mises à jour en temps réel des événements
     const bc = new BroadcastChannel('dps65_events_channel');
     bc.onmessage = (e) => {
@@ -111,10 +117,13 @@ export const EventListPage: React.FC = () => {
       loadEvents();
     });
 
-    // Rechargement au retour sur l'onglet
+    // Rechargement au retour sur l'onglet (iPhone iOS Safari / Android)
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
         loadEvents();
+        if (navigator.onLine && isLive) {
+          syncService.pullEvents().then(() => loadEvents()).catch(() => {});
+        }
       }
     };
 
@@ -342,6 +351,20 @@ export const EventListPage: React.FC = () => {
                 </button>
               )}
             </div>
+            <button 
+              onClick={async () => {
+                if (isRefreshing) return;
+                setIsRefreshing(true);
+                await syncService.pullEvents();
+                await loadEvents();
+                setIsRefreshing(false);
+              }}
+              disabled={isRefreshing}
+              className="p-2 rounded-lg border bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-600 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors disabled:opacity-50"
+              title="Actualiser les événements"
+            >
+              <RefreshCw className={`w-5 h-5 ${isRefreshing ? 'animate-spin text-blue-600 dark:text-blue-400' : ''}`} />
+            </button>
             <button 
               onClick={() => setShowFilters(!showFilters)}
               className={`p-2 rounded-lg border transition-colors ${showFilters || dateFilter || statusFilter !== 'ALL' ? 'bg-blue-50 border-blue-200 text-blue-600 dark:bg-blue-900/20 dark:border-blue-800 dark:text-blue-400' : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-600 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}

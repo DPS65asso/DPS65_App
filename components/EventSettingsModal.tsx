@@ -90,7 +90,8 @@ export const EventSettingsModal: React.FC<Props> = ({ isOpen, event, onClose, on
                     }
                     
                     const coords: [number, number][] = [];
-                    const step = Math.max(1, Math.ceil(trkpts.length / 2000)); 
+                    // Échantillonnage optimisé (max 800 points) pour une fluidité cartographique et un payload ultra-léger (<25Ko)
+                    const step = Math.max(1, Math.ceil(trkpts.length / 800)); 
 
                     for(let i=0; i < trkpts.length; i += step) {
                         const latStr = trkpts[i].getAttribute("lat");
@@ -287,8 +288,8 @@ export const EventSettingsModal: React.FC<Props> = ({ isOpen, event, onClose, on
                                 const files = e.target.files;
                                 if (!files || files.length === 0) return;
                                 Array.from(files).forEach(file => {
-                                    if (file.size > 8 * 1024 * 1024) {
-                                        alert(`Le fichier ${file.name} est trop volumineux (max 8 Mo)`);
+                                    if (file.size > 3.5 * 1024 * 1024) {
+                                        alert(`Le fichier ${file.name} est trop volumineux (max 3.5 Mo). Veuillez utiliser un fichier PDF optimisé pour garantir une synchronisation rapide sur les téléphones du terrain.`);
                                         return;
                                     }
                                     const reader = new FileReader();

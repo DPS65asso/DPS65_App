@@ -159,21 +159,43 @@ export const eventService = {
         let event = await db.get('events', id);
         if (!event) event = await db.get('events_archive', id);
         
-        // Si non trouvé localement et qu'on est en ligne, on tente de le récupérer sur Supabase
-        if (isLive) {
+        // Fonction helper pour récupérer les détails distants depuis Supabase
+        const fetchRemoteDetails = async () => {
+            if (!isLive || !navigator.onLine) return;
             try {
                 const { data, error } = await supabase.from('events').select('*').eq('id', id).maybeSingle();
                 if (!error && data) {
                     const remoteEvt = data as AppEvent;
                     if (data.is_archived) remoteEvt.isArchived = true;
-                    // Fusionner avec l'existant local pour préserver les fichiers GPX et PDF
-                    const merged = event ? mergeEventData(event, remoteEvt) : remoteEvt;
+                    const latestLocal = (await db.get('events', id)) || (await db.get('events_archive', id));
+                    const merged = latestLocal ? mergeEventData(latestLocal, remoteEvt) : remoteEvt;
                     await db.put(merged.isArchived ? 'events_archive' : 'events', merged);
-                    event = merged;
+                    try {
+                        bc.postMessage({ type: 'UPDATE_EVENTS' });
+                    } catch (e) {}
                 }
             } catch (e) {
-                console.error("Error fetching event from Supabase:", e);
+                console.warn("Could not fetch full event details from Supabase:", e);
             }
+        };
+
+        // Si l'événement est déjà présent localement avec ses détails ou si l'appareil est hors-ligne
+        if (event && (event.tracks?.length || event.mapPdfs?.length)) {
+            // Mettre à jour en arrière-plan sans bloquer l'affichage immédiat
+            fetchRemoteDetails();
+            return event;
+        }
+
+        // Si l'événement manque ou que ses détails cartographiques n'ont pas encore été téléchargés
+        if (isLive && navigator.onLine) {
+            try {
+                // Timeout de 4s pour ne pas bloquer l'UI si mauvaise connexion mobile
+                await Promise.race([
+                    fetchRemoteDetails(),
+                    new Promise(resolve => setTimeout(resolve, 4000))
+                ]);
+                event = (await db.get('events', id)) || (await db.get('events_archive', id)) || event;
+            } catch (e) {}
         }
         
         return event;
