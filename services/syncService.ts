@@ -318,12 +318,48 @@ class SyncService {
     public async pullEvents(): Promise<boolean> {
         if (!this.isOnline || !isLive) return false;
         try {
-            // Sélection des métadonnées essentielles sans les gros objets binaires
-            const { data, error } = (await (supabase.from('events') as any)
-                .select('id, name, date, location, "createdAt", "updatedAt", "resourceConfig", "supervisorName", "supervisorPhone", organizer_code, is_archived')) as { data: any[] | null; error: any };
-            
+            let data: any[] | null = null;
+            let error: any = null;
+
+            // Tentative 1 : Sélection légère des colonnes standard sans gros payloads
+            try {
+                const res1 = (await (supabase.from('events') as any)
+                    .select('id, name, date, location, "createdAt", "updatedAt", "resourceConfig", "supervisorName", "supervisorPhone", organizer_code, is_archived')) as { data: any[] | null; error: any };
+                if (!res1.error && res1.data) {
+                    data = res1.data;
+                } else {
+                    error = res1.error;
+                }
+            } catch (e) {
+                error = e;
+            }
+
+            // Tentative 2 (Fallback si une colonne manque dans le schéma Supabase) : colonnes universelles
+            if (!data || error) {
+                try {
+                    const res2 = (await (supabase.from('events') as any)
+                        .select('id, name, date, location')) as { data: any[] | null; error: any };
+                    if (!res2.error && res2.data) {
+                        data = res2.data;
+                        error = null;
+                    }
+                } catch (e) {}
+            }
+
+            // Tentative 3 (Fallback complet) : select('*')
+            if (!data || error) {
+                try {
+                    const res3 = (await (supabase.from('events') as any)
+                        .select('*')) as { data: any[] | null; error: any };
+                    if (!res3.error && res3.data) {
+                        data = res3.data;
+                        error = null;
+                    }
+                } catch (e) {}
+            }
+
             if (error) {
-                console.warn("[Sync pullEvents] Erreur:", error.message);
+                console.warn("[Sync pullEvents] Échec récupération Supabase:", error.message || error);
                 return false;
             }
 
@@ -336,7 +372,7 @@ class SyncService {
                         .map(item => item.data.id)
                 );
 
-                const tx = db.transaction('events', 'readwrite');
+                const tx = db.transaction(['events', 'events_archive'], 'readwrite');
                 let changed = false;
 
                 for (const remote of data) {
@@ -346,20 +382,19 @@ class SyncService {
                         localData.isArchived = !!localData.is_archived;
                     }
 
-                    const localExisting = (await tx.store.get(remote.id)) || (await db.get('events_archive', remote.id));
+                    const localExisting = (await tx.objectStore('events').get(remote.id)) || (await tx.objectStore('events_archive').get(remote.id));
                     const merged = localExisting ? mergeEventData(localExisting, localData) : localData;
 
                     if (merged.isArchived) {
-                        try {
-                            const archTx = db.transaction('events_archive', 'readwrite');
-                            await archTx.store.put(merged);
-                            await archTx.done;
-                        } catch (e) {}
-                    }
-
-                    if (!localExisting || JSON.stringify(localExisting) !== JSON.stringify(merged)) {
-                        await tx.store.put(merged);
+                        await tx.objectStore('events_archive').put(merged);
+                        await tx.objectStore('events').delete(remote.id);
                         changed = true;
+                    } else {
+                        await tx.objectStore('events').put(merged);
+                        await tx.objectStore('events_archive').delete(remote.id);
+                        if (!localExisting || JSON.stringify(localExisting) !== JSON.stringify(merged)) {
+                            changed = true;
+                        }
                     }
                 }
 
@@ -395,11 +430,13 @@ class SyncService {
         try {
             const syncTable = async (tableName: string, dbStoreName: string) => {
                 try {
-                    // Pour 'events', on récupère les colonnes légères pour éviter le blocage réseau causé par les PDF/GPX massifs
-                    const selectCols = tableName === 'events'
-                        ? 'id, name, date, location, "createdAt", "updatedAt", "resourceConfig", "supervisorName", "supervisorPhone", organizer_code, is_archived'
-                        : '*';
-                    const { data, error } = (await (supabase.from(tableName as any) as any).select(selectCols)) as { data: any[] | null; error: any };
+                    // Pour 'events', on utilise pullEvents() qui gère les fallbacks résilients et transactions propres
+                    if (tableName === 'events') {
+                        await this.pullEvents();
+                        return;
+                    }
+
+                    const { data, error } = (await (supabase.from(tableName as any) as any).select('*')) as { data: any[] | null; error: any };
                     if (error) {
                         // On logge l'erreur mais on ne bloque pas les autres tables
                         console.warn(`Sync: Could not pull ${tableName}: ${error.message}`);
@@ -435,28 +472,7 @@ class SyncService {
                                     localData.clothingOrderInProgress = !!localData.clothing_order_in_progress;
                                 }
                             }
-                            if (tableName === 'events') {
-                                if (localData.is_archived !== undefined && localData.isArchived === undefined) {
-                                    localData.isArchived = !!localData.is_archived;
-                                }
-                                const localExisting = (await tx.store.get(remote.id)) || (await db.get('events_archive', remote.id));
-                                const merged = localExisting ? mergeEventData(localExisting, localData) : localData;
-
-                                if (merged.isArchived) {
-                                    try {
-                                        const archTx = db.transaction('events_archive', 'readwrite');
-                                        await archTx.store.put(merged);
-                                        await archTx.done;
-                                    } catch (e) {
-                                        console.warn("Could not save to events_archive during pull", e);
-                                    }
-                                }
-
-                                if (!localExisting || JSON.stringify(localExisting) !== JSON.stringify(merged)) {
-                                    await tx.store.put(merged);
-                                    changed = true;
-                                }
-                            } else if (dbStoreName === 'victims') {
+                            if (dbStoreName === 'victims') {
                                 const localExisting = await tx.store.get(remote.id);
                                 const merged = localExisting ? mergeVictimData(localExisting, localData) : localData;
                                 if (!localExisting || JSON.stringify(localExisting) !== JSON.stringify(merged)) {
@@ -478,8 +494,10 @@ class SyncService {
                             }
                         }
 
-                        // 2. Nettoyage (Pruning) des données supprimées/archivées sur Supabase
-                        if (dbStoreName !== 'config') {
+                        // 2. Nettoyage (Pruning) sécurisé des données supprimées sur Supabase
+                        // RÈGLE CRITIQUE : Ne jamais élaguer si data est vide (déconnexion, auth en cours ou RLS restreinte)
+                        // et ne jamais élaguer automatiquement les événements (seule une suppression explicite est autorisée)
+                        if (dbStoreName !== 'config' && tableName !== 'events' && data.length > 0) {
                             const localItems = await tx.store.getAll();
                             const remoteIds = new Set(data.map(r => r.id));
                             const pendingUpserts = new Set(
@@ -490,10 +508,6 @@ class SyncService {
 
                             for (const localItem of localItems) {
                                 if (localItem && localItem.id) {
-                                    // Ne jamais élaguer un événement archivé ou récemment créé localement
-                                    if (tableName === 'events' && (localItem.isArchived || sessionStorage.getItem(`local_create_${localItem.id}`))) {
-                                        continue;
-                                    }
                                     if (!remoteIds.has(localItem.id) && !pendingDeletes.has(localItem.id) && !pendingUpserts.has(localItem.id)) {
                                         console.log(`[Sync Prune] Suppression de l'élément local obsolète: ${tableName}:${localItem.id}`);
                                         await tx.store.delete(localItem.id);

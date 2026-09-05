@@ -12,7 +12,19 @@ const bc = new BroadcastChannel('dps65_events_channel');
 export const eventService = {
     getEvents: async (): Promise<AppEvent[]> => {
         const db = await initDB();
-        const allEvents = await db.getAll('events');
+        let allEvents = await db.getAll('events');
+        
+        // Si le cache local est vide et que l'application est en ligne,
+        // on déclenche immédiatement un chargement de secours depuis Supabase
+        if (allEvents.length === 0 && isLive && navigator.onLine) {
+            try {
+                await syncService.pullEvents();
+                allEvents = await db.getAll('events');
+            } catch (e) {
+                console.warn("[eventService] Auto-pull events on empty cache:", e);
+            }
+        }
+        
         return allEvents.filter(e => !e.isArchived);
     },
 

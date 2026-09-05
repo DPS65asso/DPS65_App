@@ -146,6 +146,15 @@ export const EventListPage: React.FC = () => {
         data = await storageService.getArchivedEvents();
     } else {
         data = await storageService.getEvents();
+        // Si la liste est vide et qu'on est en ligne, tentative de chargement immédiat depuis Supabase
+        if (data.length === 0 && isLive && navigator.onLine) {
+            try {
+                await syncService.pullEvents();
+                data = await storageService.getEvents();
+            } catch (e) {
+                console.warn("[EventListPage] Auto-pull on empty events failed:", e);
+            }
+        }
     }
     
     const today = getLocalDateString();

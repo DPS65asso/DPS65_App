@@ -37,6 +37,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try {
           const data = await authService.getSession();
           setProfile(data.profile);
+          if (data.profile) {
+              // Réhydrater les événements en arrière-plan dès la reconnexion
+              import('../services/syncService').then(({ syncService }) => {
+                  syncService.pullEvents().catch(() => {});
+              }).catch(() => {});
+          }
       } catch (e) {
           console.error("Profile Load Error", e);
           setProfile(null);
