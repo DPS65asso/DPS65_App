@@ -1,6 +1,7 @@
 /**
  * Service de détection et mise à jour automatique et silencieuse depuis Vercel.
  * Maintient l'application à jour en arrière-plan sans interrompre ni déconnecter l'utilisateur.
+ * Optimisé pour ne jamais bloquer ni ralentir l'application ou la saisie sur le terrain.
  */
 
 declare const __APP_BUILD_ID__: string | undefined;
@@ -15,17 +16,15 @@ class VersionService {
   private pendingUpdate = false;
   private checkIntervalId: any = null;
   private isChecking = false;
+  private lastCheckTime = 0;
   private swRegistration: ServiceWorkerRegistration | null = null;
   private appStartTime = Date.now();
+  private readonly MIN_CHECK_INTERVAL_MS = 120_000; // Au maximum une vérification toutes les 2 minutes
 
   constructor() {
-    // ID de build injecté à la compilation Vite ou timestamp initial
     this.currentBuildId = typeof __APP_BUILD_ID__ !== 'undefined' ? __APP_BUILD_ID__ : 'dev';
   }
 
-  /**
-   * Retourne l'identifiant de la version locale actuellement exécutée
-   */
   public getCurrentBuildId(): string {
     return this.currentBuildId;
   }
@@ -39,38 +38,35 @@ class VersionService {
     // 1. Initialiser la surveillance du Service Worker
     this.initServiceWorkerWatcher();
 
-    // 2. Première vérification immédiate puis à +3 secondes (fin d'hydratation)
-    this.checkAndUpdate();
+    // 2. Première vérification après un délai de démarrage tranquille (5s) pour ne pas encombrer le boot
     setTimeout(() => {
       this.checkAndUpdate();
-    }, 3000);
+    }, 5000);
 
-    // 3. Vérification périodique toutes les 5 minutes
+    // 3. Vérification périodique toutes les 10 minutes
     if (this.checkIntervalId) clearInterval(this.checkIntervalId);
     this.checkIntervalId = setInterval(() => {
       this.checkAndUpdate();
-    }, 5 * 60 * 1000);
+    }, 10 * 60 * 1000);
 
-    // 4. Vérification lors du retour au premier plan ou focus
+    // 4. Écouter le masquage / retour d'onglet UNIQUEMENT (Pas de window.focus pour ne pas réagir aux inputs de formulaires)
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
         this.checkAndUpdate();
       } else if (document.visibilityState === 'hidden' && this.pendingUpdate) {
-        // L'utilisateur quitte l'onglet ou verrouille son téléphone :
-        // Moment idéal pour rafraîchir silencieusement l'application !
+        // L'utilisateur quitte l'application ou verrouille son téléphone :
+        // Moment propice pour rafraîchir en tâche de fond de façon transparente
         this.executeSilentReload();
       }
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
-    window.addEventListener('focus', () => this.checkAndUpdate());
-    window.addEventListener('online', () => this.checkAndUpdate());
 
     // 5. Écouter les diffusions de mise à jour forcée (via Supabase / admin)
     try {
       const bc = new BroadcastChannel('dps65_config_channel');
       bc.onmessage = (e) => {
         if (e.data?.type === 'UPDATE_CONFIG') {
-          this.checkAndUpdate();
+          this.checkAndUpdate(true);
         }
       };
     } catch (e) {
@@ -78,9 +74,6 @@ class VersionService {
     }
   }
 
-  /**
-   * Surveille le Service Worker et force l'activation sans attente
-   */
   private initServiceWorkerWatcher(): void {
     if (!('serviceWorker' in navigator)) return;
 
@@ -89,23 +82,17 @@ class VersionService {
         if (!reg) return;
         this.swRegistration = reg;
 
-        // Si un SW est déjà en attente, lui demander de s'activer
         if (reg.waiting) {
           reg.waiting.postMessage({ type: 'SKIP_WAITING' });
           this.pendingUpdate = true;
         }
 
-        // Si une nouvelle version du SW est détectée
         reg.addEventListener('updatefound', () => {
           const newWorker = reg.installing;
           if (newWorker) {
             newWorker.addEventListener('statechange', () => {
-              if (newWorker.state === 'installed') {
-                if (navigator.serviceWorker.controller) {
-                  // Nouveau contenu disponible en cache
-                  this.pendingUpdate = true;
-                  this.handleUpdateAvailable();
-                }
+              if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                this.pendingUpdate = true;
               }
             });
           }
@@ -115,10 +102,8 @@ class VersionService {
         console.warn('[VersionService] Erreur récupération SW:', err);
       });
 
-    // Quand le nouveau SW prend le contrôle, appliquer silencieusement si approprié
     navigator.serviceWorker.addEventListener('controllerchange', () => {
       this.pendingUpdate = true;
-      this.handleUpdateAvailable();
     });
   }
 
@@ -128,8 +113,6 @@ class VersionService {
   public async fetchRemoteVersion(): Promise<VersionInfo | null> {
     try {
       const timestamp = Date.now();
-      
-      // 1. Essai prioritaire sur le manifest de version
       const res = await fetch(`/version.json?_t=${timestamp}`, {
         cache: 'no-store',
         headers: {
@@ -147,34 +130,8 @@ class VersionService {
           };
         }
       }
-
-      // 2. Fallback : interrogation directe de la racine HTML sur Vercel
-      // On inspecte les hashes d'assets ou les en-têtes Vercel
-      const htmlRes = await fetch(`/?_t=${timestamp}`, {
-        cache: 'no-store',
-        headers: {
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache'
-        }
-      });
-
-      if (htmlRes.ok) {
-        const vercelId = htmlRes.headers.get('x-vercel-id');
-        const etag = htmlRes.headers.get('etag');
-        const text = await htmlRes.text();
-        
-        // Trouver le hash du bundle principal /assets/index-*.js
-        const match = text.match(/\/assets\/index-([a-zA-Z0-9_-]+)\.js/);
-        const scriptHash = match ? match[1] : (vercelId || etag);
-
-        if (scriptHash) {
-          return {
-            buildId: scriptHash
-          };
-        }
-      }
     } catch (err) {
-      // Échec réseau (hors-ligne ou réseau instable sur le terrain) : on ignore silencieusement
+      // Hors-ligne ou réseau mobile instable : ignore silencieusement
     }
     return null;
   }
@@ -182,45 +139,52 @@ class VersionService {
   /**
    * Vérifie si une nouvelle version existe sur Vercel et déclenche la mise à jour silencieuse
    */
-  public async checkAndUpdate(): Promise<boolean> {
+  public async checkAndUpdate(force: boolean = false): Promise<boolean> {
     if (this.isChecking) return false;
+
+    const now = Date.now();
+    if (!force && (now - this.lastCheckTime < this.MIN_CHECK_INTERVAL_MS)) {
+      return false; // Évite les requêtes rapprochées
+    }
+
     this.isChecking = true;
+    this.lastCheckTime = now;
 
     try {
-      // 1. Déclencher la mise à jour du Service Worker en tâche de fond
+      // Tâche de fond Service Worker
       if (this.swRegistration) {
         this.swRegistration.update().catch(() => {});
       }
 
-      // 2. Interroger Vercel
       const remote = await this.fetchRemoteVersion();
       if (!remote) {
-        this.isChecking = false;
         return false;
       }
 
-      // En mode dev ('dev'), ne pas forcer de mise à jour intempestive
-      if (this.currentBuildId === 'dev' || remote.buildId === 'dev') {
-        this.isChecking = false;
+      // En mode développement local ou initial, pas de rechargement intempestif
+      if (
+        this.currentBuildId === 'dev' || 
+        remote.buildId === 'dev' || 
+        remote.buildId === 'initial' ||
+        window.location.hostname === 'localhost' ||
+        window.location.hostname === '127.0.0.1'
+      ) {
         return false;
       }
 
-      // Vérifier si la version distante diffère de la version locale
+      // Version distante différente de la version locale
       if (remote.buildId !== this.currentBuildId) {
-        console.log(`[VersionService] Nouvelle version Vercel détectée: ${remote.buildId} (actuel: ${this.currentBuildId})`);
         this.pendingUpdate = true;
 
-        // Prévenir le Service Worker d'activer immédiatement le nouveau cache
         if (this.swRegistration?.waiting) {
           this.swRegistration.waiting.postMessage({ type: 'SKIP_WAITING' });
         }
 
         this.handleUpdateAvailable(remote.buildId);
-        this.isChecking = false;
         return true;
       }
     } catch (e) {
-      // Ne jamais bloquer l'app en cas d'erreur de vérification
+      // Jamais d'erreur bloquante
     } finally {
       this.isChecking = false;
     }
@@ -232,43 +196,27 @@ class VersionService {
    * Traite la disponibilité d'une mise à jour de manière invisible
    */
   private handleUpdateAvailable(newBuildId?: string): void {
-    // Si l'utilisateur est inactif ou si l'onglet est masqué, recharger tout de suite
+    // Si l'utilisateur est hors de l'onglet, recharger discrètement
     if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
       this.executeSilentReload(newBuildId);
       return;
     }
 
-    // Si l'application vient juste de démarrer (moins de 2.5 secondes) et qu'aucun
-    // formulaire n'est en cours de saisie, synchroniser immédiatement
-    const timeSinceStart = Date.now() - this.appStartTime;
-    const isFormFocused = typeof document !== 'undefined' && !!document.querySelector('input:focus, textarea:focus, select:focus');
-    const alreadyReloadedForBuild = newBuildId && sessionStorage.getItem('dps65_reloaded_build') === newBuildId;
-
-    if (timeSinceStart < 2500 && !isFormFocused && !alreadyReloadedForBuild) {
-      this.executeSilentReload(newBuildId);
-      return;
-    }
-
-    // Sinon, l'utilisateur est activement sur l'écran :
-    // On attend le premier masquage de l'onglet (fermeture, bascule d'app, extinction d'écran)
-    // pour effectuer la mise à jour de façon 100% invisible sans perte de saisie.
+    // Si un champ de formulaire est actif ou si l'utilisateur est sur la page depuis longtemps,
+    // on NE recharge JAMAIS directement pour ne pas interrompre la saisie.
+    // La mise à jour s'appliquera dès la fermeture ou mise en veille de l'écran.
   }
 
-  /**
-   * Recharge silencieusement la page vers la dernière version Vercel
-   */
   private executeSilentReload(targetBuildId?: string): void {
     if (targetBuildId) {
       const lastReload = sessionStorage.getItem('dps65_reloaded_build');
       if (lastReload === targetBuildId) {
-        // Empêcher toute boucle de rafraîchissement
         return;
       }
       sessionStorage.setItem('dps65_reloaded_build', targetBuildId);
     }
 
     try {
-      // Rechargement silencieux
       window.location.reload();
     } catch (e) {
       window.location.href = window.location.href;

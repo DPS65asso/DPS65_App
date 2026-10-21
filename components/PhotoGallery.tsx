@@ -34,7 +34,12 @@ export const PhotoGallery: React.FC<PhotoGalleryProps> = ({ photos, onUpdate, re
     };
   }, []); 
 
-  // Gestionnaire de réponse du Worker
+  const photosRef = useRef(photos);
+  photosRef.current = photos;
+  const onUpdateRef = useRef(onUpdate);
+  onUpdateRef.current = onUpdate;
+
+  // Gestionnaire de réponse du Worker (stable, ne se réinitialise pas à chaque frappe)
   useEffect(() => {
       if(workerRef.current) {
           workerRef.current.onmessage = (e) => {
@@ -46,7 +51,7 @@ export const PhotoGallery: React.FC<PhotoGalleryProps> = ({ photos, onUpdate, re
                     blob: blob, 
                     description: ecoMode ? 'Mode Éco (Noir/Blanc)' : ''
                 };
-                onUpdate([...photos, newPhoto]);
+                onUpdateRef.current([...photosRef.current, newPhoto]);
             } else {
                 console.error("Worker error", error);
                 alert("Erreur compression.");
@@ -54,11 +59,11 @@ export const PhotoGallery: React.FC<PhotoGalleryProps> = ({ photos, onUpdate, re
             setIsCompressing(false);
           };
       }
-  }, [photos, onUpdate, ecoMode]);
+  }, [ecoMode]);
 
   // OPTIMISATION CRITIQUE : Gestion stable des URLs pour les Blobs
-  // Évite de recréer des URLs à chaque render (Memory Leak + Flickering)
   const displayUrls = useMemo(() => {
+      if (!photos || photos.length === 0) return {};
       const urls: Record<string, string> = {};
       photos.forEach(p => {
           if (p.blob) {
@@ -73,11 +78,13 @@ export const PhotoGallery: React.FC<PhotoGalleryProps> = ({ photos, onUpdate, re
   // Nettoyage des URLs lors du démontage ou changement de photos
   useEffect(() => {
       return () => {
-          photos.forEach(p => {
-              if (p.blob && displayUrls[p.id]) {
-                  URL.revokeObjectURL(displayUrls[p.id]);
-              }
-          });
+          if (photos && photos.length > 0) {
+              photos.forEach(p => {
+                  if (p.blob && displayUrls[p.id]) {
+                      URL.revokeObjectURL(displayUrls[p.id]);
+                  }
+              });
+          }
       };
   }, [displayUrls, photos]);
 

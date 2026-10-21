@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { Layout } from '../components/Layout';
 import { Button } from '../components/Button';
@@ -8,7 +8,7 @@ import { TransferQrModal } from '../components/TransferQrModal';
 import { PhotoGallery } from '../components/PhotoGallery';
 import { storageService } from '../services/storageService';
 import { bagService } from '../services/bagService';
-import { Outcome, Victim, Solute, VitalSign, AppConfig, TriageColor, Medication, Event, ResponderEntry } from '../types';
+import { Outcome, Victim, Solute, VitalSign, AppConfig, TriageColor, Medication, Event, ResponderEntry, VictimPhoto } from '../types';
 import { useVoiceInput } from '../hooks/useVoiceInput';
 import { User, ClipboardList, AlertTriangle, Activity, Loader2, Clock, Phone, RefreshCw, Mic, MicOff, ShieldCheck, HeartPulse, Stethoscope, Syringe, CheckCircle2, Plus, Trash2, MapPin, Building2, History, ChevronDown, ChevronUp, PenTool, Bed, QrCode, Zap, Timer, Camera, Pill, Flame, FileText, ArrowDown, Maximize2, X, Eye, EyeOff, Send, Check } from 'lucide-react';
 import { generateUUID, isValidPhoneNumber, MAX_INPUT_LENGTH, MAX_TEXTAREA_LENGTH, MAX_PHONE_LENGTH, getLocalDateTimeString } from '../utils/security';
@@ -22,6 +22,7 @@ import { Sparkles, Copy, Radio } from 'lucide-react';
 
 const inputClass = "w-full p-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-slate-700 text-slate-900 dark:text-white dark:placeholder-slate-400 transition-colors";
 const labelClass = "block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1";
+const EMPTY_PHOTOS: VictimPhoto[] = [];
 
 export const AddVictimPage: React.FC = () => {
   const { id, victimId } = useParams<{ id: string; victimId?: string }>();
@@ -139,8 +140,14 @@ export const AddVictimPage: React.FC = () => {
   const [hospitalSelect, setHospitalSelect] = useState('');
   const [timeError, setTimeError] = useState(false);
   
-  const { startListening: startReason, isListening: isListeningReason } = useVoiceInput((text) => handleChange('reason', (formData.reason ? formData.reason + ' ' : '') + text));
-  const { startListening: startCare, isListening: isListeningCare } = useVoiceInput((text) => handleChange('careProvided', (formData.careProvided ? formData.careProvided + ' ' : '') + text));
+  const handleVoiceReason = useCallback((text: string) => {
+    setFormData(prev => ({ ...prev, reason: (prev.reason ? prev.reason + ' ' : '') + text }));
+  }, []);
+  const handleVoiceCare = useCallback((text: string) => {
+    setFormData(prev => ({ ...prev, careProvided: (prev.careProvided ? prev.careProvided + ' ' : '') + text }));
+  }, []);
+  const { startListening: startReason, isListening: isListeningReason } = useVoiceInput(handleVoiceReason);
+  const { startListening: startCare, isListening: isListeningCare } = useVoiceInput(handleVoiceCare);
   const topRef = useRef<HTMLDivElement>(null);
   
   // RESTRICTION : Accès aux soins avancés
@@ -270,7 +277,24 @@ export const AddVictimPage: React.FC = () => {
     init();
   }, [victimId, id, navigate]);
 
-  const handleChange = (field: keyof Victim, value: any) => { if (field === 'outcome') { const exitStatuses = [Outcome.RELEASED, Outcome.EVACUATED_HOSPITAL, Outcome.REFUSED_CARE, Outcome.TRANSFER_TO_POST]; if (exitStatuses.includes(value) && !formData.departureTime) { setFormData(prev => ({ ...prev, [field]: value, departureTime: getLocalDateTimeString() })); return; } } setFormData(prev => ({ ...prev, [field]: value })); };
+  const handleChange = useCallback((field: keyof Victim, value: any) => { 
+    if (field === 'outcome') { 
+      const exitStatuses = [Outcome.RELEASED, Outcome.EVACUATED_HOSPITAL, Outcome.REFUSED_CARE, Outcome.TRANSFER_TO_POST]; 
+      setFormData(prev => {
+        if (exitStatuses.includes(value) && !prev.departureTime) { 
+          return { ...prev, [field]: value, departureTime: getLocalDateTimeString() }; 
+        }
+        return { ...prev, [field]: value };
+      });
+      return;
+    } 
+    setFormData(prev => ({ ...prev, [field]: value })); 
+  }, []);
+
+  const handleUpdatePhotos = useCallback((newPhotos: VictimPhoto[]) => {
+    setFormData(prev => ({ ...prev, photos: newPhotos }));
+  }, []);
+
   const handleVitalChange = (field: keyof VitalSign, value: string) => { if (value.length > 10) return; setNewVital(prev => ({ ...prev, [field]: value })); };
   const addVitalSign = () => { if (!newVital.pulse && !newVital.sao2 && !newVital.bp && !newVital.glycemia && !newVital.temp && !newVital.eva) return; const entry: VitalSign = { id: generateUUID(), time: newVital.time || getCurrentTime(), pulse: newVital.pulse, sao2: newVital.sao2, bp: newVital.bp, glycemia: newVital.glycemia, temp: newVital.temp, eva: newVital.eva }; setFormData(prev => ({ ...prev, vitals: [...(prev.vitals || []), entry] })); setNewVital({ time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }), pulse: '', sao2: '', bp: '', glycemia: '', temp: '', eva: '' }); };
   const removeVitalSign = (vitalId: string) => { setFormData(prev => ({ ...prev, vitals: (prev.vitals || []).filter(v => v.id !== vitalId) })); };
@@ -286,9 +310,9 @@ export const AddVictimPage: React.FC = () => {
   const toggleTourniquet = (checked: boolean) => { if (checked) { setFormData(prev => ({ ...prev, hasTourniquet: true, tourniquetTime: prev.tourniquetTime || getLocalDateTimeString() })); } else { setFormData(prev => ({ ...prev, hasTourniquet: false })); } };
 
   const getVitalHistory = (type: 'pulse' | 'bp' | 'sao2'): number[] => {
-      if (!formData.vitals) return [];
-      return formData.vitals
-        .sort((a,b) => a.time.localeCompare(b.time))
+      if (!formData.vitals || formData.vitals.length === 0) return [];
+      return [...formData.vitals]
+        .sort((a,b) => (a.time || '').localeCompare(b.time || ''))
         .map(v => {
             if (type === 'bp' && v.bp) return parseInt(v.bp.split('/')[0]); 
             if (type === 'pulse' && v.pulse) return parseInt(v.pulse);
@@ -622,7 +646,7 @@ export const AddVictimPage: React.FC = () => {
                     <button type="button" onClick={() => setShowVitalList(!showVitalList)} className="w-full flex items-center justify-center gap-2 p-2 bg-slate-50 dark:bg-slate-800/50 rounded-lg text-xs font-bold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors border border-slate-200 dark:border-slate-700 mb-2">{showVitalList ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}{showVitalList ? 'Masquer l\'historique détaillé' : `Voir l'historique complet (${formData.vitals.length})`}</button>
                     {showVitalList && (
                         <div className="animate-in slide-in-from-top-2 space-y-2">
-                            {formData.vitals.sort((a, b) => (b.time || '').localeCompare(a.time || '')).map((vital) => (
+                            {[...formData.vitals].sort((a, b) => (b.time || '').localeCompare(a.time || '')).map((vital) => (
                                 <div key={vital.id} className="flex items-center justify-between p-3 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
                                     <div className="flex items-center gap-3">
                                         <span className="text-sm font-bold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-700 px-2 py-1 rounded">{vital.time}</span>
@@ -680,7 +704,7 @@ export const AddVictimPage: React.FC = () => {
         {/* --- PHOTOS --- */}
         <div className="bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 transition-colors">
             <h3 className="text-sm font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-4 flex items-center gap-2"><Camera className="w-4 h-4" /> Photos & Preuves</h3>
-            <PhotoGallery photos={formData.photos || []} onUpdate={(newPhotos) => handleChange('photos', newPhotos)} />
+            <PhotoGallery photos={formData.photos || EMPTY_PHOTOS} onUpdate={handleUpdatePhotos} />
         </div>
 
         {/* --- MODE AVANCÉ (RESTREINT AUX IDE/MED/ADMIN) --- */}

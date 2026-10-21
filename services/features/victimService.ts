@@ -100,8 +100,10 @@ export const victimService = {
 
         await tx.done;
         
-        // 3. Trigger Sync
-        syncService.processQueue();
+        // 3. Trigger Sync de manière asynchrone pour ne pas bloquer l'IHM et la navigation
+        setTimeout(() => {
+            syncService.processQueue();
+        }, 100);
         
         auditService.log('CREATE_VICTIM', `Victim ID: ${cleanVictim.id}`);
         bc.postMessage({ type: 'UPDATE_VICTIMS', eventId: victim.eventId });
@@ -139,7 +141,9 @@ export const victimService = {
         });
 
         await tx.done;
-        syncService.processQueue();
+        setTimeout(() => {
+            syncService.processQueue();
+        }, 100);
         
         bc.postMessage({ type: 'UPDATE_VICTIMS', eventId: updatedVictim.eventId });
     },
