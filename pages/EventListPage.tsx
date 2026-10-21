@@ -44,6 +44,8 @@ export const EventListPage: React.FC = () => {
   const [downloadSuccess, setDownloadSuccess] = useState(false);
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const listAbortControllerRef = useRef<AbortController | null>(null);
+  const hasInitialLoadedRef = useRef(false);
+  const listDebounceTimerRef = useRef<any>(null);
 
   const handleDownloadOfflineClick = async (e: React.MouseEvent, event: Event) => {
     e.stopPropagation();
@@ -96,50 +98,10 @@ export const EventListPage: React.FC = () => {
     }
   };
 
-  useEffect(() => {
-    loadEvents();
-    
-    // Déclenchement d'un rafraîchissement silencieux immédiat et léger en tâche de fond (<15Ko)
-    if (navigator.onLine && isLive) {
-      syncService.pullEvents().then(() => loadEvents()).catch(() => {});
+  const loadEvents = async (silent: boolean = false) => {
+    if (!silent && !hasInitialLoadedRef.current) {
+      setIsLoading(true);
     }
-
-    // Écoute des mises à jour en temps réel des événements
-    const bc = new BroadcastChannel('dps65_events_channel');
-    bc.onmessage = (e) => {
-      if (e.data.type === 'UPDATE_EVENTS' || e.data.type === 'UPDATE_MISSIONS') {
-        loadEvents();
-      }
-    };
-
-    // Synchronisation en direct avec le service de synchronisation
-    const unsubSync = syncService.subscribe(() => {
-      loadEvents();
-    });
-
-    // Rechargement au retour sur l'onglet (iPhone iOS Safari / Android)
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        loadEvents();
-        if (navigator.onLine && isLive) {
-          syncService.pullEvents().then(() => loadEvents()).catch(() => {});
-        }
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    window.addEventListener('focus', handleVisibilityChange);
-    
-    return () => {
-      bc.close();
-      unsubSync();
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-      window.removeEventListener('focus', handleVisibilityChange);
-    };
-  }, [showArchived]);
-
-  const loadEvents = async () => {
-    setIsLoading(true);
     let data: Event[] = [];
     
     if (showArchived) {
@@ -165,16 +127,10 @@ export const EventListPage: React.FC = () => {
 
       // Logique pour liste active (non archivée)
       if (!showArchived) {
-          // Priorité absolue aux événements d'aujourd'hui en haut de liste
           if (aIsToday && !bIsToday) return -1;
           if (!aIsToday && bIsToday) return 1;
-          
-          // Sinon, tri par date CROISSANTE (le plus proche en haut)
-          // Ex: 20 Oct, 25 Oct, 01 Nov
           const dateCompare = a.date.localeCompare(b.date);
           if (dateCompare !== 0) return dateCompare;
-          
-          // Si même date, création la plus récente en premier (ou l'inverse selon préférence)
           return b.createdAt - a.createdAt;
       }
 
@@ -183,9 +139,62 @@ export const EventListPage: React.FC = () => {
       if (dateCompareDesc !== 0) return dateCompareDesc;
       return b.createdAt - a.createdAt;
     });
+
     setEvents(sortedData);
     setIsLoading(false);
+    hasInitialLoadedRef.current = true;
   };
+
+  useEffect(() => {
+    hasInitialLoadedRef.current = false;
+    loadEvents();
+    
+    // Déclenchement d'un rafraîchissement silencieux immédiat et léger en tâche de fond (<15Ko)
+    if (navigator.onLine && isLive) {
+      syncService.pullEvents().then(() => loadEvents(true)).catch(() => {});
+    }
+
+    const debouncedLoadEvents = () => {
+      if (listDebounceTimerRef.current) clearTimeout(listDebounceTimerRef.current);
+      listDebounceTimerRef.current = setTimeout(() => {
+        loadEvents(true);
+      }, 150);
+    };
+
+    // Écoute des mises à jour en temps réel des événements
+    const bc = new BroadcastChannel('dps65_events_channel');
+    bc.onmessage = (e) => {
+      if (e.data.type === 'UPDATE_EVENTS' || e.data.type === 'UPDATE_MISSIONS') {
+        debouncedLoadEvents();
+      }
+    };
+
+    // Synchronisation en direct avec le service de synchronisation
+    const unsubSync = syncService.subscribe(() => {
+      debouncedLoadEvents();
+    });
+
+    // Rechargement au retour sur l'onglet (iPhone iOS Safari / Android)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        debouncedLoadEvents();
+        if (navigator.onLine && isLive) {
+          syncService.pullEvents().then(() => loadEvents(true)).catch(() => {});
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleVisibilityChange);
+    
+    return () => {
+      if (listDebounceTimerRef.current) clearTimeout(listDebounceTimerRef.current);
+      bc.close();
+      unsubSync();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleVisibilityChange);
+    };
+  }, [showArchived]);
 
   const handleDeleteClick = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();

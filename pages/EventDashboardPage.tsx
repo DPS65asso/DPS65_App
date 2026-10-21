@@ -1,5 +1,5 @@
 
-import React, { useEffect, useState, useRef, useMemo } from 'react';
+import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Layout } from '../components/Layout';
 import { Button } from '../components/Button';
@@ -36,6 +36,8 @@ export const EventDashboardPage: React.FC = () => {
   const [filterMedical, setFilterMedical] = useState(false);
 
   const notifiedVictimsRef = useRef<Set<string>>(new Set());
+  const isLoadingDataRef = useRef(false);
+  const debounceTimerRef = useRef<any>(null);
 
   const [isResponderModalOpen, setIsResponderModalOpen] = useState(false);
   const [isNoviModalOpen, setIsNoviModalOpen] = useState(false);
@@ -60,19 +62,59 @@ export const EventDashboardPage: React.FC = () => {
     }
   }, [profile, navigate]);
 
-  const loadData = async () => {
-    if (id) {
+  const loadData = useCallback(async () => {
+    if (!id || isLoadingDataRef.current) return;
+    isLoadingDataRef.current = true;
+    try {
       const e = await storageService.getEventById(id);
       if (e) {
-        setEvent(e);
+        setEvent(prev => {
+          if (!prev) return e;
+          if (
+            prev.id === e.id &&
+            prev.updatedAt === e.updatedAt &&
+            prev.name === e.name &&
+            prev.date === e.date &&
+            prev.location === e.location &&
+            prev.tracks?.length === e.tracks?.length &&
+            prev.mapPdfs?.length === e.mapPdfs?.length
+          ) {
+            return prev;
+          }
+          return e;
+        });
+
         const v = await storageService.getVictimsByEvent(id, false);
-        setVictims(v);
+        setVictims(prev => {
+          if (prev.length !== v.length) return v;
+          const isDifferent = v.some((item, idx) => {
+            const prevItem = prev[idx];
+            return (
+              !prevItem ||
+              prevItem.id !== item.id ||
+              prevItem.updatedAt !== item.updatedAt ||
+              prevItem.outcome !== item.outcome ||
+              prevItem.triageColor !== item.triageColor ||
+              prevItem.fullName !== item.fullName ||
+              prevItem.samuValidated !== item.samuValidated ||
+              prevItem.bibNumber !== item.bibNumber
+            );
+          });
+          return isDifferent ? v : prev;
+        });
+
         const c = await storageService.getConfig();
         setConfig(c);
-      } else { navigate('/events'); }
+      } else { 
+        navigate('/events'); 
+      }
+    } catch (err) {
+      console.error("Error loading dashboard data:", err);
+    } finally {
+      setIsLoading(false);
+      isLoadingDataRef.current = false;
     }
-    setIsLoading(false);
-  };
+  }, [id, navigate]);
 
   useEffect(() => {
     loadData();
@@ -84,26 +126,34 @@ export const EventDashboardPage: React.FC = () => {
         checkVictimsFreshness(timeNow);
     }, 60000); 
 
+    const debouncedLoadData = () => {
+      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = setTimeout(() => {
+        loadData();
+      }, 150);
+    };
+
     const bcVictims = new BroadcastChannel('dps65_victims_channel');
     bcVictims.onmessage = (e) => {
         if (e.data.type === 'UPDATE_VICTIMS' && e.data.eventId === id) {
-            loadData();
+            debouncedLoadData();
         }
     };
 
     const bcEvents = new BroadcastChannel('dps65_events_channel');
     bcEvents.onmessage = (e) => {
         if (e.data.type === 'UPDATE_EVENTS' && (!e.data.eventId || e.data.eventId === id)) {
-            loadData();
+            debouncedLoadData();
         }
     };
     
     return () => { 
         clearInterval(interval);
+        if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
         bcVictims.close();
         bcEvents.close();
     };
-  }, [id]);
+  }, [id, loadData]);
 
   const checkVictimsFreshness = (timeNow: number) => {
     victims.forEach(v => {
@@ -317,7 +367,7 @@ export const EventDashboardPage: React.FC = () => {
                                 {victim.signatureData && <Pencil className="w-3 h-3 text-green-500" />}
                               </div>
                            </div>
-                           <button onClick={(e) => handleDeleteClick(e, victim.id)} className="absolute top-4 right-4 p-2 text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 lg:opacity-100 transition-opacity"><Trash2 className="w-4 h-4" /></button>
+                           <button onClick={(e) => handleDeleteClick(e, victim.id)} title="Supprimer la fiche victime" className="absolute top-3.5 right-3.5 p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg transition-colors"><Trash2 className="w-4 h-4" /></button>
                       </div>
                   )})
               )}

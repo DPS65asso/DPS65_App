@@ -8,6 +8,7 @@ import { sanitizeEventData, mergeEventData } from '../core/storageHelpers';
 import { syncService } from '../syncService';
 
 const bc = new BroadcastChannel('dps65_events_channel');
+const recentFetches = new Map<string, number>();
 
 export const eventService = {
     getEvents: async (): Promise<AppEvent[]> => {
@@ -174,6 +175,12 @@ export const eventService = {
         // Fonction helper pour récupérer les détails distants depuis Supabase
         const fetchRemoteDetails = async () => {
             if (!isLive || !navigator.onLine) return;
+            const now = Date.now();
+            const lastFetch = recentFetches.get(id) || 0;
+            // Cooldown de 60 secondes pour éviter tout martèlement réseau ou I/O inutile
+            if (now - lastFetch < 60000) return;
+            recentFetches.set(id, now);
+
             try {
                 const { data, error } = await supabase.from('events').select('*').eq('id', id).maybeSingle();
                 if (!error && data) {
@@ -182,9 +189,8 @@ export const eventService = {
                     const latestLocal = (await db.get('events', id)) || (await db.get('events_archive', id));
                     const merged = latestLocal ? mergeEventData(latestLocal, remoteEvt) : remoteEvt;
                     await db.put(merged.isArchived ? 'events_archive' : 'events', merged);
-                    try {
-                        bc.postMessage({ type: 'UPDATE_EVENTS' });
-                    } catch (e) {}
+                    // NE JAMAIS émettre bc.postMessage('UPDATE_EVENTS') ici :
+                    // getEventById est une lecture et déclenchait une boucle infinie avec les vues d'écoute.
                 }
             } catch (e) {
                 console.warn("Could not fetch full event details from Supabase:", e);
