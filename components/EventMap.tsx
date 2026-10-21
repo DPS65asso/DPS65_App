@@ -738,13 +738,24 @@ export const EventMap: React.FC<Props> = ({
                     attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' 
                     url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" 
                     maxZoom={19}
+                    maxNativeZoom={16}
                 />
             )}
             {currentStyle === 'topo' && (
-                <TileLayer attribution='&copy; OpenTopoMap' url="https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png" maxZoom={17} />
+                <TileLayer 
+                    attribution='&copy; OpenTopoMap' 
+                    url="https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png" 
+                    maxZoom={19} 
+                    maxNativeZoom={17}
+                />
             )}
             {currentStyle === 'satellite' && (
-                <TileLayer attribution='&copy; Esri' url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" />
+                <TileLayer 
+                    attribution='&copy; Esri' 
+                    url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" 
+                    maxZoom={19}
+                    maxNativeZoom={18}
+                />
             )}
 
             {/* POINTS PERSO */}
