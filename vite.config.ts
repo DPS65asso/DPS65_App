@@ -6,14 +6,29 @@ import { VitePWA } from 'vite-plugin-pwa';
 export default defineConfig(({ mode }) => {
   // Charge les variables d'environnement depuis .env (sans préfixe obligatoire VITE_)
   const env = loadEnv(mode, (process as any).cwd(), '');
+  const buildId = Date.now().toString();
 
   return {
-    // Polyfill pour process.env.API_KEY requis par le composant AI
+    // Polyfill pour process.env.API_KEY requis par le composant AI et versioning de build
     define: {
-      'process.env.API_KEY': JSON.stringify(env.API_KEY || env.VITE_API_KEY || '')
+      'process.env.API_KEY': JSON.stringify(env.API_KEY || env.VITE_API_KEY || ''),
+      '__APP_BUILD_ID__': JSON.stringify(buildId)
     },
     plugins: [
       react(),
+      {
+        name: 'generate-version-json',
+        generateBundle() {
+          this.emitFile({
+            type: 'asset',
+            fileName: 'version.json',
+            source: JSON.stringify({
+              buildId,
+              builtAt: new Date().toISOString()
+            })
+          });
+        }
+      },
       VitePWA({
         strategies: 'injectManifest',
         srcDir: 'src',

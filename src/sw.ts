@@ -10,6 +10,11 @@ declare const self: ServiceWorkerGlobalScope;
 cleanupOutdatedCaches();
 precacheAndRoute(self.__WB_MANIFEST);
 
+// Forcer l'activation immédiate de tout nouveau Service Worker sans bloquer
+self.addEventListener('install', () => {
+  self.skipWaiting();
+});
+
 // Écouter le message SKIP_WAITING du client pour forcer l'activation immédiate
 self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'SKIP_WAITING') {
