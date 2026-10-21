@@ -12,21 +12,28 @@ export const OfflineMapPrompt: React.FC = () => {
 
     useEffect(() => {
         const checkStatus = async () => {
-            // Vérifier si l'utilisateur a précédemment refusé ou reporté le téléchargement
+            // Vérifier si l'utilisateur a précédemment refusé ou si la carte est déjà marquée comme installée
             const isDismissed = localStorage.getItem('dps65_offline_map_dismissed') === 'true';
             if (isDismissed) return;
+            if (localStorage.getItem('dps65_offline_map_downloaded') === 'true') return;
+
+            // Ne pas afficher la demande de téléchargement si l'appareil est hors-ligne
+            if (!navigator.onLine) return;
 
             try {
                 const status = await getOfflineMapStatus();
                 setCachedStatus(status);
 
-                // Si plus de 90% des tuiles ne sont PAS téléchargées, on propose le téléchargement
-                if (status.percent < 90) {
-                    // Petite attente avant d'afficher pour un effet poli au démarrage
-                    setTimeout(() => {
-                        setShowPrompt(true);
-                    }, 3000);
+                // Proposer UNIQUEMENT si la carte n'est pas déjà présente sur le téléphone
+                if (status.isDownloaded || status.percent >= 70 || status.cachedCount > 80) {
+                    localStorage.setItem('dps65_offline_map_downloaded', 'true');
+                    return;
                 }
+
+                // Petite attente avant d'afficher pour un effet poli au démarrage
+                setTimeout(() => {
+                    setShowPrompt(true);
+                }, 3000);
             } catch (e) {
                 console.error("Erreur d'initialisation du statut de carte hors-ligne :", e);
             }
@@ -38,6 +45,11 @@ export const OfflineMapPrompt: React.FC = () => {
     const abortControllerRef = React.useRef<AbortController | null>(null);
 
     const handleDownload = async () => {
+        if (!navigator.onLine) {
+            setDownloadError("Téléchargement impossible : vous êtes hors-ligne ou en mode avion. Connectez-vous à Internet pour télécharger la carte.");
+            return;
+        }
+
         setIsDownloading(true);
         setDownloadError(null);
         const controller = new AbortController();
@@ -51,10 +63,11 @@ export const OfflineMapPrompt: React.FC = () => {
                     currentUrl: prog.currentUrl || ''
                 });
             }, controller.signal);
+            localStorage.setItem('dps65_offline_map_downloaded', 'true');
             setDownloadSuccess(true);
             setTimeout(() => {
                 setShowPrompt(false);
-            }, 4000);
+            }, 3000);
         } catch (error: any) {
             if (error?.name === 'AbortError' || controller.signal.aborted) {
                 console.log("Téléchargement annulé par l'utilisateur.");
@@ -128,9 +141,6 @@ export const OfflineMapPrompt: React.FC = () => {
 
                         {/* Description */}
                         <div className="space-y-3 text-sm text-slate-600 dark:text-slate-300 mb-6 font-medium">
-                            <p>
-                                Vous allez intervenir sur des événements sportifs ou des dispositifs prévisionnels de secours (DPS) en Haute Montagne ou dans des zones avec peu de couverture réseau <strong>(Zones Blanches)</strong> ?
-                            </p>
                             <p className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200/50 dark:border-amber-800/20 rounded-xl p-3 text-xs text-amber-800 dark:text-amber-300 flex gap-2.5 items-start">
                                 <Info className="w-4 h-4 shrink-0 mt-0.5" />
                                 <span>

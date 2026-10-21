@@ -256,12 +256,40 @@ export async function downloadTileUrls(
     }
     
     const total = urls.length;
+    if (total === 0) return;
+
     const cache = await caches.open(CACHE_NAME);
+
+    // Vérification stricte du mode en ligne / mode avion
+    if (!navigator.onLine) {
+        // Vérifier si toutes les tuiles sont déjà présentes en cache local
+        let missingCount = 0;
+        for (const url of urls) {
+            const match = await cache.match(url);
+            if (!match) {
+                missingCount++;
+            }
+        }
+        if (missingCount > 0) {
+            throw new Error(`Téléchargement impossible : vous êtes hors-ligne ou en mode avion (${missingCount} tuile(s) manquante(s)). Connectez-vous à Internet pour télécharger la carte.`);
+        } else {
+            onProgress({
+                downloaded: total,
+                total,
+                percent: 100,
+                currentUrl: "Toutes les tuiles sont déjà disponibles hors-ligne"
+            });
+            return;
+        }
+    }
     
     // Pour ne pas surcharger le réseau, on télécharge par paquets de requêtes concurrentes d'intensité raisonnable
     const CONCURRENCY_LIMIT = 8;
     let index = 0;
-    let downloadedCount = 0;
+    let newlyDownloadedCount = 0;
+    let alreadyCachedCount = 0;
+    let failedCount = 0;
+    let processedCount = 0;
     
     async function worker() {
         while (index < total) {
@@ -272,46 +300,62 @@ export async function downloadTileUrls(
             const url = urls[currentIndex];
             if (!url) continue;
             
+            let isTileReady = false;
             try {
-                // Vérifier si déjà présent en cache
+                // 1. Vérifier si déjà présent en cache local
                 const cachedResponse = await cache.match(url);
                 if (cachedResponse) {
-                    downloadedCount++;
-                    onProgress({
-                        downloaded: downloadedCount,
-                        total,
-                        percent: Math.round((downloadedCount / total) * 100),
-                        currentUrl: `Déjà en cache...`
-                    });
-                    continue;
-                }
-                
-                // Télécharger la tuile avec un timeout de 10s
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 10000);
-                
-                const response = await fetch(url, { 
-                    signal: signal || controller.signal,
-                    headers: { 'Accept': 'image/*' }
-                });
-                
-                clearTimeout(timeoutId);
-                
-                if (response.ok) {
-                    await cache.put(url, response);
+                    alreadyCachedCount++;
+                    isTileReady = true;
+                } else {
+                    // 2. Télécharger la tuile avec un timeout de 8s
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 8000);
+                    
+                    const onAbort = () => controller.abort();
+                    if (signal) {
+                        if (signal.aborted) controller.abort();
+                        else signal.addEventListener('abort', onAbort, { once: true });
+                    }
+                    
+                    try {
+                        const response = await fetch(url, { 
+                            signal: controller.signal,
+                            headers: { 'Accept': 'image/*' }
+                        });
+                        clearTimeout(timeoutId);
+                        
+                        if (response.ok) {
+                            await cache.put(url, response);
+                            newlyDownloadedCount++;
+                            isTileReady = true;
+                        } else {
+                            failedCount++;
+                        }
+                    } catch (fetchErr) {
+                        clearTimeout(timeoutId);
+                        if (signal?.aborted) throw fetchErr;
+                        failedCount++;
+                    } finally {
+                        if (signal) signal.removeEventListener('abort', onAbort);
+                    }
                 }
             } catch (e) {
-                // Ignore silent failure of individual tiles
+                if (signal?.aborted) break;
+                failedCount++;
             } finally {
                 if (signal?.aborted) {
                     break;
                 }
-                downloadedCount++;
+                processedCount++;
+                const securedCount = alreadyCachedCount + newlyDownloadedCount;
                 onProgress({
-                    downloaded: downloadedCount,
+                    downloaded: securedCount,
                     total,
-                    percent: Math.round((downloadedCount / total) * 100),
-                    currentUrl: `Tuile ${downloadedCount}/${total}`
+                    percent: Math.min(100, Math.round((processedCount / total) * 100)),
+                    currentUrl: isTileReady 
+                        ? `Tuile ${processedCount}/${total}` 
+                        : `Échec tuile ${processedCount}/${total}`
                 });
             }
         }
@@ -323,6 +367,19 @@ export async function downloadTileUrls(
     
     if (signal?.aborted) {
         throw new DOMException('Download aborted', 'AbortError');
+    }
+
+    const securedCount = alreadyCachedCount + newlyDownloadedCount;
+
+    // Si aucune tuile n'a pu être téléchargée et qu'il y a eu des échecs (ex: coupure réseau, mode avion survenu)
+    if (failedCount > 0 && newlyDownloadedCount === 0 && alreadyCachedCount < total * 0.9) {
+        throw new Error("Échec du téléchargement : aucune connexion Internet active pour récupérer les tuiles de carte. Désactivez le mode avion.");
+    }
+
+    // Si un taux d'échec critique survient (> 25% des tuiles à télécharger)
+    const neededToDownload = total - alreadyCachedCount;
+    if (neededToDownload > 0 && failedCount > neededToDownload * 0.25) {
+        throw new Error(`Téléchargement incomplet : ${failedCount} tuile(s) n'ont pas pu être téléchargées (connexion instable ou interrompue).`);
     }
 }
 

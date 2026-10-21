@@ -49,6 +49,16 @@ export const EventListPage: React.FC = () => {
 
   const handleDownloadOfflineClick = async (e: React.MouseEvent, event: Event) => {
     e.stopPropagation();
+    if (!navigator.onLine) {
+      setDownloadingEventId(event.id);
+      setDownloadError("Mode hors-ligne / avion actif : connectez-vous à Internet pour télécharger cette carte.");
+      setTimeout(() => {
+        setDownloadingEventId(null);
+        setDownloadError(null);
+      }, 4000);
+      return;
+    }
+
     setDownloadingEventId(event.id);
     setDownloadProgress({ downloaded: 0, total: 0, percent: 0, currentUrl: '' });
     setDownloadSuccess(false);
@@ -87,6 +97,10 @@ export const EventListPage: React.FC = () => {
         console.error("Local map download failed from list:", err);
         setDownloadError(err?.message || "Le téléchargement d'urgence a échoué.");
       }
+      setTimeout(() => {
+        setDownloadingEventId(null);
+        setDownloadError(null);
+      }, 5000);
     } finally {
       listAbortControllerRef.current = null;
     }
