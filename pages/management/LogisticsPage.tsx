@@ -362,12 +362,30 @@ export const LogisticsPage: React.FC = () => {
     };
 
     const renderListHeader = () => (
-        <div className="flex items-center justify-center w-full min-w-0 pr-6">
+        <div className="flex items-center justify-center gap-3 w-full min-w-0 pr-6">
+            <button
+                onClick={goToPrevVehicle}
+                disabled={currentVehicleIndex === 0}
+                className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 flex items-center justify-center transition-all disabled:opacity-30 disabled:cursor-not-allowed shadow-sm cursor-pointer"
+                aria-label="Véhicule précédent"
+            >
+                <ChevronLeft className="w-4 h-4" />
+            </button>
+
             {fleet.length > 0 && (
                 <div className="text-sm font-black tracking-widest text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 px-4 py-1.5 rounded-xl shadow-inner border border-slate-200 dark:border-slate-700">
                     {currentVehicleIndex + 1} / {fleet.length}
                 </div>
             )}
+
+            <button
+                onClick={goToNextVehicle}
+                disabled={currentVehicleIndex === fleet.length - 1}
+                className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 flex items-center justify-center transition-all disabled:opacity-30 disabled:cursor-not-allowed shadow-sm cursor-pointer"
+                aria-label="Véhicule suivant"
+            >
+                <ChevronRight className="w-4 h-4" />
+            </button>
         </div>
     );
 
@@ -393,28 +411,6 @@ export const LogisticsPage: React.FC = () => {
                     >
                         {/* CARROUSEL VIEWPORT */}
                         <div className="relative flex-1 w-full overflow-hidden flex items-stretch">
-                            {/* BOUTON FLÉCHÉ GAUCHE (DESKTOP / ACCESSIBILITÉ) */}
-                            {currentVehicleIndex > 0 && (
-                                <button
-                                    onClick={goToPrevVehicle}
-                                    className="absolute left-1.5 top-1/2 -translate-y-1/2 z-20 w-9 h-9 rounded-full bg-black/40 hover:bg-black/70 backdrop-blur-md text-white flex items-center justify-center transition-transform active:scale-90 shadow-lg border border-white/20"
-                                    aria-label="Véhicule précédent"
-                                >
-                                    <ChevronLeft className="w-5 h-5" />
-                                </button>
-                            )}
-
-                            {/* BOUTON FLÉCHÉ DROIT (DESKTOP / ACCESSIBILITÉ) */}
-                            {currentVehicleIndex < fleet.length - 1 && (
-                                <button
-                                    onClick={goToNextVehicle}
-                                    className="absolute right-1.5 top-1/2 -translate-y-1/2 z-20 w-9 h-9 rounded-full bg-black/40 hover:bg-black/70 backdrop-blur-md text-white flex items-center justify-center transition-transform active:scale-90 shadow-lg border border-white/20"
-                                    aria-label="Véhicule suivant"
-                                >
-                                    <ChevronRight className="w-5 h-5" />
-                                </button>
-                            )}
-
                             {/* PISTE DU CARROUSEL AVEC LARGEUR ADAPTÉE & FLUIDE */}
                             <div
                                 className="flex w-full h-full transition-transform duration-300 ease-out"

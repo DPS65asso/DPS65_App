@@ -496,29 +496,25 @@ DROP POLICY IF EXISTS select_bags ON public.bags;
 CREATE POLICY select_bags ON public.bags
     FOR SELECT TO anon, authenticated USING (true);
 
+DROP POLICY IF EXISTS modify_bags ON public.bags;
 CREATE POLICY modify_bags ON public.bags
     FOR ALL TO authenticated
-    USING (public.current_user_role() IN ('admin', 'logisticien'))
-    WITH CHECK (public.current_user_role() IN ('admin', 'logisticien'));
+    USING (true)
+    WITH CHECK (true);
 
 -- ----------------- TABLE: BAG ITEMS -----------------
 DROP POLICY IF EXISTS select_bag_items ON public.bag_items;
 CREATE POLICY select_bag_items ON public.bag_items
     FOR SELECT TO anon, authenticated USING (true);
 
--- Les secouristes peuvent consommer des items, ce qui met à jour la quantité
-CREATE POLICY update_bag_items ON public.bag_items
-    FOR UPDATE TO authenticated
+DROP POLICY IF EXISTS update_bag_items ON public.bag_items;
+DROP POLICY IF EXISTS admin_modify_bag_items ON public.bag_items;
+DROP POLICY IF EXISTS admin_delete_bag_items ON public.bag_items;
+DROP POLICY IF EXISTS modify_bag_items ON public.bag_items;
+CREATE POLICY modify_bag_items ON public.bag_items
+    FOR ALL TO authenticated
     USING (true)
     WITH CHECK (true);
-
-CREATE POLICY admin_modify_bag_items ON public.bag_items
-    FOR INSERT TO authenticated
-    WITH CHECK (public.current_user_role() IN ('admin', 'logisticien'));
-
-CREATE POLICY admin_delete_bag_items ON public.bag_items
-    FOR DELETE TO authenticated
-    USING (public.current_user_role() IN ('admin', 'logisticien'));
 
 -- ----------------- TABLE: UNIFORMS -----------------
 CREATE POLICY select_uniforms ON public.uniforms

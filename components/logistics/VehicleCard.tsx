@@ -184,11 +184,16 @@ export const VehicleCard: React.FC<VehicleCardProps> = ({
                         </div>
                     </div>
 
-                    {/* Badge Immatriculation style plaque automobile */}
+                    {/* Badge Immatriculation style plaque automobile européenne */}
                     {vehicle.immatriculation && (
-                        <div className="inline-flex items-center gap-1.5 bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 px-2.5 py-0.5 rounded font-mono font-black text-xs text-slate-900 dark:text-white tracking-widest shadow-inner">
-                            <span className="text-[9px] text-blue-600 font-sans font-bold">F</span>
-                            <span>{vehicle.immatriculation}</span>
+                        <div className="inline-flex items-center bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded overflow-hidden font-mono font-black text-xs text-slate-900 dark:text-white tracking-widest shadow-inner whitespace-nowrap flex-shrink-0">
+                            <div className="bg-blue-700 text-amber-300 flex flex-col items-center justify-center px-1.5 self-stretch">
+                                <div className="text-[6px] tracking-tighter leading-none my-0.5">★★★★★</div>
+                                <span className="text-[10px] font-sans font-black leading-none text-white">F</span>
+                            </div>
+                            <div className="px-2.5 py-1">
+                                {vehicle.immatriculation}
+                            </div>
                         </div>
                     )}
                 </div>
