@@ -755,7 +755,6 @@ BEGIN
     END IF;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
-
 -- ----------------------------------------------------
 -- 11. MIGRATIONS POUR LES TRACÉS GPX & CARTOGRAPHIE PDF
 -- ----------------------------------------------------
@@ -765,6 +764,130 @@ ALTER TABLE IF EXISTS public.events ADD COLUMN IF NOT EXISTS "trackData" JSONB D
 ALTER TABLE IF EXISTS public.events ADD COLUMN IF NOT EXISTS "mapPdfUrl" TEXT;
 ALTER TABLE IF EXISTS public.events ADD COLUMN IF NOT EXISTS "mapPdfs" JSONB DEFAULT '[]'::jsonb;
 ALTER TABLE IF EXISTS public.events ADD COLUMN IF NOT EXISTS is_archived BOOLEAN DEFAULT FALSE;
+
+-- ====================================================================
+-- 12. GESTION EXPLICITE DES PRIVILÈGES & RÔLES SUPABASE (COMPATIBILITÉ 2024-2026+)
+-- ====================================================================
+-- Suite à la suppression par Supabase des GRANT automatiques sur le schéma public,
+-- cette section garantit l'accès explicite aux rôles anon, authenticated et service_role
+-- dans le strict respect du principe du moindre privilège (Least Privilege).
+
+GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
+
+-- Attribution du droit d'usage sur le type enum personnalisé 'user_role' (syntaxe standard PostgreSQL)
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_type WHERE typname = 'user_role') THEN
+        GRANT USAGE ON TYPE public.user_role TO anon, authenticated, service_role;
+    END IF;
+END $$;
+
+-- 12.2 ACCÈS PRIVILÉGIÉ DE BASE : SERVICE_ROLE (Accès total sans restriction RLS)
+GRANT ALL ON ALL TABLES IN SCHEMA public TO service_role;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO service_role;
+GRANT ALL ON ALL ROUTINES IN SCHEMA public TO service_role;
+
+-- 12.3 PERMISSIONS EXPLICITES PAR TABLE POUR LES RÔLES CLIENTS (ANON / AUTHENTICATED)
+
+-- TABLE: profiles (Données utilisateurs & rôles)
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.profiles TO authenticated;
+
+-- TABLE: events (Événements & DPS)
+GRANT SELECT ON TABLE public.events TO anon;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.events TO authenticated;
+
+-- TABLE: victims (Fiches médicales sensibles)
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.victims TO authenticated;
+
+-- TABLE: logbook (Main courante opérationnelle & radio)
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.logbook TO authenticated;
+
+-- TABLE: team_locations (Positions GPS temps réel)
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.team_locations TO authenticated;
+
+-- TABLE: custom_markers (Points tactiques sur la carte)
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.custom_markers TO authenticated;
+
+-- TABLE: missions (Planning des dispositifs de secours)
+GRANT SELECT ON TABLE public.missions TO anon;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.missions TO authenticated;
+
+-- TABLE: bags (Lots de secours A, B, C, Sacs IDE)
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.bags TO authenticated;
+
+-- TABLE: bag_items (Contenu des sacs & consommables)
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.bag_items TO authenticated;
+
+-- TABLE: uniforms (Vestiaire & paquetage secouristes)
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.uniforms TO authenticated;
+
+-- TABLE: fleet (Parc véhicules)
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.fleet TO authenticated;
+
+-- TABLE: vehicle_checks (Fiches de vérification & pleins véhicules)
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.vehicle_checks TO authenticated;
+
+-- TABLE: news (Actualités & alertes associatives)
+GRANT SELECT ON TABLE public.news TO anon;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.news TO authenticated;
+
+-- TABLE: documents (Procédures opérationnelles & fiches réflexes)
+GRANT SELECT ON TABLE public.documents TO anon;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.documents TO authenticated;
+
+-- TABLE: courses (Formations secouristes & recyclages PSE)
+GRANT SELECT ON TABLE public.courses TO anon;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.courses TO authenticated;
+
+-- TABLE: config (Configuration globale, codes d'inscription, équipes)
+GRANT SELECT ON TABLE public.config TO anon;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.config TO authenticated;
+
+-- TABLE: audit (Journal d'audit de sécurité)
+GRANT SELECT, INSERT ON TABLE public.audit TO authenticated;
+
+-- 12.4 PERMISSIONS SUR LES SÉQUENCES
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO authenticated;
+
+-- 12.5 PERMISSIONS D'EXÉCUTION SUR LES FONCTIONS ET RPC
+GRANT EXECUTE ON FUNCTION public.current_user_role() TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.get_event_by_organizer_code(TEXT) TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.get_victims_by_organizer_code(UUID, TEXT) TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.set_updated_at_timestamp_ms() TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.handle_new_user_signup() TO service_role;
+
+-- 12.6 SÉCURISATION PROACTIVE DES FUTURES TABLES (ALTER DEFAULT PRIVILEGES)
+-- Pour les objets créés par le rôle postgres (exécuteur standard des migrations Supabase)
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public 
+    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO authenticated;
+
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public 
+    GRANT ALL ON TABLES TO service_role;
+
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public 
+    GRANT USAGE, SELECT ON SEQUENCES TO authenticated;
+
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public 
+    GRANT ALL ON SEQUENCES TO service_role;
+
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public 
+    GRANT EXECUTE ON FUNCTIONS TO anon, authenticated, service_role;
+
+-- Pour les objets créés par le rôle actif courant (migrations directes / scripts console)
+ALTER DEFAULT PRIVILEGES IN SCHEMA public 
+    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO authenticated;
+
+ALTER DEFAULT PRIVILEGES IN SCHEMA public 
+    GRANT ALL ON TABLES TO service_role;
+
+ALTER DEFAULT PRIVILEGES IN SCHEMA public 
+    GRANT USAGE, SELECT ON SEQUENCES TO authenticated;
+
+ALTER DEFAULT PRIVILEGES IN SCHEMA public 
+    GRANT ALL ON SEQUENCES TO service_role;
+
+ALTER DEFAULT PRIVILEGES IN SCHEMA public 
+    GRANT EXECUTE ON FUNCTIONS TO anon, authenticated, service_role;
 
 
 
