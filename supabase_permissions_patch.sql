@@ -76,14 +76,16 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.missions TO authenticated;
 
 -- TABLE: bags
 -- Lots de secours (Lot A, B, C, Sac IDE)
--- anon : aucun droit
+-- anon : SELECT (lecture opérationnelle pour affichage matériel et preview)
 -- authenticated : SELECT, INSERT, UPDATE, DELETE
+GRANT SELECT ON TABLE public.bags TO anon;
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.bags TO authenticated;
 
 -- TABLE: bag_items
 -- Contenu des sacs de secours et matériel
--- anon : aucun droit
+-- anon : SELECT (lecture de l'inventaire des sacs)
 -- authenticated : SELECT, INSERT, UPDATE, DELETE
+GRANT SELECT ON TABLE public.bag_items TO anon;
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.bag_items TO authenticated;
 
 -- TABLE: uniforms
@@ -94,14 +96,16 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.uniforms TO authenticated;
 
 -- TABLE: fleet
 -- Véhicules d'intervention
--- anon : aucun droit
+-- anon : SELECT (lecture de la liste des véhicules et statut)
 -- authenticated : SELECT, INSERT, UPDATE, DELETE
+GRANT SELECT ON TABLE public.fleet TO anon;
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.fleet TO authenticated;
 
 -- TABLE: vehicle_checks
 -- Fiches de vérification des véhicules
--- anon : aucun droit
+-- anon : SELECT (lecture des fiches de contrôle)
 -- authenticated : SELECT, INSERT, UPDATE, DELETE
+GRANT SELECT ON TABLE public.vehicle_checks TO anon;
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.vehicle_checks TO authenticated;
 
 -- TABLE: news
@@ -188,3 +192,34 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public
 
 ALTER DEFAULT PRIVILEGES IN SCHEMA public 
     GRANT EXECUTE ON FUNCTIONS TO anon, authenticated, service_role;
+
+-- ----------------------------------------------------
+-- 7. MISE À JOUR DES POLITIQUES RLS (LECTURE LOGISTIQUE & PREVIEW)
+-- ----------------------------------------------------
+-- Autorise la consultation en lecture seule pour 'anon' (requêtes non-authentifiées et environnement preview AI Studio)
+DROP POLICY IF EXISTS select_bags ON public.bags;
+CREATE POLICY select_bags ON public.bags
+    FOR SELECT TO anon, authenticated USING (true);
+
+DROP POLICY IF EXISTS select_bag_items ON public.bag_items;
+CREATE POLICY select_bag_items ON public.bag_items
+    FOR SELECT TO anon, authenticated USING (true);
+
+DROP POLICY IF EXISTS select_fleet ON public.fleet;
+CREATE POLICY select_fleet ON public.fleet
+    FOR SELECT TO anon, authenticated USING (true);
+
+DROP POLICY IF EXISTS select_vehicle_checks ON public.vehicle_checks;
+CREATE POLICY select_vehicle_checks ON public.vehicle_checks
+    FOR SELECT TO anon, authenticated USING (true);
+
+-- ----------------------------------------------------
+-- 8. COLONNES PHOTOS VÉHICULES ET SUIVI DES PANNES MÉCANIQUES
+-- ----------------------------------------------------
+ALTER TABLE IF EXISTS public.fleet ADD COLUMN IF NOT EXISTS "imageUrl" TEXT;
+ALTER TABLE IF EXISTS public.fleet ADD COLUMN IF NOT EXISTS immatriculation TEXT;
+ALTER TABLE IF EXISTS public.vehicle_checks ADD COLUMN IF NOT EXISTS resolved BOOLEAN DEFAULT false;
+ALTER TABLE IF EXISTS public.vehicle_checks ADD COLUMN IF NOT EXISTS "resolvedAt" BIGINT;
+ALTER TABLE IF EXISTS public.vehicle_checks ADD COLUMN IF NOT EXISTS "resolvedBy" TEXT;
+
+

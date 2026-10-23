@@ -530,7 +530,11 @@ class SyncService {
                                 'news': 'dps65_asso_channel',
                                 'documents': 'dps65_asso_channel',
                                 'custom_markers': 'dps65_gps_channel',
-                                'team_locations': 'dps65_gps_channel'
+                                'team_locations': 'dps65_gps_channel',
+                                'bags': 'dps65_bags_channel',
+                                'bag_items': 'dps65_bags_channel',
+                                'fleet': 'dps65_logistics_channel',
+                                'vehicle_checks': 'dps65_logistics_channel'
                             };
                             const channelName = bcMap[tableName];
                             if (channelName) {

@@ -227,6 +227,8 @@ export interface VehicleDefinition {
     id: string;
     name: string;
     type: string;
+    immatriculation?: string;
+    imageUrl?: string;
     lastTechControl: string; 
     nextTechControl: string; 
     lastService: string;
@@ -244,6 +246,9 @@ export interface VehicleCheck {
     cleanlinessInOut: boolean;
     cleanlinessOut: boolean;
     alerts: string[];
+    resolved?: boolean;
+    resolvedAt?: number;
+    resolvedBy?: string;
 }
 
 // --- GESTION VESTIAIRE ---

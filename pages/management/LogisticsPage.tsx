@@ -1,13 +1,16 @@
 
 import React, { useState, useEffect } from 'react';
 import { Layout } from '../../components/Layout';
-import { Truck, AlertTriangle, Save, History, Calendar, Wrench, ArrowLeft, Plus, Trash2, Settings, Bell, FileText, Loader2, PenTool } from 'lucide-react';
+import { Truck, AlertTriangle, Save, History, Calendar, Wrench, ArrowLeft, Plus, Trash2, Settings, Bell, FileText, Loader2, PenTool, Camera, ChevronLeft, ChevronRight } from 'lucide-react';
 import { storageService } from '../../services/storageService';
 import { exportService } from '../../services/exportService';
 import { generateUUID, safeDateFormat } from '../../utils/security';
+import { compressImageFile } from '../../utils/imageUtils';
 import { VehicleCheck, VehicleDefinition, VehicleTrackingPoint } from '../../types';
 import { useAuth } from '../../context/AuthContext';
 import { Button } from '../../components/Button';
+import { VehicleCard } from '../../components/logistics/VehicleCard';
+import { MechanicalBreakdownsModal } from '../../components/logistics/MechanicalBreakdownsModal';
 
 export const LogisticsPage: React.FC = () => {
     const { profile } = useAuth();
@@ -18,6 +21,10 @@ export const LogisticsPage: React.FC = () => {
     const [fleet, setFleet] = useState<VehicleDefinition[]>([]);
     const [isLoadingHistory, setIsLoadingHistory] = useState(false);
     const [isExporting, setIsExporting] = useState(false);
+    const [breakdownModalVehicle, setBreakdownModalVehicle] = useState<VehicleDefinition | null>(null);
+    const [currentVehicleIndex, setCurrentVehicleIndex] = useState(0);
+    const [touchStartX, setTouchStartX] = useState<number | null>(null);
+    const [touchEndX, setTouchEndX] = useState<number | null>(null);
     
     // Droits d'accès
     const isManager = profile?.role === 'admin' || profile?.role === 'logisticien';
@@ -40,7 +47,82 @@ export const LogisticsPage: React.FC = () => {
 
     useEffect(() => {
         loadData();
+        let bc: BroadcastChannel | null = null;
+        try {
+            bc = new BroadcastChannel('dps65_logistics_channel');
+            bc.onmessage = () => {
+                loadData();
+            };
+        } catch (e) {}
+        return () => {
+            if (bc) bc.close();
+        };
     }, []);
+
+    const minSwipeDistance = 45;
+
+    const handleTouchStart = (e: React.TouchEvent) => {
+        setTouchEndX(null);
+        setTouchStartX(e.targetTouches[0].clientX);
+    };
+
+    const handleTouchMove = (e: React.TouchEvent) => {
+        setTouchEndX(e.targetTouches[0].clientX);
+    };
+
+    const handleTouchEnd = () => {
+        if (!touchStartX || !touchEndX) return;
+        const distance = touchStartX - touchEndX;
+        if (distance > minSwipeDistance && currentVehicleIndex < fleet.length - 1) {
+            setCurrentVehicleIndex(prev => prev + 1);
+        }
+        if (distance < -minSwipeDistance && currentVehicleIndex > 0) {
+            setCurrentVehicleIndex(prev => prev - 1);
+        }
+    };
+
+    const goToPrevVehicle = () => {
+        if (currentVehicleIndex > 0) {
+            setCurrentVehicleIndex(prev => prev - 1);
+        }
+    };
+
+    const goToNextVehicle = () => {
+        if (currentVehicleIndex < fleet.length - 1) {
+            setCurrentVehicleIndex(prev => prev + 1);
+        }
+    };
+
+    const vehicleHasBreakdown = (vehicleId: string) => {
+        return recentChecks.some(c => {
+            if (c.vehicleId !== vehicleId || c.resolved) return false;
+            return c.alerts && c.alerts.some(a => {
+                const lower = a.toLowerCase();
+                return (
+                    a.startsWith('PANNE') ||
+                    lower.includes('mecanique') ||
+                    lower.includes('mécanique') ||
+                    lower.includes('moteur') ||
+                    lower.includes('frein') ||
+                    lower.includes('boite') ||
+                    lower.includes('embrayage') ||
+                    lower.includes('batterie') ||
+                    lower.includes('pneu') ||
+                    lower.includes('distribution')
+                );
+            });
+        });
+    };
+
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (view !== 'LIST') return;
+            if (e.key === 'ArrowRight') goToNextVehicle();
+            if (e.key === 'ArrowLeft') goToPrevVehicle();
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [view, currentVehicleIndex, fleet.length]);
 
     const loadData = async () => {
         const checks = await storageService.getVehicleChecks();
@@ -53,6 +135,7 @@ export const LogisticsPage: React.FC = () => {
         if (fleetData.length > 0 && !reportForm.vehicle) {
             setReportForm(prev => ({ ...prev, vehicle: fleetData[0].id }));
         }
+        setCurrentVehicleIndex(prev => (prev >= fleetData.length ? Math.max(0, fleetData.length - 1) : prev));
         calculateAlerts(fleetData);
     };
 
@@ -198,6 +281,20 @@ export const LogisticsPage: React.FC = () => {
         setView('EDIT');
     };
 
+    const handleUpdatePhoto = async (vehicleId: string, photoDataUrl: string) => {
+        const vehicle = fleet.find(v => v.id === vehicleId);
+        if (!vehicle) return;
+        const updatedVehicle = { ...vehicle, imageUrl: photoDataUrl };
+        await storageService.saveVehicle(updatedVehicle);
+        await loadData();
+    };
+
+    const handleResolveBreakdown = async (checkId: string) => {
+        const resolvedBy = profile ? `${profile.firstName} ${profile.lastName}` : 'Admin';
+        await storageService.resolveVehicleBreakdown(checkId, resolvedBy);
+        await loadData();
+    };
+
     const saveVehicleEdit = async () => {
         if (!editForm.id || !editForm.name) return;
         await storageService.saveVehicle(editForm as VehicleDefinition);
@@ -264,160 +361,105 @@ export const LogisticsPage: React.FC = () => {
         }
     };
 
-    const getStatusStyle = (dateStr: string) => {
-        if (!dateStr) return { className: 'bg-slate-100 text-slate-500 border border-slate-200', dateDisplay: '--/--/----', status: 'Non défini' };
-        
-        const today = new Date();
-        const target = new Date(dateStr);
-        const diffTime = target.getTime() - today.getTime();
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-        const dateDisplay = safeDateFormat(dateStr);
-
-        if (diffDays < 0) return { className: 'bg-red-600 text-white shadow-md shadow-red-500/20', dateDisplay, status: `RETARD ${Math.abs(diffDays)}j` };
-        if (diffDays < 30) return { className: 'bg-orange-500 text-white shadow-md shadow-orange-500/20', dateDisplay, status: `J-${diffDays}` };
-        
-        // Green status
-        return { className: 'bg-emerald-600 text-white shadow-md shadow-emerald-500/20', dateDisplay, status: 'Valide' };
-    };
+    const renderListHeader = () => (
+        <div className="flex items-center justify-center w-full min-w-0 pr-6">
+            {fleet.length > 0 && (
+                <div className="text-sm font-black tracking-widest text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 px-4 py-1.5 rounded-xl shadow-inner border border-slate-200 dark:border-slate-700">
+                    {currentVehicleIndex + 1} / {fleet.length}
+                </div>
+            )}
+        </div>
+    );
 
     return (
-        <Layout title={view === 'HISTORY' ? "Historique" : (view === 'EDIT' ? "Gestion Véhicule" : "Logistique")} showBack="/management" hideSync={true}>
+        <Layout 
+            title={view === 'LIST' ? renderListHeader() : (view === 'HISTORY' ? "Historique" : (view === 'EDIT' ? "Gestion Véhicule" : "Logistique"))} 
+            showBack="/management" 
+            hideSync={true} 
+            noScroll={view === 'LIST'}
+        >
             {view === 'LIST' && (
-                <div className="space-y-4 pb-20">
-                    {/* ALERTES MAINTENANCE (ADMIN ONLY) */}
-                    {isManager && fleetAlerts.length > 0 && (
-                        <div className="bg-red-50 dark:bg-red-900/10 rounded-xl border border-red-200 dark:border-red-800 p-4 shadow-sm animate-in slide-in-from-top-2">
-                            <div className="flex justify-between items-center mb-3">
-                                <h3 className="font-bold text-red-700 dark:text-red-400 flex items-center gap-2 text-xs uppercase tracking-wider"><Bell className="w-4 h-4 animate-pulse" /> Maintenance Requise ({fleetAlerts.length})</h3>
-                            </div>
-                            <div className="space-y-2 max-h-40 overflow-y-auto custom-scrollbar">
-                                {fleetAlerts.map((alert, idx) => (
-                                    <div key={idx} className="bg-white dark:bg-slate-900 p-2 rounded border border-red-100 dark:border-red-900/50 flex justify-between items-center text-xs">
-                                        <div><span className="font-black text-slate-800 dark:text-white">{alert.vehicle}</span><span className="text-slate-400 mx-1">•</span><span className="text-slate-600 dark:text-slate-300">{alert.label}</span></div>
-                                        <div className={`font-black ${alert.days < 0 ? 'text-red-600' : 'text-orange-500'}`}>{alert.days < 0 ? `RETARD ${Math.abs(alert.days)}j` : `J-${alert.days}`}</div>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    )}
-                    
-                    {/* BOUTON SIGNALEMENT (ACCESSIBLE TOUS) */}
-                    <button onClick={() => handleReportClick()} className="w-full bg-slate-800 text-white p-4 rounded-xl shadow-lg flex items-center justify-between active:scale-[0.99] transition-transform">
-                        <div className="flex items-center gap-3">
-                            <div className="p-2 bg-white/20 rounded-lg"><AlertTriangle className="w-6 h-6" /></div>
-                            <div className="text-left">
-                                <span className="block font-black text-lg">Signaler une Panne</span>
-                                <span className="block text-xs opacity-70">Ou ajouter un entretien</span>
-                            </div>
-                        </div>
-                        <Plus className="w-5 h-5" />
-                    </button>
-
-                    <div className="grid grid-cols-1 gap-3">
-                        {fleet.map((v) => {
-                            // On cherche le dernier relevé pour ce véhicule
-                            const lastCheck = recentChecks.filter(c => c.vehicleId === v.id).sort((a,b) => b.date - a.date)[0];
-                            const ctInfo = getStatusStyle(v.nextTechControl);
-                            
-                            return (
-                                <div key={v.id} className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden shadow-sm transition-all group">
-                                    <div className="p-4 flex justify-between items-start">
-                                        <div className="flex items-center gap-4">
-                                            <div className="w-12 h-12 bg-slate-100 dark:bg-slate-700 rounded-xl flex items-center justify-center text-slate-400 dark:text-slate-500">
-                                                <Truck className="w-7 h-7" />
-                                            </div>
-                                            <div>
-                                                <h4 className="font-black text-lg text-slate-800 dark:text-white leading-none">{v.name}</h4>
-                                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{v.type}</span>
-                                            </div>
-                                        </div>
-                                        {isManager && <button onClick={(e) => { e.stopPropagation(); openEditVehicle(v); }} className="text-slate-300 hover:text-blue-500 p-1"><Settings className="w-5 h-5" /></button>}
-                                    </div>
-                                    
-                                    {/* DASHBOARD INDICATORS */}
-                                    <div className="px-4 pb-4 space-y-2">
-                                        <div className="grid grid-cols-2 gap-2">
-                                            {/* SUIVI ADDITIONNEL (MOST URGENT) */}
-                                            {(() => {
-                                                const urgentPoint = v.customTracking && v.customTracking.length > 0 
-                                                    ? [...v.customTracking].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())[0]
-                                                    : null;
-                                                
-                                                const status = urgentPoint ? getStatusStyle(urgentPoint.date) : null;
-
-                                                return (
-                                                    <div className={`rounded-xl p-3 flex flex-col items-center justify-center min-h-[80px] ${status ? status.className : 'bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800'}`}>
-                                                        <span className="text-[9px] font-bold uppercase mb-0.5 opacity-80 text-center leading-tight">
-                                                            {urgentPoint ? urgentPoint.label : 'Suivi Add.'}
-                                                        </span>
-                                                        <span className="font-black text-lg tracking-tight">
-                                                            {urgentPoint ? status?.dateDisplay : '--/--/----'}
-                                                        </span>
-                                                        {status && status.status !== 'Valide' && (
-                                                            <span className="text-[9px] font-bold bg-black/20 px-1.5 rounded mt-1">{status.status}</span>
-                                                        )}
-                                                    </div>
-                                                );
-                                            })()}
-
-                                            {/* PROCHAIN CT */}
-                                            <div className={`rounded-xl p-3 flex flex-col items-center justify-center min-h-[80px] ${ctInfo.className}`}>
-                                                <span className="text-[9px] font-bold uppercase mb-0.5 opacity-80">Prochain CT</span>
-                                                <span className="font-black text-lg tracking-tight">{ctInfo.dateDisplay}</span>
-                                                {ctInfo.status !== 'Valide' && <span className="text-[9px] font-bold bg-black/20 px-1.5 rounded mt-1">{ctInfo.status}</span>}
-                                            </div>
-                                        </div>
-
-                                        {/* KILOMÉTRAGE EN GRAND */}
-                                        <div className="bg-slate-50 dark:bg-slate-900 rounded-xl p-4 flex flex-col items-center justify-center border border-slate-100 dark:border-slate-800 shadow-inner">
-                                            <span className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-1">Kilométrage Actuel</span>
-                                            <div className="flex items-baseline gap-2">
-                                                <span className="font-mono font-black text-slate-800 dark:text-white text-3xl tracking-tighter">
-                                                    {lastCheck ? lastCheck.km.toLocaleString() : '---'}
-                                                </span>
-                                                <span className="text-sm font-bold text-slate-400 uppercase">km</span>
-                                            </div>
-                                            {lastCheck && (
-                                                <span className="text-[9px] text-slate-400 mt-1 font-bold italic">
-                                                    Relevé le {new Date(lastCheck.date).toLocaleDateString()}
-                                                </span>
-                                            )}
-                                        </div>
-                                    </div>
-
-                                    {/* LISTE COMPLÈTE DU SUIVI ADDITIONNEL (SI PLUS D'UN POINT) */}
-                                    {v.customTracking && v.customTracking.length > 1 && (
-                                        <div className="px-4 pb-4">
-                                            <div className="bg-blue-50/30 dark:bg-blue-900/5 rounded-xl p-2 border border-blue-100/30 dark:border-blue-900/20">
-                                                <div className="space-y-1">
-                                                    {v.customTracking.slice(1).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()).map(pt => {
-                                                        const status = getStatusStyle(pt.date);
-                                                        return (
-                                                            <div key={pt.id} className="flex justify-between items-center text-[10px] px-1">
-                                                                <span className="font-bold text-slate-500 dark:text-slate-400">{pt.label}</span>
-                                                                <span className={`font-mono ${status.status !== 'Valide' ? 'text-orange-500' : 'text-slate-400'}`}>{status.dateDisplay}</span>
-                                                            </div>
-                                                        );
-                                                    })}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    )}
-                                    
-                                    {/* ACTIONS */}
-                                    <div className="flex border-t border-slate-100 dark:border-slate-700">
-                                        <button onClick={() => handleReportClick(v.id)} className="flex-1 py-3 text-xs font-bold text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-900/20 transition-colors flex items-center justify-center gap-2 border-r border-slate-100 dark:border-slate-700">
-                                            <AlertTriangle className="w-4 h-4" /> Signaler
-                                        </button>
-                                        <button onClick={() => handleHistoryClick(v.id)} className="flex-1 py-3 text-xs font-bold text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors flex items-center justify-center gap-2">
-                                            <History className="w-4 h-4" /> Historique
-                                        </button>
-                                    </div>
-                                </div>
-                            );
-                        })}
+                fleet.length === 0 ? (
+                    <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-slate-500">
+                        <Truck className="w-16 h-16 stroke-1 text-slate-400 mb-2" />
+                        <p className="font-bold">Aucun véhicule configuré</p>
                     </div>
-                </div>
+                ) : (
+                    <div 
+                        className="h-full flex-1 flex flex-col overflow-hidden select-none"
+                        onTouchStart={handleTouchStart}
+                        onTouchMove={handleTouchMove}
+                        onTouchEnd={handleTouchEnd}
+                    >
+                        {/* CARROUSEL VIEWPORT */}
+                        <div className="relative flex-1 w-full overflow-hidden flex items-stretch">
+                            {/* BOUTON FLÉCHÉ GAUCHE (DESKTOP / ACCESSIBILITÉ) */}
+                            {currentVehicleIndex > 0 && (
+                                <button
+                                    onClick={goToPrevVehicle}
+                                    className="absolute left-1.5 top-1/2 -translate-y-1/2 z-20 w-9 h-9 rounded-full bg-black/40 hover:bg-black/70 backdrop-blur-md text-white flex items-center justify-center transition-transform active:scale-90 shadow-lg border border-white/20"
+                                    aria-label="Véhicule précédent"
+                                >
+                                    <ChevronLeft className="w-5 h-5" />
+                                </button>
+                            )}
+
+                            {/* BOUTON FLÉCHÉ DROIT (DESKTOP / ACCESSIBILITÉ) */}
+                            {currentVehicleIndex < fleet.length - 1 && (
+                                <button
+                                    onClick={goToNextVehicle}
+                                    className="absolute right-1.5 top-1/2 -translate-y-1/2 z-20 w-9 h-9 rounded-full bg-black/40 hover:bg-black/70 backdrop-blur-md text-white flex items-center justify-center transition-transform active:scale-90 shadow-lg border border-white/20"
+                                    aria-label="Véhicule suivant"
+                                >
+                                    <ChevronRight className="w-5 h-5" />
+                                </button>
+                            )}
+
+                            {/* PISTE DU CARROUSEL AVEC LARGEUR ADAPTÉE & FLUIDE */}
+                            <div
+                                className="flex w-full h-full transition-transform duration-300 ease-out"
+                                style={{ transform: `translateX(-${currentVehicleIndex * 100}%)` }}
+                            >
+                                {fleet.map((v) => {
+                                    const lastCheck = recentChecks.filter(c => c.vehicleId === v.id).sort((a,b) => b.date - a.date)[0];
+                                    return (
+                                        <div key={v.id} className="w-full h-full flex-shrink-0 px-3 sm:px-6 md:px-12 pb-1 flex flex-col items-center justify-center">
+                                            <div className="w-full max-w-sm sm:max-w-md h-full flex flex-col">
+                                                <VehicleCard
+                                                    vehicle={v}
+                                                    lastCheck={lastCheck}
+                                                    checks={recentChecks}
+                                                    isManager={isManager}
+                                                    onEditSettings={openEditVehicle}
+                                                    onReport={handleReportClick}
+                                                    onHistory={handleHistoryClick}
+                                                    onUpdatePhoto={handleUpdatePhoto}
+                                                    onOpenBreakdowns={(veh) => setBreakdownModalVehicle(veh)}
+                                                />
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+
+                        {/* NAVIGATION PAR POINTS (DOTS) EN BAS */}
+                        <div className="flex items-center justify-center gap-1.5 py-1.5 flex-none">
+                            {fleet.map((_, idx) => (
+                                <button
+                                    key={idx}
+                                    onClick={() => setCurrentVehicleIndex(idx)}
+                                    aria-label={`Aller au véhicule ${idx + 1}`}
+                                    className={`transition-all rounded-full ${
+                                        idx === currentVehicleIndex
+                                            ? 'w-6 h-2 bg-red-600'
+                                            : 'w-2 h-2 bg-slate-300 dark:bg-slate-700 hover:bg-slate-400'
+                                    }`}
+                                />
+                            ))}
+                        </div>
+                    </div>
+                )
             )}
 
             {view === 'REPORT' && (
@@ -502,6 +544,69 @@ export const LogisticsPage: React.FC = () => {
                         )}
                     </div>
                     
+                    <div>
+                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Nom du véhicule</label>
+                        <input 
+                            type="text" 
+                            className="w-full p-3 bg-slate-50 dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700 font-bold" 
+                            value={editForm.name || ''} 
+                            onChange={e => setEditForm({...editForm, name: e.target.value})} 
+                        />
+                    </div>
+
+                    <div>
+                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Immatriculation</label>
+                        <input 
+                            type="text" 
+                            className="w-full p-3 bg-slate-50 dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700 font-mono font-bold uppercase" 
+                            placeholder="Ex: 65-DPS-01" 
+                            value={editForm.immatriculation || ''} 
+                            onChange={e => setEditForm({...editForm, immatriculation: e.target.value.toUpperCase()})} 
+                        />
+                    </div>
+
+                    <div>
+                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Photo du véhicule</label>
+                        <div className="flex items-center gap-3">
+                            {editForm.imageUrl ? (
+                                <img src={editForm.imageUrl} alt="Aperçu" className="w-24 h-16 object-cover rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm" />
+                            ) : (
+                                <div className="w-24 h-16 bg-slate-100 dark:bg-slate-900 rounded-xl flex items-center justify-center text-slate-400 border border-slate-200 dark:border-slate-700">
+                                    <Truck className="w-6 h-6" />
+                                </div>
+                            )}
+                            <label className="cursor-pointer bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-white px-3 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 border border-slate-300 dark:border-slate-600 transition-colors">
+                                <Camera className="w-4 h-4" />
+                                <span>Sélectionner une photo</span>
+                                <input 
+                                    type="file" 
+                                    accept="image/*" 
+                                    className="hidden" 
+                                    onChange={async (e) => {
+                                        const f = e.target.files?.[0];
+                                        if (f) {
+                                            try {
+                                                const compressed = await compressImageFile(f, 1200, 900, 0.8);
+                                                setEditForm(prev => ({ ...prev, imageUrl: compressed }));
+                                            } catch (err: any) {
+                                                alert(err.message || "Erreur lors du chargement de l'image");
+                                            }
+                                        }
+                                    }} 
+                                />
+                            </label>
+                            {editForm.imageUrl && (
+                                <button 
+                                    type="button" 
+                                    onClick={() => setEditForm(prev => ({ ...prev, imageUrl: '' }))}
+                                    className="text-xs font-bold text-red-500 hover:text-red-700 p-2"
+                                >
+                                    Supprimer
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                    
                     <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Prochain CT</label><input type="date" className="w-full p-3 bg-slate-50 dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700" value={editForm.nextTechControl} onChange={e => setEditForm({...editForm, nextTechControl: e.target.value})} /></div>
                     <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Prochaine Vidange</label><input type="date" className="w-full p-3 bg-slate-50 dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700" value={editForm.nextService} onChange={e => setEditForm({...editForm, nextService: e.target.value})} /></div>
                     <div className="border-t border-slate-100 dark:border-slate-700 pt-4 mt-2">
@@ -581,6 +686,19 @@ export const LogisticsPage: React.FC = () => {
                         </div>
                     )}
                 </div>
+            )}
+
+            {/* MODALE DU MODULE PANNES MÉCANIQUES ACTIVES */}
+            {breakdownModalVehicle && (
+                <MechanicalBreakdownsModal
+                    isOpen={!!breakdownModalVehicle}
+                    onClose={() => setBreakdownModalVehicle(null)}
+                    vehicle={breakdownModalVehicle}
+                    checks={recentChecks}
+                    isManager={isManager}
+                    onResolveBreakdown={handleResolveBreakdown}
+                    onAddBreakdown={(vId) => handleReportClick(vId)}
+                />
             )}
         </Layout>
     );

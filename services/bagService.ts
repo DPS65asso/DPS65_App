@@ -4,11 +4,46 @@ import { Bag, BagConsumption, BagItem, BagType } from '../types';
 import { generateUUID } from '../utils/security';
 import { BAG_TEMPLATES } from '../data/bagInventory';
 import { syncService } from './syncService';
+import { supabase, isLive } from './supabaseClient';
 
 export const bagService = {
     getBags: async (): Promise<Bag[]> => {
         const db = await initDB();
-        return await db.getAll('bags');
+        let bags = await db.getAll('bags');
+
+        // Récupération automatique depuis Supabase si le cache local est vide
+        if (bags.length === 0 && isLive && navigator.onLine) {
+            try {
+                const { data, error } = await supabase.from('bags').select('*');
+                if (!error && data && data.length > 0) {
+                    const tx = db.transaction('bags', 'readwrite');
+                    for (const b of data) {
+                        await tx.store.put(b);
+                    }
+                    await tx.done;
+                    bags = await db.getAll('bags');
+                }
+            } catch (e) {
+                console.warn("[bagService] Auto-pull bags failed:", e);
+            }
+        }
+
+        // Si aucun sac n'existe (mode preview ou premier démarrage), initialisation des sacs opérationnels par défaut
+        if (bags.length === 0) {
+            const defaultBags: { name: string; type: BagType; description: string }[] = [
+                { name: 'Lot A (PMA)', type: 'LOT_A', description: 'Sac complet premiers secours & PMA' },
+                { name: 'Lot B - Alpha', type: 'LOT_B', description: 'Sac intervention binôme secouriste' },
+                { name: 'Lot B - Bravo', type: 'LOT_B', description: 'Sac intervention binôme secouriste' },
+                { name: 'Sac IDE (Médical)', type: 'SAC_IDE', description: 'Dotation médicale pour infirmier / médecin' }
+            ];
+
+            for (const b of defaultBags) {
+                await bagService.createBag(b.name, b.type, b.description);
+            }
+            bags = await db.getAll('bags');
+        }
+
+        return bags;
     },
 
     createBag: async (name: string, type: BagType, description: string = ''): Promise<Bag> => {
@@ -148,7 +183,23 @@ export const bagService = {
 
     getBagItems: async (bagId: string): Promise<BagItem[]> => {
         const db = await initDB();
-        return await db.getAllFromIndex('bag_items', 'by-bag', bagId);
+        let items = await db.getAllFromIndex('bag_items', 'by-bag', bagId);
+        if (items.length === 0 && isLive && navigator.onLine) {
+            try {
+                const { data, error } = await supabase.from('bag_items').select('*').eq('bagId', bagId);
+                if (!error && data && data.length > 0) {
+                    const tx = db.transaction('bag_items', 'readwrite');
+                    for (const item of data) {
+                        await tx.store.put(item);
+                    }
+                    await tx.done;
+                    items = await db.getAllFromIndex('bag_items', 'by-bag', bagId);
+                }
+            } catch (e) {
+                console.warn("[bagService] Auto-pull bag_items failed:", e);
+            }
+        }
+        return items;
     },
 
     addBagItem: async (bagId: string, itemData: {name: string, quantity: number, targetQuantity: number}): Promise<BagItem> => {

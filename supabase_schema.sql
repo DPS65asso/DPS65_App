@@ -492,8 +492,9 @@ CREATE POLICY modify_missions ON public.missions
     WITH CHECK (true);
 
 -- ----------------- TABLE: BAGS -----------------
+DROP POLICY IF EXISTS select_bags ON public.bags;
 CREATE POLICY select_bags ON public.bags
-    FOR SELECT TO authenticated USING (true);
+    FOR SELECT TO anon, authenticated USING (true);
 
 CREATE POLICY modify_bags ON public.bags
     FOR ALL TO authenticated
@@ -501,8 +502,9 @@ CREATE POLICY modify_bags ON public.bags
     WITH CHECK (public.current_user_role() IN ('admin', 'logisticien'));
 
 -- ----------------- TABLE: BAG ITEMS -----------------
+DROP POLICY IF EXISTS select_bag_items ON public.bag_items;
 CREATE POLICY select_bag_items ON public.bag_items
-    FOR SELECT TO authenticated USING (true);
+    FOR SELECT TO anon, authenticated USING (true);
 
 -- Les secouristes peuvent consommer des items, ce qui met à jour la quantité
 CREATE POLICY update_bag_items ON public.bag_items
@@ -529,8 +531,9 @@ CREATE POLICY modify_uniforms ON public.uniforms
     WITH CHECK (public.current_user_role() IN ('admin', 'logisticien') OR auth.uid() = id);
 
 -- ----------------- TABLE: FLEET -----------------
+DROP POLICY IF EXISTS select_fleet ON public.fleet;
 CREATE POLICY select_fleet ON public.fleet
-    FOR SELECT TO authenticated USING (true);
+    FOR SELECT TO anon, authenticated USING (true);
 
 CREATE POLICY modify_fleet ON public.fleet
     FOR ALL TO authenticated
@@ -538,8 +541,9 @@ CREATE POLICY modify_fleet ON public.fleet
     WITH CHECK (public.current_user_role() IN ('admin', 'logisticien'));
 
 -- ----------------- TABLE: VEHICLE CHECKS -----------------
+DROP POLICY IF EXISTS select_vehicle_checks ON public.vehicle_checks;
 CREATE POLICY select_vehicle_checks ON public.vehicle_checks
-    FOR SELECT TO authenticated USING (true);
+    FOR SELECT TO anon, authenticated USING (true);
 
 CREATE POLICY write_vehicle_checks ON public.vehicle_checks
     FOR INSERT TO authenticated
@@ -765,6 +769,13 @@ ALTER TABLE IF EXISTS public.events ADD COLUMN IF NOT EXISTS "mapPdfUrl" TEXT;
 ALTER TABLE IF EXISTS public.events ADD COLUMN IF NOT EXISTS "mapPdfs" JSONB DEFAULT '[]'::jsonb;
 ALTER TABLE IF EXISTS public.events ADD COLUMN IF NOT EXISTS is_archived BOOLEAN DEFAULT FALSE;
 
+-- Colonnes pour photos de véhicules, immatriculations et suivi des pannes mécaniques
+ALTER TABLE IF EXISTS public.fleet ADD COLUMN IF NOT EXISTS "imageUrl" TEXT;
+ALTER TABLE IF EXISTS public.fleet ADD COLUMN IF NOT EXISTS immatriculation TEXT;
+ALTER TABLE IF EXISTS public.vehicle_checks ADD COLUMN IF NOT EXISTS resolved BOOLEAN DEFAULT false;
+ALTER TABLE IF EXISTS public.vehicle_checks ADD COLUMN IF NOT EXISTS "resolvedAt" BIGINT;
+ALTER TABLE IF EXISTS public.vehicle_checks ADD COLUMN IF NOT EXISTS "resolvedBy" TEXT;
+
 -- ====================================================================
 -- 12. GESTION EXPLICITE DES PRIVILÈGES & RÔLES SUPABASE (COMPATIBILITÉ 2024-2026+)
 -- ====================================================================
@@ -813,18 +824,22 @@ GRANT SELECT ON TABLE public.missions TO anon;
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.missions TO authenticated;
 
 -- TABLE: bags (Lots de secours A, B, C, Sacs IDE)
+GRANT SELECT ON TABLE public.bags TO anon;
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.bags TO authenticated;
 
 -- TABLE: bag_items (Contenu des sacs & consommables)
+GRANT SELECT ON TABLE public.bag_items TO anon;
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.bag_items TO authenticated;
 
 -- TABLE: uniforms (Vestiaire & paquetage secouristes)
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.uniforms TO authenticated;
 
 -- TABLE: fleet (Parc véhicules)
+GRANT SELECT ON TABLE public.fleet TO anon;
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.fleet TO authenticated;
 
 -- TABLE: vehicle_checks (Fiches de vérification & pleins véhicules)
+GRANT SELECT ON TABLE public.vehicle_checks TO anon;
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.vehicle_checks TO authenticated;
 
 -- TABLE: news (Actualités & alertes associatives)

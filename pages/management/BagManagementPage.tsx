@@ -85,6 +85,16 @@ export const BagManagementPage: React.FC = () => {
 
     useEffect(() => {
         loadBags();
+        let bc: BroadcastChannel | null = null;
+        try {
+            bc = new BroadcastChannel('dps65_bags_channel');
+            bc.onmessage = () => {
+                loadBags();
+            };
+        } catch (e) {}
+        return () => {
+            if (bc) bc.close();
+        };
     }, [currentTeam]);
 
     const loadBags = async () => {

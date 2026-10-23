@@ -12,14 +12,15 @@ import { ConfirmDialog } from './ConfirmDialog';
 
 interface LayoutProps {
   children: React.ReactNode;
-  title?: string | null;
+  title?: React.ReactNode;
   showBack?: boolean | string;
   showStatus?: boolean;
   hideHeaderTools?: boolean;
   hideSync?: boolean;
+  noScroll?: boolean;
 }
 
-export const Layout: React.FC<LayoutProps> = ({ children, title, showBack = false, showStatus = false, hideHeaderTools = false, hideSync = false }) => {
+export const Layout: React.FC<LayoutProps> = ({ children, title, showBack = false, showStatus = false, hideHeaderTools = false, hideSync = false, noScroll = false }) => {
   const { user, signOut } = useAuth();
   const isOrganizer = user?.role === 'organisateur';
   const navigate = useNavigate();
@@ -139,10 +140,13 @@ export const Layout: React.FC<LayoutProps> = ({ children, title, showBack = fals
             </div>
           )}
 
-          <div className="flex-1 overflow-y-auto w-full overflow-x-hidden scroll-smooth pt-safe pb-safe" style={{ WebkitOverflowScrolling: 'touch' }}>
-              <main className="container mx-auto max-w-7xl p-4 lg:p-8 flex flex-col pb-32 min-h-full relative w-full min-w-0">
+          <div 
+            className={`flex-1 w-full overflow-x-hidden pt-safe pb-safe ${noScroll ? 'overflow-hidden flex flex-col h-full' : 'overflow-y-auto scroll-smooth'}`} 
+            style={{ WebkitOverflowScrolling: 'touch' }}
+          >
+              <main className={`container mx-auto max-w-7xl flex flex-col relative w-full min-w-0 ${noScroll ? 'h-full flex-1 p-2 sm:p-4 overflow-hidden pb-16' : 'p-4 lg:p-8 pb-32 min-h-full'}`}>
                 {!isCustomHeaderPage && (
-                  <div className="flex items-center justify-between mb-6 pt-2">
+                  <div className={`flex items-center justify-between ${noScroll ? 'mb-2 pt-1' : 'mb-6 pt-2'}`}>
                     <div className="flex items-center gap-2 overflow-hidden flex-1">
                       {showBack ? (
                         isOrganizer ? (
@@ -167,9 +171,15 @@ export const Layout: React.FC<LayoutProps> = ({ children, title, showBack = fals
                           <Logo className="w-8 h-8" />
                         </Link>
                       )}
-                      <h1 className="text-xl font-bold text-slate-800 dark:text-white tracking-tight truncate mr-2">
-                        {title !== undefined && title !== null ? title : 'Suivi DPS65'}
-                      </h1>
+                      {typeof title === 'string' || title === undefined || title === null ? (
+                        <h1 className="text-xl font-bold text-slate-800 dark:text-white tracking-tight truncate mr-2">
+                          {title !== undefined && title !== null ? title : 'Suivi DPS65'}
+                        </h1>
+                      ) : (
+                        <div className="flex-1 min-w-0 mr-2 flex items-center">
+                          {title}
+                        </div>
+                      )}
                     </div>
                     
                     {!hideHeaderTools && !hideSync && (
